@@ -1,86 +1,80 @@
 import netCDF4 as nt
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-os.environ["PROJ_LIB"] = "C:\\Users\\tpklo\\.conda\\pkgs\\proj4-5.2.0-ha925a31_1\\Library\\share"
-from mpl_toolkits.basemap import Basemap, addcyclic, shiftgrid
+
+from mpl_toolkits.basemap import Basemap
 
 
-def basic_plot():
-    rootgrp = nt.Dataset("C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2018283.1848.001.2018284055739.nc",
-                          "r+", format="NETCDF5")
-    obs_dat = rootgrp.groups["observation_data"].variables
-    lat, long = rootgrp.GRingPointLatitude, rootgrp.GRingPointLongitude
-    obs_data_Io4, obs_data_Io5 = obs_dat['I04'], obs_dat['I05']
-    obs_io5_lut = obs_dat["I05_brightness_temperature_lut"]
+def get_nc_files(year, month, day, ext=".nc"):
+    from glob import glob
+    import os
+    str = os.path.join("..", "data", f"NPPSoumi {year}-{month}-{day}", f"*{ext}")
+    return glob(str)
+
+
+def load_file(file, band="I05"):
+    """Read in NETCDF4 file - return scaled map"""
+    with nt.Dataset(file, "r+", format="NETCDF5") as rootgrp:
+        lat_anchors = rootgrp.GRingPointLatitude
+        long_anchors = rootgrp.GRingPointLongitude
+        try:
+            obs_data_band = rootgrp.groups["observation_data"].variables[band][:]
+            obs_lookup_band = rootgrp.groups["observation_data"].variables[band + "_brightness_temperature_lut"][:]
+            obs_data_band[obs_data_band == rootgrp.groups["observation_data"].variables[band]._FillValue] = np.nan
+            try:
+                obs_data_band += rootgrp.groups["observation_data"].variables[band].add_offset
+                obs_data_band /= rootgrp.groups["observation_data"].variables[band].scale_factor
+            except AttributeError as e:
+                raise e
+            # lat = np.zeros(obs_data_band.shape)
+            # long = np.zeros(obs_data_band.shape)
+            #
+            # lat[]
+            # xv, yv = np.meshgrid(np.arange(0, obs_data_band.shape[0]), np.arange(0, obs_data_band.shape[1]))
+            # long = long_anchors[0] + xv * (long_anchors[1] - long_anchors[0]) / ob + yv * (
+            #             long_anchors[3] - long_anchors[0])
+            # long =
+            return obs_lookup_band[obs_data_band.astype("int")]
+        except KeyError as e:
+            raise e
+
+
+def select_and_plot(temps, eye_x, eye_y, padding=50):
+    eye = temps[eye_x - padding:eye_x + padding, eye_y - padding: eye_y + padding]
     fig, ax = plt.subplots()
-    im = ax.imshow(obs_data_Io5, cmap="jet", aspect="auto")
+    im = ax.imshow(eye, cmap="jet")
     fig.colorbar(im)
     plt.show()
 
 
-def readin_filename(filename, names, scale=True):
-    data = nt.Dataset(filename)
-    data.set_auto_scale(False)
-    indata = {}
-    for name in names:
-        groups = data.groups.keys()
-        for group in groups:
-            if name in data.groups[group].variables.keys():
-                data_group = group
-        indata[name] = data.groups[data_group].variables[name][:]
-        indata[name] = indata[name].astype('float')
-        if scale:
-            indata[name][indata[name] > 65530] = np.nan
-            try:
-                indata[name] *= data.groups[data_group].variables[name].scale_factor
-            except AttributeError:
-                pass
-            try:
-                indata[name] += data.groups[data_group].variables[name].add_offset
-            except AttributeError:
-                pass
-    return indata
+def plot_using_bmap(temperatures, lat, longs):
+    bmap = Basemap(width=100000, height=100000, resolution="l", projection="stere", lat_0=lat.mean(),
+                   lon_0=longs.mean())
+    la, lo = np.meshgrid(lat, longs)
+    x_i, y_i = bmap(la, lo)
 
-
-def trunc_bright_temp(band, eye_coords, buffer):
-    # Parameters
-    filename = "C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2017262.1742.001.2017335035656.nc"
-
-    # Data Read In
-    data = readin_filename(filename, [band, band+'_brightness_temperature_lut'], scale=False)
-    bt = data[band+'_brightness_temperature_lut'][data[band].astype('int')]
-
-    bt_trunc = np.empty([2*buffer, 2*buffer])
-    bt_trunc_vert = bt[eye_coords[0]-buffer:eye_coords[0]+buffer]
-    for i in range(len(bt_trunc_vert)):
-        bt_trunc[i] = bt_trunc_vert[i][eye_coords[1]-buffer:eye_coords[1]+buffer]
-
-    return bt_trunc
-
-
-def basemap():
-    map = Basemap(width=6000000, height=4500000, rsphere=(6378137.00, 6356752.3142), resolution='c',
-                  area_thresh=1000., projection='lcc', lat_1=21., lat_2=46, lat_0=33.5, lon_0=-89.)
-    map.drawcoastlines()
-    map.drawmapboundary()
+    bmap.pcolor(x_i, y_i, temperatures)
+    bmap.drawcountries()
     plt.show()
 
 
-def eye_plot(bands=['I04', 'I05'], eye_coords=[330, 2360], buffer=60):
-    fig, axs = plt.subplots(nrows=1, ncols=2)
-    for band, ax in zip(bands, axs):
-        eye_data = trunc_bright_temp(band, eye_coords, buffer)
-        im = ax.imshow(eye_data, cmap="jet", aspect="auto")
-        ax.title.set_text(band)
-
-    fig.colorbar(im, ax=axs.ravel().tolist())
+def plot_using_imshow(temps):
+    fig, ax = plt.subplots()
+    im = ax.imshow(temps, cmap="jet")
+    fig.colorbar(im)
     plt.show()
 
-def profile(bands=['I04', 'I05'], eye_coords=[330, 2360]):
 
+def rect_sample_profile(temps, eye_x, eye_y,width=5, max_r=150 ):
+    eye = temps[eye_x:eye_x-max_r:-1, eye_y - width:eye_y + width]
+    r = np.arange(0, max_r)
+    t = np.mean(eye, axis=1)
+    plt.plot(r,t)
+    plt.show()
 
-# vlims 2018 [1825, 1960]
-# hlims 2018 [2920, 3050]
-
-eye_plot()
+files = get_nc_files(2017, 9, 19)
+temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc")
+temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
+t = temps_i05 - temps_i04
+select_and_plot(t, 330, 2360)
+rect_sample_profile(t,330,2360,max_r = 75,width=10)
