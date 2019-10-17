@@ -1,21 +1,70 @@
 import netCDF4 as nt
 import matplotlib.pyplot as plt
+import numpy as np
+
+from mpl_toolkits.basemap import Basemap
 
 
-rootgrp = nt.Dataset("data/temperature/NPPSoumi 2017-09-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", "r+",
-                     format="NETCDF5")
-obs_dat = rootgrp.groups["observation_data"].variables
-lat, long = rootgrp.GRingPointLatitude, rootgrp.GRingPointLongitude
-obs_data_Io4, obs_data_Io5 = obs_dat['I04'], obs_dat['I05']
+def get_nc_files(year, month, day, ext=".nc"):
+    from glob import glob
+    import os
+    str = os.path.join("..", "data", f"NPPSoumi {year}-{month}-{day}", f"*{ext}")
+    return glob(str)
 
 
-obs_io5_lut = obs_dat["I05_brightness_temperature_lut"]
+def load_file(file, band="I05"):
+    """Read in NETCDF4 file - return scaled map"""
+    with nt.Dataset(file, "r+", format="NETCDF5") as rootgrp:
+        lat_anchors = rootgrp.GRingPointLatitude
+        long_anchors = rootgrp.GRingPointLongitude
+        try:
+            obs_data_band = rootgrp.groups["observation_data"].variables[band][:]
+            obs_lookup_band = rootgrp.groups["observation_data"].variables[band + "_brightness_temperature_lut"][:]
+            obs_data_band[obs_data_band == rootgrp.groups["observation_data"].variables[band]._FillValue] = np.nan
+            try:
+                obs_data_band += rootgrp.groups["observation_data"].variables[band].add_offset
+                obs_data_band /= rootgrp.groups["observation_data"].variables[band].scale_factor
+            except AttributeError as e:
+                raise e
+            # lat = np.zeros(obs_data_band.shape)
+            # long = np.zeros(obs_data_band.shape)
+            #
+            # lat[]
+            # xv, yv = np.meshgrid(np.arange(0, obs_data_band.shape[0]), np.arange(0, obs_data_band.shape[1]))
+            # long = long_anchors[0] + xv * (long_anchors[1] - long_anchors[0]) / ob + yv * (
+            #             long_anchors[3] - long_anchors[0])
+            # long =
+            return obs_lookup_band[obs_data_band.astype("int")]
+        except KeyError as e:
+            raise e
 
-obs_io5_temp.reshape(obs_data_Io5.shape)
 
-fig, ax = plt.subplots()
-im = ax.imshow(obs_io5_temp, cmap="jet", aspect="auto")
-fig.colorbar(im)
-plt.show()
+def select_and_plot(temps, eye_x, eye_y, padding=50):
+    eye = temps[eye_x - padding:eye_x + padding, eye_y - padding: eye_y + padding]
+    fig, ax = plt.subplots()
+    im = ax.imshow(eye, cmap="jet")
+    fig.colorbar(im)
 
-rootgrp.close()
+def plot_using_bmap(temperatures, lat, longs):
+    bmap = Basemap(width=100000, height=100000, resolution="l", projection="stere", lat_0=lat.mean(),
+                   lon_0=longs.mean())
+    la, lo = np.meshgrid(lat, longs)
+    x_i, y_i = bmap(la, lo)
+
+    bmap.pcolor(x_i, y_i, temperatures)
+    bmap.drawcountries()
+    plt.show()
+
+
+def plot_using_imshow(temps):
+    fig, ax = plt.subplots()
+    im = ax.imshow(temps, cmap="jet")
+    fig.colorbar(im)
+    plt.show()
+
+
+files = get_nc_files(2017, 9, 19)
+temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc")
+temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc",band="I04")
+t = temps_i05
+select_and_plot(t, 300, 2300, 100)
