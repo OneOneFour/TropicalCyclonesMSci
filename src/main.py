@@ -44,6 +44,8 @@ def select_and_plot(temps, eye_x, eye_y, padding=50):
     fig, ax = plt.subplots()
     im = ax.imshow(eye, cmap="jet")
     fig.colorbar(im)
+    plt.show()
+
 
 def plot_using_bmap(temperatures, lat, longs):
     bmap = Basemap(width=100000, height=100000, resolution="l", projection="stere", lat_0=lat.mean(),
@@ -63,8 +65,16 @@ def plot_using_imshow(temps):
     plt.show()
 
 
+def rect_sample_profile(temps, eye_x, eye_y,width=5, max_r=150 ):
+    eye = temps[eye_x:eye_x-max_r:-1, eye_y - width:eye_y + width]
+    r = np.arange(0, max_r)
+    t = np.mean(eye, axis=1)
+    plt.plot(r,t)
+    plt.show()
+
 files = get_nc_files(2017, 9, 19)
 temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc")
-temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc",band="I04")
-t = temps_i05
-select_and_plot(t, 300, 2300, 100)
+temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
+t = temps_i05 - temps_i04
+select_and_plot(t, 330, 2360)
+rect_sample_profile(t,330,2360,max_r = 75,width=10)
