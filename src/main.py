@@ -1,13 +1,15 @@
 import netCDF4 as nt
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+os.environ['PROJ_LIB'] = 'C:\\Users\\tpklo\\.conda\\pkgs\\proj4-5.2.0-ha925a31_1\\Library\\share'
+
 
 from mpl_toolkits.basemap import Basemap
 
 
 def get_nc_files(year, month, day, ext=".nc"):
     from glob import glob
-    import os
     str = os.path.join("..", "data", f"NPPSoumi {year}-{month}-{day}", f"*{ext}")
     return glob(str)
 
@@ -73,8 +75,8 @@ def rect_sample_profile(temps, eye_x, eye_y,width=5, max_r=150 ):
     plt.show()
 
 files = get_nc_files(2017, 9, 19)
-temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc")
-temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
+temps_i05 = load_file("C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2017262.1742.001.2017335035656.nc")
+temps_i04 = load_file("C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
 t = temps_i05 - temps_i04
 select_and_plot(t, 330, 2360)
 rect_sample_profile(t,330,2360,max_r = 75,width=10)
