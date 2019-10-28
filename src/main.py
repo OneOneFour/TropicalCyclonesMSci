@@ -46,7 +46,6 @@ def select_and_plot(temps, eye_x, eye_y, padding=50):
     fig, ax = plt.subplots()
     im = ax.imshow(eye, cmap="jet")
     fig.colorbar(im)
-    plt.show()
 
 
 def plot_using_bmap(temperatures, lat, longs):
@@ -57,26 +56,38 @@ def plot_using_bmap(temperatures, lat, longs):
 
     bmap.pcolor(x_i, y_i, temperatures)
     bmap.drawcountries()
-    plt.show()
 
 
 def plot_using_imshow(temps):
     fig, ax = plt.subplots()
     im = ax.imshow(temps, cmap="jet")
     fig.colorbar(im)
-    plt.show()
 
 
-def rect_sample_profile(temps, eye_x, eye_y,width=5, max_r=150 ):
-    eye = temps[eye_x:eye_x-max_r:-1, eye_y - width:eye_y + width]
-    r = np.arange(0, max_r)
-    t = np.mean(eye, axis=1)
-    plt.plot(r,t)
-    plt.show()
+def rect_sample_profile(i05temps, i04temps, eye_x, eye_y,width=5, max_r=150, type='both'):
+    i05eye = i05temps[eye_x:eye_x-max_r:-1, eye_y - width:eye_y + width]
+    i04eye = i04temps[eye_x:eye_x-max_r:-1, eye_y - width:eye_y + width]
+    r = np.arange(0, max_r) * 375
+    i05t = np.mean(i05eye, axis=1)
+    i04t = np.mean(i04eye, axis=1)
+    plt.figure()
+    if type == 'both':
+        plt.plot(r, i05t, label='I05')
+        plt.plot(r, i04t, label='I04')
+        plt.ylabel('I05/I04 Brightness Temperature/K')
+        plt.xlabel('Radius from centre/m')
+        plt.legend()
+    elif type == 'compare':
+        plt.plot(i05t-i04t, i05t)
+        plt.xlabel('I05-I04')
+        plt.ylabel('I05')
+
 
 files = get_nc_files(2017, 9, 19)
 temps_i05 = load_file("C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2017262.1742.001.2017335035656.nc")
 temps_i04 = load_file("C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
 t = temps_i05 - temps_i04
 select_and_plot(t, 330, 2360)
-rect_sample_profile(t,330,2360,max_r = 75,width=10)
+rect_sample_profile(temps_i05, temps_i04, 330, 2360, max_r=75, width=10, type='both')
+
+plt.show()
