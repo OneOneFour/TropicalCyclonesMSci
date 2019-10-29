@@ -1,4 +1,6 @@
 numpy
 matplotlib
-basemap
-netCDF4
+satpy
+requests
+wget
+
