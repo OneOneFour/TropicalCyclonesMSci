@@ -63,7 +63,7 @@ def rect_sample_profile(temps, eye_x, eye_y, width=5, max_r=150):
     plt.show()
 
 
-filenames = find_files_and_readers(base_dir="./", reader="viirs_l1b", start_time=datetime(2017, 9, 19),
+filenames = find_files_and_readers(base_dir="../data", reader="viirs_l1b", start_time=datetime(2017, 9, 19),
                                    end_time=datetime(2017, 9, 20))
 
 print(filenames)
