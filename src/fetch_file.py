@@ -5,13 +5,14 @@ import wget
 import requests
 import satpy
 
+
 WEBSERVER_QUERY_URL = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
 
 SEARCH_FOR_FILES = "/searchForFiles"
 GET_FILE_URLS = "/getFileUrls"
 
-
-def get_data(root_dir, year, month, day, north=90, south=-90, west=-180, east=180, collection="5110"):
+#TODO find way to apply this filter after the first initial query, aka by looking inside the ncdump metadata
+def get_data(root_dir, year, month, day, north=90, south=-90, west=-180, east=180, collection="5110",dayOrNight="DNB"):
     '''
     Use SatPy to check if data exists already in root dir. If not contact the NASA LAADS DAC server to download the required data.
     '''
@@ -36,6 +37,7 @@ def get_data(root_dir, year, month, day, north=90, south=-90, west=-180, east=18
             "east": east,
             "west": west,
             "coordsOrTiles": "coords",
+            "dayNightBoth":dayOrNight
         })
         fileIdStr = ""
         root_fids = ET.fromstring(query_response.content)
@@ -44,8 +46,11 @@ def get_data(root_dir, year, month, day, north=90, south=-90, west=-180, east=18
         file_name_response = requests.get(WEBSERVER_QUERY_URL + GET_FILE_URLS, params={"fileIds": fileIdStr})
         files = [f.text for f in ET.fromstring(file_name_response.content)]
         fpath = [os.path.join(root_dir, os.path.split(f)[1]) for f in files]
-        if input(f"The following files will be downloaded (y/n)?:\n{files}") == "y":
+        if input(f"The following files will be downloaded (y/n)?:\n{files}\n") == "y":
             for i, file in enumerate(files):
+                if os.path.isfile(fpath[i]):
+                    print(f"{fpath[i]} already downloaded... skipping...")
+                    continue
                 print(f"Downloading {file}")
                 # Begin downloading from the content server
                 header = {

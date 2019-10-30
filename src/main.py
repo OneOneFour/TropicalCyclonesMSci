@@ -1,8 +1,9 @@
-import netCDF4 as nt
 import matplotlib.pyplot as plt
+import netCDF4 as nt
 import numpy as np
-from satpy import Scene, find_files_and_readers
-from datetime import datetime
+from satpy import Scene
+
+from fetch_file import get_data
 
 
 def get_nc_files(year, month, day, time, ext=".nc"):
@@ -63,13 +64,18 @@ def rect_sample_profile(temps, eye_x, eye_y, width=5, max_r=150):
     plt.show()
 
 
-filenames = find_files_and_readers(base_dir="../data", reader="viirs_l1b", start_time=datetime(2017, 9, 19),
-                                   end_time=datetime(2017, 9, 20))
+filenames = get_data("data", 2017, 9, 19, north=18, south=14, west=-65, east=-60,dayOrNight="D")
 
 print(filenames)
-scene = Scene(reader="viirs_l1b",filenames=filenames)
-scene.load(["I04","I05"])
-scene.show("I04")
+scene = Scene(reader="viirs_l1b", filenames=filenames)
+scene.load(["I04", "I05", "i_lat", "i_lon"])
+new_scene = scene.resample("cwa")
+plt.imshow(scene["I04"])
+plt.colorbar()
+plt.show()
+plt.imshow(new_scene.resample("cwa"))
+plt.colorbar()
+plt.show()
 # files = get_nc_files(2017, 9, 19)
 # temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP03IMG.A2017262.1600.001.2017335033838.nc")
 # temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
