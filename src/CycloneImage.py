@@ -40,7 +40,7 @@ class CycloneImage:
             area = self.raw_scene[band].attrs["area"].compute_optimal_bb_area(
                 {"proj": proj, "lat_0": self.center[0], "lon_0": self.center[1], "lat_1": 25., "lat_2": 25.}
             )
-            self.corrected_scene = self.raw_scene.resample(area)  # resample image to projectioni
+            self.corrected_scene = self.raw_scene.resample(area)  # resample image to projection
             crs = self.corrected_scene[band].attrs["area"].to_cartopy_crs()
 
         # Cartopy methods
