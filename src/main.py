@@ -64,18 +64,33 @@ def rect_sample_profile(temps, eye_x, eye_y, width=5, max_r=150):
     plt.show()
 
 
-filenames = get_data("data", 2017, 9, 19, north=18, south=14, west=-65, east=-60,dayOrNight="D")
+filenames = get_data("data", 2017, 9, 19, north=18, south=14, west=-65, east=-60, dayOrNight="D")
 
 print(filenames)
 scene = Scene(reader="viirs_l1b", filenames=filenames)
 scene.load(["I04", "I05", "i_lat", "i_lon"])
-new_scene = scene.resample("cwa")
+# new_scene = scene.resample(resampler = "ewa")
 plt.imshow(scene["I04"])
 plt.colorbar()
 plt.show()
-plt.imshow(new_scene.resample("cwa"))
-plt.colorbar()
+
+# Attempt at Cartopy plot
+
+my_area = scene["I04"].attrs["area"].compute_optimal_bb_area(
+    {"proj": "lcc", "lon_0": -60, "lat_0": 15, "lat_1": 25., "lat_2": 25.})
+new_scene = scene.resample(my_area)
+crs = new_scene["I04"].attrs["area"].to_cartopy_crs()
+ax = plt.axes(projection=crs)
+
+ax.coastlines()
+ax.gridlines()
+ax.set_global()
+plt.imshow(new_scene["I04"],transform=crs,extent=crs.bounds,origin="upper")
 plt.show()
+
+# plt.imshow(new_scene["I04"])
+# plt.colorbar()
+# plt.show()
 # files = get_nc_files(2017, 9, 19)
 # temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP03IMG.A2017262.1600.001.2017335033838.nc")
 # temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")

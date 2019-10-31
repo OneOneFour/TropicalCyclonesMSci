@@ -57,6 +57,7 @@ def get_data(root_dir, year, month, day, north=90, south=-90, west=-180, east=18
                     "Authorization": os.environ["LAADS_API_KEY"]
                 }
                 # Use wget for large files
+                # headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
                 wget.download(file, fpath[i])
                 if not os.path.isfile(fpath[i]):
                     raise ConnectionError(
