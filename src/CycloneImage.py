@@ -34,11 +34,14 @@ class CycloneImage:
         self.raw_scene.load(["I04", "I05", "i_lat", "i_lon"])  # Load the two primary bands of inspection + geodata
 
     def plot_globe(self, band="I04", proj="lcc"):
-        area = self.raw_scene[band].attrs["area"].compute_optimal_bb_area(
-            {"proj": proj, "lat_0": self.center[0], "lon_0": self.center[1], "lat_1": 25., "lat_2": 25.}
-        )
-        corrected_scene = self.raw_scene.resample(area)  # resample image to projection
-        crs = corrected_scene[band].attrs["area"].to_cartopy_crs()
+        try:
+            crs = self.corrected_scene[band].attrs["area"].to_cartopy_crs()
+        except AttributeError:
+            area = self.raw_scene[band].attrs["area"].compute_optimal_bb_area(
+                {"proj": proj, "lat_0": self.center[0], "lon_0": self.center[1], "lat_1": 25., "lat_2": 25.}
+            )
+            self.corrected_scene = self.raw_scene.resample(area)  # resample image to projectioni
+            crs = self.corrected_scene[band].attrs["area"].to_cartopy_crs()
 
         # Cartopy methods
         ax = plt.axes(projection=crs)
@@ -46,7 +49,7 @@ class CycloneImage:
         ax.gridlines()
         ax.set_global()
 
-        plt.imshow(corrected_scene[band], transform=crs, extent=crs.bounds, origin="upper")
+        plt.imshow(self.corrected_scene[band], transform=crs, extent=crs.bounds, origin="upper")
         cb = plt.colorbar()
         cb.set_label("Kelvin (K)")
         plt.show()
