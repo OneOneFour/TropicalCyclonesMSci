@@ -3,7 +3,7 @@ from satpy import Scene, find_files_and_readers
 from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
-import h5py
+from fetch_file import get_data
 #import os
 #os.environ['PROJ_LIB'] = 'C:\\Users\\tpklo\\.conda\\pkgs\\proj4-5.2.0-ha925a31_1\\Library\\share'
 
@@ -96,14 +96,43 @@ def combined_imaging_bands(filename, eye_coords=None):
     else:
         plot_eye(temps_combined, eye_coords[0], eye_coords[1])
 
-#filenames = find_files_and_readers(base_dir="../Data", reader="viirs_l1b", start_time=datetime(2017, 9, 19), end_time=datetime(2017, 9, 20))
+def compare_diff_days(filenames, i05_temps, i04_temps, eyes, width):
+    for i in range(len(i04_temps)):
+        i05eye = i05_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
+        i04eye = i04_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
+        i05t = np.mean(i05eye, axis=1)
+        i04t = np.mean(i04eye, axis=1)
+        label = filenames[i][18:30]
+        plt.scatter(i04t, i05t, label=label, s=10)
+    plt.xlabel('I04')
+    plt.ylabel('I05')
+    plt.legend()
+
+#filenames = find_files_and_readers(base_dir="../Data", reader="viirs_l1b", start_time=datetime(2018, 10, 10), end_time=datetime(2018, 10, 11))
 #scene = Scene(reader="viirs_l1b", filenames=filenames)
 #scene.load(["I04","I05"])
-#files = get_nc_files(2017, 9, 19)
 
-temps_i05, longs, lats = load_file("C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2017262.1742.001.2017335035656.nc",
-                      geo_file="C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP03IMG.A2017262.1742.001.2017335033241.nc")
-temps_i04 = load_file("C:/Users/tpklo/OneDrive/Documents/MSci/InitialCode/Data/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
-rect_sample_profile(temps_i05, temps_i04, 330, 2360, max_r=75, width=5, type='compare')
+#filenames = get_data(root_dir="../Data", year=2019, month=9, day=1, north=27, south=25, west=-78, east=-76)
+#for filename in filenames['viirs_l1b']:
+#    if 'VNP02' in filename:
+#        print(filename)
+#        temps_i05 = load_file(filename)
+#        temps_i04 = load_file(filename, band="I04")
+#        plot_whole_im(temps_i05)
+#rect_sample_profile(temps_i05, temps_i04, 330, 2360, max_r=75, width=5, type='compare')
 
+
+files = ["../Data/VNP02IMG.A2019242.1730.001.2019243030442.nc",
+         "../Data/VNP02IMG.A2019243.1712.001.2019243231515.nc",
+         "../Data/VNP02IMG.A2019244.1830.001.2019245003519.nc"]
+eyes = [[4245, 2413], [5916, 2166], [2103, 6217]]
+i04_temp_list = []
+i05_temp_list = []
+for file in files:
+    temps_i05 = load_file(file)
+    temps_i04 = load_file(file, band="I04")
+    i04_temp_list.append(temps_i04)
+    i05_temp_list.append(temps_i05)
+#plot_eye(i05_temp_list[0], eye_y=4245, eye_x=2413)
+compare_diff_days(files, i05_temp_list, i04_temp_list, eyes, width=3)
 plt.show()
