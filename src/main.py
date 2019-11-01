@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import netCDF4 as nt
 import numpy as np
-
+from fetch_file import get_data
 from CycloneImage import CycloneImage
 
 
@@ -94,89 +94,55 @@ def combined_imaging_bands(filename, eye_coords=None):
     else:
         plot_eye(temps_combined, eye_coords[0], eye_coords[1])
 
-def compare_diff_days(filenames, i05_temps, i04_temps, eyes, width):
+
+def compare_diff_days(filenames, i05_temps, i04_temps, eyes, width, sides):
     for i in range(len(i04_temps)):
-        i05eye = i05_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
-        i04eye = i04_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
+        if sides[i] == "left":
+            i05eye = i05_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
+            i04eye = i04_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
+        elif sides[i] == "right":
+            i05eye = i05_temps[i][eyes[i][1]:eyes[i][1]+150, eyes[i][0] - width:eyes[i][0] + width]
+            i04eye = i04_temps[i][eyes[i][1]:eyes[i][1]+150, eyes[i][0] - width:eyes[i][0] + width]
         i05t = np.mean(i05eye, axis=1)
         i04t = np.mean(i04eye, axis=1)
         label = filenames[i][18:30]
-        plt.scatter(i04t, i05t, label=label, s=10)
+        plt.scatter(i04t, i05t, label=label, s=20)
     plt.xlabel('I04')
     plt.ylabel('I05')
     plt.legend()
 
-#filenames = find_files_and_readers(base_dir="../Data", reader="viirs_l1b", start_time=datetime(2018, 10, 10), end_time=datetime(2018, 10, 11))
-#scene = Scene(reader="viirs_l1b", filenames=filenames)
-#scene.load(["I04","I05"])
-
-#filenames = get_data(root_dir="../Data", year=2019, month=9, day=1, north=27, south=25, west=-78, east=-76)
-#for filename in filenames['viirs_l1b']:
-#    if 'VNP02' in filename:
-#        print(filename)
-#        temps_i05 = load_file(filename)
-#        temps_i04 = load_file(filename, band="I04")
-#        plot_whole_im(temps_i05)
-#rect_sample_profile(temps_i05, temps_i04, 330, 2360, max_r=75, width=5, type='compare')
-
-
-files = ["../Data/VNP02IMG.A2019242.1730.001.2019243030442.nc",
-         "../Data/VNP02IMG.A2019243.1712.001.2019243231515.nc",
-         "../Data/VNP02IMG.A2019244.1830.001.2019245003519.nc"]
-eyes = [[4245, 2413], [5916, 2166], [2103, 6217]]
-i04_temp_list = []
-i05_temp_list = []
-for file in files:
-    temps_i05 = load_file(file)
-    temps_i04 = load_file(file, band="I04")
-    i04_temp_list.append(temps_i04)
-    i05_temp_list.append(temps_i05)
-#plot_eye(i05_temp_list[0], eye_y=4245, eye_x=2413)
-compare_diff_days(files, i05_temp_list, i04_temp_list, eyes, width=3)
-plt.show()
-
-
-def rect_sample_profile(temps, eye_x, eye_y, width=5, max_r=150):
-    eye = temps[eye_x:eye_x - max_r:-1, eye_y - width:eye_y + width]
-    r = np.arange(0, max_r)
-    t = np.mean(eye, axis=1)
-    plt.plot(r, t)
-    plt.show()
-
 
 if __name__ == "__main__":
-    ci = CycloneImage(2017, 9, 19, center=(16, -62.5), margin=(2.5, 2.5))
-    ci.plot_globe()
-    # filenames = get_data("data", 2017, 9, 19, north=18, south=14, west=-65, east=-60, dayOrNight="D")
-    #
-    # print(filenames)
-    # scene = Scene(reader="viirs_l1b", filenames=filenames)
-    # scene.load(["I04", "I05", "i_lat", "i_lon"])
-    # # new_scene = scene.resample(resampler = "ewa")
-    # plt.imshow(scene["I04"])
-    # plt.colorbar()
-    # plt.show()
-    #
-    # # Attempt at Cartopy plot
-    #
-    # my_area = scene["I04"].attrs["area"].compute_optimal_bb_area(
-    #     {"proj": "lcc", "lon_0": -60, "lat_0": 15, "lat_1": 25., "lat_2": 25.})
-    # new_scene = scene.resample(my_area)
-    # crs = new_scene["I04"].attrs["area"].to_cartopy_crs()
-    # ax = plt.axes(projection=crs)
-    #
-    # ax.coastlines()
-    # ax.gridlines()
-    # ax.set_global()
-    # plt.imshow(new_scene["I04"],transform=crs,extent=crs.bounds,origin="upper")
-    # plt.show()
-    #
-    # # plt.imshow(new_scene["I04"])
-    # # plt.colorbar()
-    # # plt.show()
-    # # files = get_nc_files(2017, 9, 19)
-    # # temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP03IMG.A2017262.1600.001.2017335033838.nc")
-    # # temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
-    # # t = temps_i05 - temps_i04
-    # # select_and_plot(t, 330, 2360)
-    # # rect_sample_profile(t, 330, 2360, max_r=75, width=10)
+    # ci = CycloneImage(2017, 9, 19, center=(16, -62.5), margin=(2.5, 2.5))
+    # ci.plot_globe()
+
+    #  filenames = get_data(root_dir="../Data", year=2019, month=9, day=26, north=16, south=16, west=-41, east=-40, dayOrNight="D")
+    # for filename in filenames:   # ['viirs_l1b']:
+    #    if 'VNP02' in filename:
+    #        print(filename)
+    #        temps_i05 = load_file(filename)
+    #        #temps_i04 = load_file(filename, band="I04")
+    #        plot_whole_im(temps_i05)
+
+    #same_storm_files = ["../Data/VNP02IMG.A2019242.1730.001.2019243030442.nc",
+    #         "../Data/VNP02IMG.A2019243.1712.001.2019243231515.nc",
+    #         "../Data/VNP02IMG.A2019244.1830.001.2019245003519.nc"]
+    # same_storm_eyes = [[4245, 2413], [5916, 2166], [2103, 6217]]
+
+    diff_storm_files = ["../Data/VNP02IMG.A2017262.1742.001.2017335035656.nc",
+                        "../Data/VNP02IMG.A2018283.1848.001.2018284055739.nc",
+                        "../Data/VNP02IMG.A2019242.1730.001.2019243030442.nc",
+                        "../Data/VNP02IMG.A2019269.1536.001.2019276171936.nc"]
+    diff_storm_eyes = [[2360, 330], [2995, 1891], [4245, 2413], [4147, 6160]]
+    directions = ["left", "left", "left", "left"]
+    i04_temp_list = []
+    i05_temp_list = []
+    for file in diff_storm_files:
+        temps_i05 = load_file(file)
+        temps_i04 = load_file(file, band="I04")
+        i04_temp_list.append(temps_i04)
+        i05_temp_list.append(temps_i05)
+    #plot_eye(i05_temp_list[0], eye_y=4245, eye_x=2413)
+    compare_diff_days(diff_storm_files, i05_temp_list, i04_temp_list, diff_storm_eyes, width=3, sides=directions)
+
+    plt.show()
