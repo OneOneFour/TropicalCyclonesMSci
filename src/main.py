@@ -1,11 +1,8 @@
-import netCDF4 as nt
-from satpy import Scene, find_files_and_readers
-from datetime import datetime
 import matplotlib.pyplot as plt
+import netCDF4 as nt
 import numpy as np
-from fetch_file import get_data
-#import os
-#os.environ['PROJ_LIB'] = 'C:\\Users\\tpklo\\.conda\\pkgs\\proj4-5.2.0-ha925a31_1\\Library\\share'
+
+from CycloneImage import CycloneImage
 
 
 def get_nc_files(year, month, day, ext=".nc"):
@@ -45,6 +42,7 @@ def load_file(img_file, geo_file=None, band="I05"):
             except KeyError as e:
                 print("Are you sure this is a geolocation file")
                 raise e
+
     return obs_lookup_band[obs_data_band.astype("int")]
 
 
@@ -136,3 +134,49 @@ for file in files:
 #plot_eye(i05_temp_list[0], eye_y=4245, eye_x=2413)
 compare_diff_days(files, i05_temp_list, i04_temp_list, eyes, width=3)
 plt.show()
+
+
+def rect_sample_profile(temps, eye_x, eye_y, width=5, max_r=150):
+    eye = temps[eye_x:eye_x - max_r:-1, eye_y - width:eye_y + width]
+    r = np.arange(0, max_r)
+    t = np.mean(eye, axis=1)
+    plt.plot(r, t)
+    plt.show()
+
+
+if __name__ == "__main__":
+    ci = CycloneImage(2017, 9, 19, center=(16, -62.5), margin=(2.5, 2.5))
+    ci.plot_globe()
+    # filenames = get_data("data", 2017, 9, 19, north=18, south=14, west=-65, east=-60, dayOrNight="D")
+    #
+    # print(filenames)
+    # scene = Scene(reader="viirs_l1b", filenames=filenames)
+    # scene.load(["I04", "I05", "i_lat", "i_lon"])
+    # # new_scene = scene.resample(resampler = "ewa")
+    # plt.imshow(scene["I04"])
+    # plt.colorbar()
+    # plt.show()
+    #
+    # # Attempt at Cartopy plot
+    #
+    # my_area = scene["I04"].attrs["area"].compute_optimal_bb_area(
+    #     {"proj": "lcc", "lon_0": -60, "lat_0": 15, "lat_1": 25., "lat_2": 25.})
+    # new_scene = scene.resample(my_area)
+    # crs = new_scene["I04"].attrs["area"].to_cartopy_crs()
+    # ax = plt.axes(projection=crs)
+    #
+    # ax.coastlines()
+    # ax.gridlines()
+    # ax.set_global()
+    # plt.imshow(new_scene["I04"],transform=crs,extent=crs.bounds,origin="upper")
+    # plt.show()
+    #
+    # # plt.imshow(new_scene["I04"])
+    # # plt.colorbar()
+    # # plt.show()
+    # # files = get_nc_files(2017, 9, 19)
+    # # temps_i05 = load_file("../data/NPPSoumi 2017-9-19/VNP03IMG.A2017262.1600.001.2017335033838.nc")
+    # # temps_i04 = load_file("../data/NPPSoumi 2017-9-19/VNP02IMG.A2017262.1742.001.2017335035656.nc", band="I04")
+    # # t = temps_i05 - temps_i04
+    # # select_and_plot(t, 330, 2360)
+    # # rect_sample_profile(t, 330, 2360, max_r=75, width=10)
