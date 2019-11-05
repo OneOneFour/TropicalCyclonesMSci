@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import netCDF4 as nt
 import numpy as np
+import csv
+import datetime
 from fetch_file import get_data
 from CycloneImage import CycloneImage
 
@@ -47,7 +49,7 @@ def load_file(img_file, geo_file=None, band="I05"):
 
 
 def plot_eye(temps, eye_x, eye_y, padding=50):
-    eye = temps[eye_x - padding:eye_x + padding, eye_y - padding: eye_y + padding]
+    eye = temps[eye_y - padding:eye_y + padding, eye_x - padding: eye_x + padding]
     fig, ax = plt.subplots()
     im = ax.imshow(eye, cmap="jet")
     fig.colorbar(im)
@@ -95,54 +97,86 @@ def combined_imaging_bands(filename, eye_coords=None):
         plot_eye(temps_combined, eye_coords[0], eye_coords[1])
 
 
-def compare_diff_days(filenames, i05_temps, i04_temps, eyes, width, sides):
+def compare_diff_days(filenames, i05_temps, i04_temps, eyes, width, sides, radius):
+    num_days = len(filenames)
+    half_days_floor = int(np.floor(num_days/2))
+    half_days_ceil = int(np.ceil(num_days/2))
+    fig, axs = plt.subplots(half_days_floor, half_days_ceil)
+    subplot_y = subplot_x = 0
     for i in range(len(i04_temps)):
         if sides[i] == "left":
-            i05eye = i05_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
-            i04eye = i04_temps[i][eyes[i][1] - 150:eyes[i][1], eyes[i][0] - width:eyes[i][0] + width]
+            i05eye = i05_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
+            i04eye = i04_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
         elif sides[i] == "right":
-            i05eye = i05_temps[i][eyes[i][1]:eyes[i][1]+150, eyes[i][0] - width:eyes[i][0] + width]
-            i04eye = i04_temps[i][eyes[i][1]:eyes[i][1]+150, eyes[i][0] - width:eyes[i][0] + width]
-        i05t = np.mean(i05eye, axis=1)
-        i04t = np.mean(i04eye, axis=1)
+            i05eye = i05_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
+            i04eye = i04_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
+        i05t = np.mean(i05eye, axis=0)
+        i04t = np.mean(i04eye, axis=0)
         label = filenames[i][18:30]
-        plt.scatter(i04t, i05t, label=label, s=20)
-    plt.xlabel('I04')
-    plt.ylabel('I05')
-    plt.legend()
+        axs[subplot_y, subplot_x].scatter(i04t, i05t, label=label, s=20)
+        axs[subplot_y, subplot_x].set_xlabel('I04')
+        axs[subplot_y, subplot_x].set_ylabel('I05')
+        axs[subplot_y, subplot_x].legend()
+        if subplot_x == half_days_ceil - 1:
+            subplot_x = 0
+            subplot_y += 1
+        else:
+            subplot_x += 1
 
 
-if __name__ == "__main__":
-    # ci = CycloneImage(2017, 9, 19, center=(16, -62.5), margin=(2.5, 2.5))
-    # ci.plot_globe()
-
-    #  filenames = get_data(root_dir="../Data", year=2019, month=9, day=26, north=16, south=16, west=-41, east=-40, dayOrNight="D")
-    # for filename in filenames:   # ['viirs_l1b']:
-    #    if 'VNP02' in filename:
-    #        print(filename)
-    #        temps_i05 = load_file(filename)
-    #        #temps_i04 = load_file(filename, band="I04")
-    #        plot_whole_im(temps_i05)
-
-    #same_storm_files = ["../Data/VNP02IMG.A2019242.1730.001.2019243030442.nc",
-    #         "../Data/VNP02IMG.A2019243.1712.001.2019243231515.nc",
-    #         "../Data/VNP02IMG.A2019244.1830.001.2019245003519.nc"]
-    # same_storm_eyes = [[4245, 2413], [5916, 2166], [2103, 6217]]
-
-    diff_storm_files = ["../Data/VNP02IMG.A2017262.1742.001.2017335035656.nc",
-                        "../Data/VNP02IMG.A2018283.1848.001.2018284055739.nc",
-                        "../Data/VNP02IMG.A2019242.1730.001.2019243030442.nc",
-                        "../Data/VNP02IMG.A2019269.1536.001.2019276171936.nc"]
-    diff_storm_eyes = [[2360, 330], [2995, 1891], [4245, 2413], [4147, 6160]]
-    directions = ["left", "left", "left", "left"]
+def load_cycs_and_plot(filenames, eyes, directions, plot_type="eye"):
     i04_temp_list = []
     i05_temp_list = []
-    for file in diff_storm_files:
+    for file in filenames:
         temps_i05 = load_file(file)
         temps_i04 = load_file(file, band="I04")
         i04_temp_list.append(temps_i04)
         i05_temp_list.append(temps_i05)
-    #plot_eye(i05_temp_list[0], eye_y=4245, eye_x=2413)
-    compare_diff_days(diff_storm_files, i05_temp_list, i04_temp_list, diff_storm_eyes, width=3, sides=directions)
+
+    if plot_type == "eye":
+        for i in range(len(i05_temp_list)):
+            plot_eye(i05_temp_list[i], eye_x=eyes[i][0], eye_y=eyes[i][1], padding=75)
+    elif plot_type == "prof_compare":
+        compare_diff_days(filenames, i05_temp_list, i04_temp_list, eyes, width=3, radius=130, sides=directions)
+
+
+def read_cyc_csv(filename):
+    with open(filename, mode='r') as csv_file:
+        csv_reader = csv.DictReader(csv_file)
+        filenames = []
+        eye_data = []
+        eye_directions = []
+        for row in csv_reader:
+            filenames.append('Data/%s' % row['Filename'])
+            eye_data.append([int(row['Eye X']), int(row['Eye Y'])])
+            eye_directions.append(row['Direction'])
+    return filenames, eye_data, eye_directions
+
+
+def find_cyc_data(year, month, day, eye_lat, eye_long, where_store):
+    filenames = get_data(root_dir="Data", year=year, month=month, day=day,
+                         north=eye_lat+1, south=eye_lat-1, west=eye_long-1, east=eye_long+1,
+                         dayOrNight="D")
+    for filename in filenames:
+        if 'VNP02' in filename:
+            print(filename)
+            temps_i05 = load_file(filename)
+            plot_whole_im(temps_i05)
+            plt.pause(15)
+            eyex = input("What is the eye x?")
+            eyey = input("What is the eye y?")
+            side = "left" if int(eyex) <= 3200 else "right"
+            with open(where_store, mode='a') as csv_file:
+                csv_writer = csv.writer(csv_file)
+                date = datetime.datetime(int(filename[15:19]), 1, 1) + datetime.timedelta(int(filename[19:22]) - 1)
+                row = [filename[5:], filename[15:19], date.date().month, date.date().day, filename[23:27], eyex, eyey,
+                       side, 0, 3]
+                csv_writer.writerow(row)
+
+
+if __name__ == "__main__":
+    # find_cyc_data(2019, 9, 17, eye_lat=31, eye_long=-72, where_store="Data/eye_catalogue")
+    files, eye_data, directions = read_cyc_csv("Data/eye_catalogue")
+    load_cycs_and_plot(files, eye_data, directions, plot_type="prof_compare")
 
     plt.show()
