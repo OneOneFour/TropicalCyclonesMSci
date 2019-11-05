@@ -71,6 +71,8 @@ class CycloneImage:
         splice = self.core_scene.crop(xy_bbox=[center[0] - w/2,center[1] - h/2,center[0] + w/2,center[1] + h/2])
 
         plt.scatter(splice["I04"].data.flatten().compute(), splice["I05"].data.flatten().compute())
+        plt.ylabel("Cloud Top Temperature (K)")
+        plt.xlabel("I4 band reflectance (K)")
         plt.show()
 
 
@@ -78,4 +80,4 @@ if __name__ == "__main__":
 
     with ProgressBar():
         ci = CycloneImage(2017, 9, 19, center=(16.58, -63.52), margin=(0.5, 0.5))
-        ci.draw_rect((-20000, 0), 5000, 40000)
+        ci.draw_rect((0, -30000), 5000, 40000)
