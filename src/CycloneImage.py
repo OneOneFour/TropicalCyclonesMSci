@@ -6,9 +6,7 @@ from pyresample import create_area_def
 from satpy import Scene
 
 from fetch_file import get_data
-
 DATA_DIRECTORY = "data"
-
 
 class CycloneImage:
 
