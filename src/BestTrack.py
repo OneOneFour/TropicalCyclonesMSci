@@ -18,9 +18,10 @@ for name, cyclone in cat_4_5_all_basins_group:
     for i, cyclone_point in enumerate(dict_cy[:-1]):
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
-        ci = get_eye(start_point, end_point, name=start_point["NAME"], basin=start_point["BASIN"])
+        ci = get_eye(start_point, end_point, name=start_point["NAME"], basin=start_point["BASIN"],cat=start_point["USA_SSHS"])
         if ci is not None:
             ci.draw_eye("I04")
+            ci.save_object()
     # for name_d, cyclone_day in cyclone:
     #     start, end = cyclone_day["ISO_TIME"].iloc[[0, -1]]
     #     margin = cyclone_day["USA_RMW"].mean() /30

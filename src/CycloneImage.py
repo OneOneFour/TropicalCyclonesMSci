@@ -16,12 +16,13 @@ def nm_to_degrees(nm):
     return nm / 60
 
 
-def get_eye(start_point, end_point,**kwargs):
+def get_eye(start_point, end_point, **kwargs):
     lat = start_point["LAT"], end_point["LAT"]
     lon = start_point["LON"], end_point["LON"]
     radMaxWind = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 30
-    files = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(), end_point["ISO_TIME"].to_pydatetime(), north=max(lat) +DEFAULT_MARGIN,
-                     south=min(lat)-DEFAULT_MARGIN, east=max(lon) + DEFAULT_MARGIN, west=min(lon) - DEFAULT_MARGIN)
+    files = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(), end_point["ISO_TIME"].to_pydatetime(),
+                     north=max(lat) + DEFAULT_MARGIN,
+                     south=min(lat) - DEFAULT_MARGIN, east=max(lon) + DEFAULT_MARGIN, west=min(lon) - DEFAULT_MARGIN)
     if files is None:
         print("No files were found")
         return None
@@ -39,7 +40,7 @@ def get_eye(start_point, end_point,**kwargs):
                                         lon_int + radMaxWind, lat_int + radMaxWind]
                            )
     core_scene = raw_scene.resample(area)
-    return CycloneImage(core_scene, center=(lat_int,lon_int), margin=radMaxWind, **kwargs)
+    return CycloneImage(core_scene, center=(lat_int, lon_int), margin=radMaxWind, **kwargs)
 
 
 class CycloneImage:
@@ -102,7 +103,13 @@ class CycloneImage:
         plt.show()
 
     def draw_eye(self, band="I04"):
-        self.core_scene["I04"].plot.imshow()
+        plt.figure()
+        plt.imshow(self.core_scene[band])
+        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d %H:%M:%S')} (Cat {self.cat})")
+        plt.xlabel("x (m)")
+        plt.ylabel("y (m)")
+        cb = plt.colorbar()
+        cb.set_label(f"{band} brightness temperature")
         plt.show()
 
     def draw_rect(self, center, w, h):
