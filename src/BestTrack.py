@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from fetch_file import get_data
+from CycloneImage import get_eye, nm_to_degrees
 
 BEST_TRACK_CSV = "data/best track/ibtracs.last3years.list.v04r00.csv"
 
@@ -14,6 +14,18 @@ cat_4_5_all_basins = best_track_df.loc[
 cat_4_5_all_basins_group = cat_4_5_all_basins.groupby(["SID"])
 print(len(cat_4_5_all_basins_group))
 for name, cyclone in cat_4_5_all_basins_group:
-    cyclone = cyclone.groupby(cyclone["ISO_TIME"].dt.date)
-    for name_d, cyclone_day in cyclone:
-        start, end = cyclone_day["ISO_TIME"].iloc[[0, -1]]
+    dict_cy = cyclone.to_dict(orient="records")
+    for i, cyclone_point in enumerate(dict_cy[:-1]):
+        start_point = cyclone_point
+        end_point = dict_cy[i + 1]
+        ci = get_eye(start_point, end_point, name=start_point["NAME"], basin=start_point["BASIN"])
+        if ci is not None:
+            ci.draw_eye("I04")
+    # for name_d, cyclone_day in cyclone:
+    #     start, end = cyclone_day["ISO_TIME"].iloc[[0, -1]]
+    #     margin = cyclone_day["USA_RMW"].mean() /30
+    #     lat = cyclone_day["LAT"].mean()
+    #     lon = cyclone_day["LON"].mean()
+    #     ci = get_eye(start, end, (lat, lon),"N",margin)
+    #     if ci is not None:
+    #         ci.draw_eye("I04")
