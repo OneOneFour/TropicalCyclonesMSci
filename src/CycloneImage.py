@@ -1,12 +1,11 @@
-from datetime import datetime
+import pickle
 
 import matplotlib.pyplot as plt
 from dask.diagnostics import ProgressBar
-from datetime import timedelta
 from pyresample import create_area_def
 from satpy import Scene
-import pickle
-from fetch_file import get_data, get_data_single_date
+
+from fetch_file import get_data
 
 DATA_DIRECTORY = "data"
 DEFAULT_MARGIN = 0.5
@@ -50,6 +49,7 @@ class CycloneImage:
         with open(fpath, "rb") as file:
             ci = pickle.load(file)
         assert isinstance(ci, CycloneImage)
+        ci.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
         return ci
 
     def __init__(self, core_scene=None, center=None, **kwargs):
@@ -103,13 +103,10 @@ class CycloneImage:
         plt.show()
 
     def draw_eye(self, band="I04"):
-        plt.figure()
-        plt.imshow(self.core_scene[band])
-        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d %H:%M:%S')} (Cat {self.cat})")
-        plt.xlabel("x (m)")
-        plt.ylabel("y (m)")
-        cb = plt.colorbar()
-        cb.set_label(f"{band} brightness temperature")
+        fig, ax = plt.subplots()
+        self.core_scene[band].plot.imshow()
+        ax.set_title(
+            f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d %H:%M:%S')} (Cat {self.cat}) \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel")
         plt.show()
 
     def draw_rect(self, center, w, h):
