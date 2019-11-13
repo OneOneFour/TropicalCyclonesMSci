@@ -1,5 +1,5 @@
 import pickle
-
+import numpy as np
 import matplotlib.pyplot as plt
 from dask.diagnostics import ProgressBar
 from pyresample import create_area_def
@@ -9,7 +9,7 @@ from fetch_file import get_data
 
 DATA_DIRECTORY = "data"
 DEFAULT_MARGIN = 0.5
-
+RESOLUTION_DEF = (3.71/6371) * 2 * np.pi
 
 def nm_to_degrees(nm):
     return nm / 60
@@ -18,7 +18,7 @@ def nm_to_degrees(nm):
 def get_eye(start_point, end_point, **kwargs):
     lat = start_point["LAT"], end_point["LAT"]
     lon = start_point["LON"], end_point["LON"]
-    radMaxWind = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 30
+    radMaxWind = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 60
     files = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(), end_point["ISO_TIME"].to_pydatetime(),
                      north=max(lat) + DEFAULT_MARGIN,
                      south=min(lat) - DEFAULT_MARGIN, east=max(lon) + DEFAULT_MARGIN, west=min(lon) - DEFAULT_MARGIN)
@@ -27,6 +27,7 @@ def get_eye(start_point, end_point, **kwargs):
         return None
     raw_scene = Scene(filenames=files, reader="viirs_l1b")
     raw_scene.load(["I04", "I05", "i_lat", "i_lon"])
+
     delta_time = raw_scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     frac = delta_time.seconds / (3 * 3600)
     lat_int = (lat[1] - lat[0]) * frac + lat[0]
@@ -34,12 +35,13 @@ def get_eye(start_point, end_point, **kwargs):
     area = create_area_def("eye_area",
                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int, "lon_0": lon_int,
                             "lat_1": lat_int},
-                           width=200, height=200, units="degrees",
+                           resolution=RESOLUTION_DEF, units="degrees",
                            area_extent=[lon_int - radMaxWind, lat_int - radMaxWind,
                                         lon_int + radMaxWind, lat_int + radMaxWind]
                            )
     core_scene = raw_scene.resample(area)
-    return CycloneImage(core_scene, center=(lat_int, lon_int), margin=radMaxWind, **kwargs)
+    return CycloneImage(core_scene, center=(lat_int, lon_int), margin=radMaxWind,
+                        day_or_night=raw_scene["I04"].day_or_night, **kwargs)
 
 
 class CycloneImage:
@@ -106,7 +108,7 @@ class CycloneImage:
         fig, ax = plt.subplots()
         self.core_scene[band].plot.imshow()
         ax.set_title(
-            f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d %H:%M:%S')} (Cat {self.cat}) \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel")
+            f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} ({self.day_or_night}) (Cat {self.cat}) \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel")
         plt.show()
 
     def draw_rect(self, center, w, h):
