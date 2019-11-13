@@ -5,11 +5,13 @@ from dask.diagnostics import ProgressBar
 from pyresample import create_area_def
 from satpy import Scene
 
+
 from fetch_file import get_data
 
-DATA_DIRECTORY = "data"
+DATA_DIRECTORY = "D:\data_msci"
 DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71/6371) * 2 * np.pi
+NM_TO_M = 1852
 
 def nm_to_degrees(nm):
     return nm / 60
@@ -18,7 +20,8 @@ def nm_to_degrees(nm):
 def get_eye(start_point, end_point, **kwargs):
     lat = start_point["LAT"], end_point["LAT"]
     lon = start_point["LON"], end_point["LON"]
-    radMaxWind = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 60
+    avgrmw_nm = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 2
+    avgrmw_deg = avgrmw_nm / 60
     files = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(), end_point["ISO_TIME"].to_pydatetime(),
                      north=max(lat) + DEFAULT_MARGIN,
                      south=min(lat) - DEFAULT_MARGIN, east=max(lon) + DEFAULT_MARGIN, west=min(lon) - DEFAULT_MARGIN)
@@ -36,11 +39,11 @@ def get_eye(start_point, end_point, **kwargs):
                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int, "lon_0": lon_int,
                             "lat_1": lat_int},
                            resolution=RESOLUTION_DEF, units="degrees",
-                           area_extent=[lon_int - radMaxWind, lat_int - radMaxWind,
-                                        lon_int + radMaxWind, lat_int + radMaxWind]
+                           area_extent=[lon_int - 2 * avgrmw_deg, lat_int - 2*avgrmw_deg,
+                                        lon_int + 2 * avgrmw_deg, lat_int + 2*avgrmw_deg]
                            )
     core_scene = raw_scene.resample(area)
-    return CycloneImage(core_scene, center=(lat_int, lon_int), margin=radMaxWind,
+    return CycloneImage(core_scene, center=(lat_int, lon_int),rmw = avgrmw_nm *NM_TO_M, margin= 2 * avgrmw_deg,
                         day_or_night=raw_scene["I04"].day_or_night, **kwargs)
 
 
@@ -77,7 +80,7 @@ class CycloneImage:
             self.__dict__[key] = val
 
     def save_object(self):
-        file_name = f"{DATA_DIRECTORY}/proc/CORE_{self.name}_{self.core_scene.start_time.strftime('%Y_%m_%d')}.pickle"
+        file_name = f"{DATA_DIRECTORY}/proc/CORE_{self.name}_{self.core_scene.start_time.strftime('%Y_%m_%d__%H_%M')}.pickle"
         with open(file_name, "wb") as file:
             pickle.dump(self, file)
 
@@ -111,20 +114,21 @@ class CycloneImage:
             f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} ({self.day_or_night}) (Cat {self.cat}) \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel")
         plt.show()
 
-    def draw_rect(self, center, w, h):
-        plt.subplot(1, 2, 1)
+    def draw_rect(self, center, w , h):
+
         splice = self.core_scene.crop(
             xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
-
-        plt.scatter(splice["I04"].data.flatten().compute(), splice["I05"].data.flatten().compute())
+        plt.subplot(1, 2, 1)
+        plt.scatter(splice["I04"].data.flatten(), splice["I05"].data.flatten())
         plt.ylabel("Cloud Top Temperature (K)")
         plt.xlabel("I4 band reflectance (K)")
         plt.subplot(1, 2, 2)
-        plt.imshow(self.core_scene["I04"])
+        plt.imshow(splice["I04"])
         plt.show()
 
 
 if __name__ == "__main__":
+    fpath = input("Enter the file path to load the pickle (relative)")
+    ci = CycloneImage.load_cyclone_image(fpath)
     with ProgressBar():
-        ci = CycloneImage(2017, 9, 19, center=(16.58, -63.52), margin=(0.5, 0.5))
         ci.draw_rect((0, -30000), 5000, 40000)

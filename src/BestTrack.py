@@ -1,8 +1,8 @@
 import pandas as pd
-import numpy as np
-from CycloneImage import get_eye, nm_to_degrees
 
-BEST_TRACK_CSV = "data/best track/ibtracs.last3years.list.v04r00.csv"
+from CycloneImage import get_eye
+
+BEST_TRACK_CSV = "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv"
 
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False,
                             usecols=["SID", "ISO_TIME", "USA_SSHS", "LAT", "LON", "USA_STATUS", "USA_WIND", "USA_PRES",
@@ -18,10 +18,12 @@ for name, cyclone in cat_4_5_all_basins_group:
     for i, cyclone_point in enumerate(dict_cy[:-1]):
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
-        ci = get_eye(start_point, end_point, name=start_point["NAME"], basin=start_point["BASIN"],cat=start_point["USA_SSHS"])
+        ci = get_eye(start_point, end_point, name=start_point["NAME"], basin=start_point["BASIN"],
+                     cat=start_point["USA_SSHS"])
         if ci is not None:
             ci.draw_eye("I04")
             ci.save_object()
+            ci.draw_rect((0,0),ci.rmw,ci.rmw)
     # for name_d, cyclone_day in cyclone:
     #     start, end = cyclone_day["ISO_TIME"].iloc[[0, -1]]
     #     margin = cyclone_day["USA_RMW"].mean() /30
