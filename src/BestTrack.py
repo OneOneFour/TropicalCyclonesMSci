@@ -22,5 +22,6 @@ for name, cyclone in cat_4_5_all_basins_group:
                      cat=start_point["USA_SSHS"])
         if ci is not None:
             ci.draw_eye("I04")
+            ci.draw_eye("I05")
             ci.save_object()
-            ci.draw_rect((0, 0), ci.rmw, ci.rmw)
+            ci.draw_rect((0, 0), ci.rmw*4, ci.rmw*4)

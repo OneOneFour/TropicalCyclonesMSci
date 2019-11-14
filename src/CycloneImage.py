@@ -1,12 +1,9 @@
 import os
 import pickle
-
 import matplotlib.pyplot as plt
 import numpy as np
-from dask.diagnostics import ProgressBar
 from pyresample import create_area_def
 from satpy import Scene
-
 from fetch_file import get_data
 
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "data")
@@ -26,7 +23,7 @@ def get_eye(start_point, end_point, **kwargs):
     avgrmw_deg = avgrmw_nm / 60
     files = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(), end_point["ISO_TIME"].to_pydatetime(),
                      north=max(lat) + DEFAULT_MARGIN,
-                     south=min(lat) - DEFAULT_MARGIN, east=max(lon) + DEFAULT_MARGIN, west=min(lon) - DEFAULT_MARGIN)
+                     south=min(lat) - DEFAULT_MARGIN, east=max(lon) + DEFAULT_MARGIN, west=min(lon) - DEFAULT_MARGIN,dayOrNight="D")
     if files is None:
         print("No files were found")
         return None
@@ -72,6 +69,8 @@ class CycloneImage:
         if core_scene is not None:
             self.core_scene = core_scene
             self.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
+            self.I04 = self.core_scene["I04"].values
+            self.I05 = self.core_scene["I05"].values
         else:
             raise ValueError("You must provide either a Scene object or a filepath to a scene object")
         self.center = center
