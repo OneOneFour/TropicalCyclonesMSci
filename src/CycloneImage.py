@@ -1,17 +1,19 @@
+import os
 import pickle
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from dask.diagnostics import ProgressBar
 from pyresample import create_area_def
 from satpy import Scene
 
-
 from fetch_file import get_data
 
-DATA_DIRECTORY = "D:\data_msci"
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "data")
 DEFAULT_MARGIN = 0.5
-RESOLUTION_DEF = (3.71/6371) * 2 * np.pi
+RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
+
 
 def nm_to_degrees(nm):
     return nm / 60
@@ -39,11 +41,11 @@ def get_eye(start_point, end_point, **kwargs):
                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int, "lon_0": lon_int,
                             "lat_1": lat_int},
                            resolution=RESOLUTION_DEF, units="degrees",
-                           area_extent=[lon_int - 2 * avgrmw_deg, lat_int - 2*avgrmw_deg,
-                                        lon_int + 2 * avgrmw_deg, lat_int + 2*avgrmw_deg]
+                           area_extent=[lon_int - 2 * avgrmw_deg, lat_int - 2 * avgrmw_deg,
+                                        lon_int + 2 * avgrmw_deg, lat_int + 2 * avgrmw_deg]
                            )
     core_scene = raw_scene.resample(area)
-    return CycloneImage(core_scene, center=(lat_int, lon_int),rmw = avgrmw_nm *NM_TO_M, margin= 2 * avgrmw_deg,
+    return CycloneImage(core_scene, center=(lat_int, lon_int), rmw=avgrmw_nm * NM_TO_M, margin=2 * avgrmw_deg,
                         day_or_night=raw_scene["I04"].day_or_night, **kwargs)
 
 
@@ -114,7 +116,7 @@ class CycloneImage:
             f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} ({self.day_or_night}) (Cat {self.cat}) \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel")
         plt.show()
 
-    def draw_rect(self, center, w , h):
+    def draw_rect(self, center, w, h):
 
         splice = self.core_scene.crop(
             xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])

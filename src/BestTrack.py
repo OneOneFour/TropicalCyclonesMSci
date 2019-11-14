@@ -1,8 +1,8 @@
 import pandas as pd
-
+import os
 from CycloneImage import get_eye
 
-BEST_TRACK_CSV = "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv"
+BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV","data/best_fit_csv/ibtracs.last3years.list.v04r00.csv")
 
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False,
                             usecols=["SID", "ISO_TIME", "USA_SSHS", "LAT", "LON", "USA_STATUS", "USA_WIND", "USA_PRES",
