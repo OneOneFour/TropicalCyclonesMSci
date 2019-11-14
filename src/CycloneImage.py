@@ -128,9 +128,3 @@ class CycloneImage:
         plt.imshow(splice["I04"])
         plt.show()
 
-
-if __name__ == "__main__":
-    fpath = input("Enter the file path to load the pickle (relative)")
-    ci = CycloneImage.load_cyclone_image(fpath)
-    with ProgressBar():
-        ci.draw_rect((0, -30000), 5000, 40000)
