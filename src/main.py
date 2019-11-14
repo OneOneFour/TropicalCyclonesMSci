@@ -5,7 +5,7 @@ import csv
 import datetime
 from fetch_file import get_data
 from CycloneImage import CycloneImage
-
+from dask.diagnostics.progress import ProgressBar
 
 
 def get_nc_files(year, month, day, ext=".nc"):
@@ -34,7 +34,8 @@ def load_file(img_file, geo_file=None, band="I05"):
             obs_data_band = rootgrp.groups["observation_data"].variables[band][:]
             obs_data_band += rootgrp.groups["observation_data"].variables[band].radiance_add_offset
             obs_uncert = rootgrp.groups["observation_data"].variables[band + "_uncert_index"][:]
-            obs_data_band /= (1 + obs_uncert * rootgrp.groups["observation_data"].variables[band].radiance_scale_factor**2)
+            obs_data_band /= (
+                        1 + obs_uncert * rootgrp.groups["observation_data"].variables[band].radiance_scale_factor ** 2)
             return obs_data_band
     if geo_file is not None:
         with nt.Dataset(geo_file, "r+", format="NETCDF5") as rootgrp:
@@ -62,9 +63,9 @@ def plot_whole_im(temps):
     fig.colorbar(im)
 
 
-def rect_sample_profile(i05temps, i04temps, eye_x, eye_y,width=5, max_r=150, type='both'):
-    i05eye = i05temps[eye_x:eye_x-max_r:-1, eye_y - width:eye_y + width]
-    i04eye = i04temps[eye_x:eye_x-max_r:-1, eye_y - width:eye_y + width]
+def rect_sample_profile(i05temps, i04temps, eye_x, eye_y, width=5, max_r=150, type='both'):
+    i05eye = i05temps[eye_x:eye_x - max_r:-1, eye_y - width:eye_y + width]
+    i04eye = i04temps[eye_x:eye_x - max_r:-1, eye_y - width:eye_y + width]
     r = np.arange(0, max_r) * 375
     i05t = np.mean(i05eye, axis=1)
     i04t = np.mean(i04eye, axis=1)
@@ -100,17 +101,17 @@ def combined_imaging_bands(filename, eye_coords=None):
 
 def compare_diff_days(filenames, i05_temps, i04_temps, eyes, width, sides, radius):
     num_days = len(filenames)
-    half_days_floor = int(np.floor(num_days/2))
-    half_days_ceil = int(np.ceil(num_days/2))
+    half_days_floor = int(np.floor(num_days / 2))
+    half_days_ceil = int(np.ceil(num_days / 2))
     fig, axs = plt.subplots(half_days_floor, half_days_ceil)
     subplot_y = subplot_x = 0
     for i in range(len(i04_temps)):
         if sides[i] == "left":
-            i05eye = i05_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
-            i04eye = i04_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
+            i05eye = i05_temps[i][eyes[i][1] - width:eyes[i][1] + width, eyes[i][0] - radius:eyes[i][0]]
+            i04eye = i04_temps[i][eyes[i][1] - width:eyes[i][1] + width, eyes[i][0] - radius:eyes[i][0]]
         elif sides[i] == "right":
-            i05eye = i05_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
-            i04eye = i04_temps[i][eyes[i][1] - width:eyes[i][1]+width, eyes[i][0] - radius:eyes[i][0]]
+            i05eye = i05_temps[i][eyes[i][1] - width:eyes[i][1] + width, eyes[i][0] - radius:eyes[i][0]]
+            i04eye = i04_temps[i][eyes[i][1] - width:eyes[i][1] + width, eyes[i][0] - radius:eyes[i][0]]
         i05t = np.mean(i05eye, axis=0)
         i04t = np.mean(i04eye, axis=0)
         label = filenames[i][18:30]
@@ -156,7 +157,7 @@ def read_cyc_csv(filename):
 
 def find_cyc_data(year, month, day, eye_lat, eye_long, where_store):
     filenames = get_data(root_dir="Data", year=year, month=month, day=day,
-                         north=eye_lat+1, south=eye_lat-1, west=eye_long-1, east=eye_long+1,
+                         north=eye_lat + 1, south=eye_lat - 1, west=eye_long - 1, east=eye_long + 1,
                          dayOrNight="D")
     for filename in filenames:
         if 'VNP02' in filename:
@@ -176,8 +177,7 @@ def find_cyc_data(year, month, day, eye_lat, eye_long, where_store):
 
 
 if __name__ == "__main__":
-    # find_cyc_data(2019, 9, 17, eye_lat=31, eye_long=-72, where_store="Data/eye_catalogue")
-    files, eye_data, directions = read_cyc_csv("Data/eye_catalogue")
-    load_cycs_and_plot(files, eye_data, directions, plot_type="prof_compare")
-
-    plt.show()
+    fname = input("Enter file path of cyclone pickle")
+    with ProgressBar():
+        ci = CycloneImage.load_cyclone_image(fname)
+        ci.draw_eye("I05")

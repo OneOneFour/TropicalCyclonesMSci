@@ -113,11 +113,10 @@ class CycloneImage:
         fig, ax = plt.subplots()
         self.core_scene[band].plot.imshow()
         ax.set_title(
-            f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} ({self.day_or_night}) (Cat {self.cat}) \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel")
+            f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} ({self.day_or_night}) Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
         plt.show()
 
     def draw_rect(self, center, w, h):
-
         splice = self.core_scene.crop(
             xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
         plt.subplot(1, 2, 1)

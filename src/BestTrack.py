@@ -1,7 +1,5 @@
 import os
-
 import pandas as pd
-
 from CycloneImage import get_eye
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv")
@@ -26,11 +24,3 @@ for name, cyclone in cat_4_5_all_basins_group:
             ci.draw_eye("I04")
             ci.save_object()
             ci.draw_rect((0, 0), ci.rmw, ci.rmw)
-    # for name_d, cyclone_day in cyclone:
-    #     start, end = cyclone_day["ISO_TIME"].iloc[[0, -1]]
-    #     margin = cyclone_day["USA_RMW"].mean() /30
-    #     lat = cyclone_day["LAT"].mean()
-    #     lon = cyclone_day["LON"].mean()
-    #     ci = get_eye(start, end, (lat, lon),"N",margin)
-    #     if ci is not None:
-    #         ci.draw_eye("I04")
