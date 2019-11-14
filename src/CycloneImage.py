@@ -121,6 +121,7 @@ class CycloneImage:
             xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
         plt.subplot(1, 2, 1)
         plt.scatter(splice["I04"].data.flatten(), splice["I05"].data.flatten())
+        plt.gca().invert_yaxis()
         plt.ylabel("Cloud Top Temperature (K)")
         plt.xlabel("I4 band reflectance (K)")
         plt.subplot(1, 2, 2)
