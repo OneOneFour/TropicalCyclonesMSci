@@ -1,4 +1,5 @@
 import pandas as pd
+from CycloneImage import get_eye
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
@@ -7,7 +8,7 @@ import dask
 from multiprocessing.pool import ThreadPool
 dask.config.set(pool=ThreadPool(2))
 
-BEST_TRACK_CSV = "Data/ibtracs.last3years.list.v04r00.csv"
+BEST_TRACK_CSV = "data/best track/ibtracs.last3years.list.v04r00.csv"
 
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False,
                             usecols=["SID", "ISO_TIME", "USA_SSHS", "LAT", "LON", "USA_STATUS", "USA_WIND", "USA_PRES",
