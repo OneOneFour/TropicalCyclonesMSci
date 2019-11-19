@@ -1,6 +1,8 @@
 import os
 import pickle
-
+import dask
+from multiprocessing.pool import ThreadPool
+dask.config.set(pool=ThreadPool(2))
 import matplotlib.pyplot as plt
 import numpy as np
 from dask.diagnostics import ProgressBar
@@ -9,7 +11,8 @@ from satpy import Scene
 
 from fetch_file import get_data
 
-DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "data")
+
+DATA_DIRECTORY = "data"
 DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
