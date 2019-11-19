@@ -131,10 +131,10 @@ class CycloneImage:
         try:
             fig, ax = plt.subplots()
             im = ax.imshow(self.__dict__[band], origin="upper",
-                      extent=[-self.pixel_x * self.__dict__[band].shape[0] * 0.5,
-                              self.pixel_x * self.__dict__[band].shape[0] * 0.5,
-                              -self.pixel_y * self.__dict__[band].shape[1] * 0.5,
-                              self.pixel_y * self.__dict__[band].shape[1] * 0.5])
+                           extent=[-self.pixel_x * self.__dict__[band].shape[0] * 0.5,
+                                   self.pixel_x * self.__dict__[band].shape[0] * 0.5,
+                                   -self.pixel_y * self.__dict__[band].shape[1] * 0.5,
+                                   self.pixel_y * self.__dict__[band].shape[1] * 0.5])
             ax.set_title(
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.pixel_x)} meters per pixel\nBand:{band}")
             cb = plt.colorbar(im)
@@ -149,33 +149,27 @@ class CycloneImage:
             cb.set_label("Kelvin (K)")
             plt.show()
 
-    def draw_rect(self, center, w, h):
+    def draw_rect(self, center, w, h, **kwargs):
         try:
             ix, iy = (self.I04.shape[0] / 2) + center[0] / self.pixel_x, (self.I04.shape[1] / 2) + center[
                 1] / self.pixel_y
             iw, ih = w / self.pixel_x, h / self.pixel_y
             i04_splice = self.I04[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
             i05_splice = self.I05[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
-            plt.subplot(1, 2, 1)
-            plt.scatter(i04_splice.flatten(), i05_splice.flatten())
-            plt.ylabel("Cloud Top Temperature (K)")
-            plt.xlabel("I4 band reflectance (K)")
-            plt.subplot(1, 2, 2)
-            plt.imshow(i04_splice,extent=[center[0] - w / 2, center[0] +  w / 2, center[1] - h / 2, center[1] + h / 2])
-            cb = plt.colorbar()
-            cb.set_label("Kelvin (K)")
-            plt.show()
         except AttributeError:
             splice = self.core_scene.crop(
                 xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
-            plt.subplot(1, 2, 1)
-            plt.scatter(splice["I04"].data.flatten(), splice["I05"].data.flatten())
-            plt.gca().invert_yaxis()
-            plt.ylabel("Cloud Top Temperature (K)")
-            plt.xlabel("I4 band reflectance (K)")
-            plt.subplot(1, 2, 2)
-            plt.imshow(splice["I04"])
-            cb = plt.colorbar()
-            cb.set_label("Kelvin (K)")
-            plt.colorbar()
-            plt.show()
+            i04_splice = splice["I04"].data.flatten()
+            i05_splice = splice["I05"].data.flatten()
+
+        plt.subplot(1, 2, 1)
+        plt.scatter(i04_splice.flatten(), i05_splice.flatten(), s=kwargs.get("s", 0.2))
+        plt.gca().invert_yaxis()
+        plt.gca().invert_xaxis()
+        plt.ylabel("Cloud Top Temperature (K)")
+        plt.xlabel("I4 band reflectance (K)")
+        plt.subplot(1, 2, 2)
+        plt.imshow(i04_splice, extent=[center[0] - w / 2, center[0] + w / 2, center[1] - h / 2, center[1] + h / 2])
+        cb = plt.colorbar()
+        cb.set_label("Kelvin (K)")
+        plt.show()
