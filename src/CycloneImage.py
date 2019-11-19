@@ -148,8 +148,6 @@ class CycloneImage:
             self.core_scene[band].plot.imshow()
             ax.set_title(
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
-            cb = plt.colorbar()
-            cb.set_label("Kelvin (K)")
             plt.show()
 
     def draw_rect(self, center, w, h):
