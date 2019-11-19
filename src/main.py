@@ -1,11 +1,13 @@
+import csv
+import datetime
+
 import matplotlib.pyplot as plt
 import netCDF4 as nt
 import numpy as np
-import csv
-import datetime
-from fetch_file import get_data
-from CycloneImage import CycloneImage
 from dask.diagnostics.progress import ProgressBar
+
+from CycloneImage import CycloneImage
+from fetch_file import get_data
 
 
 def get_nc_files(year, month, day, ext=".nc"):
@@ -35,7 +37,7 @@ def load_file(img_file, geo_file=None, band="I05"):
             obs_data_band += rootgrp.groups["observation_data"].variables[band].radiance_add_offset
             obs_uncert = rootgrp.groups["observation_data"].variables[band + "_uncert_index"][:]
             obs_data_band /= (
-                        1 + obs_uncert * rootgrp.groups["observation_data"].variables[band].radiance_scale_factor ** 2)
+                    1 + obs_uncert * rootgrp.groups["observation_data"].variables[band].radiance_scale_factor ** 2)
             return obs_data_band
     if geo_file is not None:
         with nt.Dataset(geo_file, "r+", format="NETCDF5") as rootgrp:
@@ -176,8 +178,25 @@ def find_cyc_data(year, month, day, eye_lat, eye_long, where_store):
                 csv_writer.writerow(row)
 
 
-if __name__ == "__main__":
+def glob_pickle_files(directory):
+    from glob import glob
+    return glob(f"{directory}\*.pickle")
+
+
+def pickle_file():
     fname = input("Enter file path of cyclone pickle")
     with ProgressBar():
         ci = CycloneImage.load_cyclone_image(fname)
         ci.draw_eye("I05")
+
+
+if __name__ == "__main__":
+    dirpath = input("Enter directory containing pickle files")
+    with ProgressBar():
+        pickle_paths = glob_pickle_files(dirpath)
+        for pickle in pickle_paths:
+            ci = CycloneImage.load_cyclone_image(pickle)
+            if ci.is_complete:
+                for y in range(-1, 1):
+                    for x in range(-1, 1):
+                        ci.draw_rect((ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw, ci.rmw)

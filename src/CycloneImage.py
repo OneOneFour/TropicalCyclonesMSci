@@ -4,6 +4,7 @@ import dask
 from multiprocessing.pool import ThreadPool
 dask.config.set(pool=ThreadPool(2))
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
 from pyresample import create_area_def
 from satpy import Scene
@@ -16,13 +17,19 @@ DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 
-
 def wrap(x):
-    if x < -180:
-        x += 360
-    elif x > 180:
-        x -= 360
+    if x > 180:
+        return x - 360
+    elif x < -180:
+        return x + 360
     return x
+
+def __clamp(x, min_v, max_v):
+    return max(min(x, max_v), min_v)
+
+def zero_clamp(x):
+    return __clamp(x,0,np.inf)
+
 
 
 def nm_to_degrees(nm):
@@ -72,8 +79,14 @@ class CycloneImage:
             ci = pickle.load(file)
         assert isinstance(ci, CycloneImage)
         ci.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
-        ci.pixel_x = ci.core_scene["I04"].area.pixel_size_x
-        ci.pixel_y = ci.core_scene["I04"].area.pixel_size_y
+        if not hasattr(ci,"I04"):
+            ci.I04 = ci.core_scene["I04"].values
+        if not hasattr(ci, "I05"):
+            ci.I05 = ci.core_scene["I04"].values
+        if not hasattr(ci, "pixel_x"):
+            ci.pixel_x = ci.core_scene["I04"].area.pixel_size_x
+        if not hasattr(ci, "pixel_y"):
+            ci.pixel_y = ci.core_scene["I04"].area.pixel_size_y
         return ci
 
     def __init__(self, core_scene=None, center=None, **kwargs):
@@ -101,6 +114,10 @@ class CycloneImage:
         self.name = "UNKNOWN"
         for key, val in kwargs.items():
             self.__dict__[key] = val
+
+    @property
+    def is_complete(self):
+        return not np.isnan(self.I04).any()
 
     def save_object(self):
         file_name = f"{DATA_DIRECTORY}/proc/CORE_{self.name}_{self.core_scene.start_time.strftime('%Y_%m_%d__%H_%M')}.pickle"
@@ -134,10 +151,10 @@ class CycloneImage:
         try:
             fig, ax = plt.subplots()
             im = ax.imshow(self.__dict__[band], origin="upper",
-                      extent=[-self.pixel_x * self.__dict__[band].shape[0] * 0.5,
-                              self.pixel_x * self.__dict__[band].shape[0] * 0.5,
-                              -self.pixel_y * self.__dict__[band].shape[1] * 0.5,
-                              self.pixel_y * self.__dict__[band].shape[1] * 0.5])
+                           extent=[-self.pixel_x * self.__dict__[band].shape[0] * 0.5,
+                                   self.pixel_x * self.__dict__[band].shape[0] * 0.5,
+                                   -self.pixel_y * self.__dict__[band].shape[1] * 0.5,
+                                   self.pixel_y * self.__dict__[band].shape[1] * 0.5])
             ax.set_title(
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.pixel_x)} meters per pixel\nBand:{band}")
             cb = plt.colorbar(im)
@@ -150,33 +167,34 @@ class CycloneImage:
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
             plt.show()
 
-    def draw_rect(self, center, w, h):
+    def draw_rect(self, center, w, h, **kwargs):
         try:
             ix, iy = (self.I04.shape[0] / 2) + center[0] / self.pixel_x, (self.I04.shape[1] / 2) + center[
                 1] / self.pixel_y
             iw, ih = w / self.pixel_x, h / self.pixel_y
-            i04_splice = self.I04[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
-            i05_splice = self.I05[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
-            plt.subplot(1, 2, 1)
-            plt.scatter(i04_splice.flatten(), i05_splice.flatten())
-            plt.ylabel("Cloud Top Temperature (K)")
-            plt.xlabel("I4 band reflectance (K)")
-            plt.subplot(1, 2, 2)
-            plt.imshow(i04_splice,extent=[center[0] - w / 2, center[0] +  w / 2, center[1] - h / 2, center[1] + h / 2])
-            cb = plt.colorbar()
-            cb.set_label("Kelvin (K)")
-            plt.show()
+            i04_splice = self.I04[zero_clamp(round(iy - ih / 2)):round(iy + ih / 2), zero_clamp(round(ix - iw / 2)):round(ix + iw / 2)]
+            i05_splice = self.I05[zero_clamp(round(iy - ih / 2)):round(iy + ih / 2), zero_clamp(round(ix - iw / 2)):round(ix + iw / 2)]
         except AttributeError:
             splice = self.core_scene.crop(
                 xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
-            plt.subplot(1, 2, 1)
-            plt.scatter(splice["I04"].data.flatten(), splice["I05"].data.flatten())
-            plt.gca().invert_yaxis()
-            plt.ylabel("Cloud Top Temperature (K)")
-            plt.xlabel("I4 band reflectance (K)")
-            plt.subplot(1, 2, 2)
-            plt.imshow(splice["I04"])
-            cb = plt.colorbar()
-            cb.set_label("Kelvin (K)")
-            plt.colorbar()
-            plt.show()
+            i04_splice = splice["I04"].data.flatten()
+            i05_splice = splice["I05"].data.flatten()
+
+        plt.subplot(1, 2, 1)
+        plt.scatter(i04_splice.flatten(), i05_splice.flatten(), s=kwargs.get("s", 0.25))
+        plt.gca().invert_yaxis()
+        plt.gca().invert_xaxis()
+        plt.ylabel("Cloud Top Temperature (K)")
+        plt.xlabel("I4 band reflectance (K)")
+        plt.subplot(1, 2, 2)
+        plt.imshow(self.I04, origin="upper",
+                   extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
+                           self.pixel_x * self.I04.shape[0] * 0.5,
+                           -self.pixel_y * self.I04.shape[1] * 0.5,
+                           self.pixel_y * self.I04.shape[1] * 0.5])
+        plt.gca().add_patch(
+            Rectangle((center[0] - w / 2, center[1] - h / 2), w, h, linewidth=1, edgecolor="r", facecolor="none"))
+        cb = plt.colorbar()
+        cb.set_label("Kelvin (K)")
+        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
+        plt.show()
