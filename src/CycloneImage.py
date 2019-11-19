@@ -5,7 +5,6 @@ from multiprocessing.pool import ThreadPool
 dask.config.set(pool=ThreadPool(2))
 import matplotlib.pyplot as plt
 import numpy as np
-from dask.diagnostics import ProgressBar
 from pyresample import create_area_def
 from satpy import Scene
 
@@ -18,6 +17,14 @@ RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 
 
+def wrap(x):
+    if x < -180:
+        x += 360
+    elif x > 180:
+        x -= 360
+    return x
+
+
 def nm_to_degrees(nm):
     return nm / 60
 
@@ -27,11 +34,15 @@ def get_eye(start_point, end_point, **kwargs):
     lon = start_point["LON"], end_point["LON"]
     avgrmw_nm = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 2
     avgrmw_deg = avgrmw_nm / 60
-    files = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(), end_point["ISO_TIME"].to_pydatetime(),
-                     north=max(lat) + DEFAULT_MARGIN,
-                     south=min(lat) - DEFAULT_MARGIN, east=max(lon) + DEFAULT_MARGIN, west=min(lon) - DEFAULT_MARGIN)
-    if files is None:
-        print("No files were found")
+    dayOrNight = kwargs.get("dayOrNight", "DNB")
+    try:
+        files, urls = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(),
+                               end_point["ISO_TIME"].to_pydatetime(),
+                               north=max(lat) + DEFAULT_MARGIN,
+                               south=min(lat) - DEFAULT_MARGIN, east=wrap(max(lon) + DEFAULT_MARGIN),
+                               west=wrap(min(lon) - DEFAULT_MARGIN),
+                               dayOrNight=dayOrNight)
+    except FileNotFoundError:
         return None
     raw_scene = Scene(filenames=files, reader="viirs_l1b")
     raw_scene.load(["I04", "I05", "i_lat", "i_lon"])
@@ -48,8 +59,9 @@ def get_eye(start_point, end_point, **kwargs):
                                         lon_int + 2 * avgrmw_deg, lat_int + 2 * avgrmw_deg]
                            )
     core_scene = raw_scene.resample(area)
-    return CycloneImage(core_scene, center=(lat_int, lon_int), rmw=avgrmw_nm * NM_TO_M, margin=2 * avgrmw_deg,
-                        day_or_night=raw_scene["I04"].day_or_night, **kwargs)
+    return CycloneImage(core_scene, center=(lat_int, lon_int), urls=urls, rmw=avgrmw_nm * NM_TO_M,
+                        margin=2 * avgrmw_deg,
+                        day_or_night=dayOrNight, **kwargs)
 
 
 class CycloneImage:
@@ -60,6 +72,8 @@ class CycloneImage:
             ci = pickle.load(file)
         assert isinstance(ci, CycloneImage)
         ci.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
+        ci.pixel_x = ci.core_scene["I04"].area.pixel_size_x
+        ci.pixel_y = ci.core_scene["I04"].area.pixel_size_y
         return ci
 
     def __init__(self, core_scene=None, center=None, **kwargs):
@@ -75,6 +89,10 @@ class CycloneImage:
         if core_scene is not None:
             self.core_scene = core_scene
             self.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
+            self.I04 = self.core_scene["I04"].values
+            self.I05 = self.core_scene["I05"].values
+            self.pixel_x = self.core_scene["I04"].area.pixel_size_x
+            self.pixel_y = self.core_scene["I05"].area.pixel_size_y
         else:
             raise ValueError("You must provide either a Scene object or a filepath to a scene object")
         self.center = center
@@ -113,21 +131,54 @@ class CycloneImage:
         plt.show()
 
     def draw_eye(self, band="I04"):
-        fig, ax = plt.subplots()
-        self.core_scene[band].plot.imshow()
-        ax.set_title(
-            f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} ({self.day_or_night}) Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
-        plt.show()
+        try:
+            fig, ax = plt.subplots()
+            im = ax.imshow(self.__dict__[band], origin="upper",
+                      extent=[-self.pixel_x * self.__dict__[band].shape[0] * 0.5,
+                              self.pixel_x * self.__dict__[band].shape[0] * 0.5,
+                              -self.pixel_y * self.__dict__[band].shape[1] * 0.5,
+                              self.pixel_y * self.__dict__[band].shape[1] * 0.5])
+            ax.set_title(
+                f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.pixel_x)} meters per pixel\nBand:{band}")
+            cb = plt.colorbar(im)
+            cb.set_label("Kelvin (K)")
+            plt.show()
+        except (KeyError, AttributeError):
+            fig, ax = plt.subplots()
+            self.core_scene[band].plot.imshow()
+            ax.set_title(
+                f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
+            cb = plt.colorbar()
+            cb.set_label("Kelvin (K)")
+            plt.show()
 
     def draw_rect(self, center, w, h):
-        splice = self.core_scene.crop(
-            xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
-        plt.subplot(1, 2, 1)
-        plt.scatter(splice["I04"].data.flatten(), splice["I05"].data.flatten())
-        plt.gca().invert_yaxis()
-        plt.ylabel("Cloud Top Temperature (K)")
-        plt.xlabel("I4 band reflectance (K)")
-        plt.subplot(1, 2, 2)
-        plt.imshow(splice["I04"])
-        plt.show()
-
+        try:
+            ix, iy = (self.I04.shape[0] / 2) + center[0] / self.pixel_x, (self.I04.shape[1] / 2) + center[
+                1] / self.pixel_y
+            iw, ih = w / self.pixel_x, h / self.pixel_y
+            i04_splice = self.I04[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
+            i05_splice = self.I05[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
+            plt.subplot(1, 2, 1)
+            plt.scatter(i04_splice.flatten(), i05_splice.flatten())
+            plt.ylabel("Cloud Top Temperature (K)")
+            plt.xlabel("I4 band reflectance (K)")
+            plt.subplot(1, 2, 2)
+            plt.imshow(i04_splice,extent=[center[0] - w / 2, center[0] +  w / 2, center[1] - h / 2, center[1] + h / 2])
+            cb = plt.colorbar()
+            cb.set_label("Kelvin (K)")
+            plt.show()
+        except AttributeError:
+            splice = self.core_scene.crop(
+                xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
+            plt.subplot(1, 2, 1)
+            plt.scatter(splice["I04"].data.flatten(), splice["I05"].data.flatten())
+            plt.gca().invert_yaxis()
+            plt.ylabel("Cloud Top Temperature (K)")
+            plt.xlabel("I4 band reflectance (K)")
+            plt.subplot(1, 2, 2)
+            plt.imshow(splice["I04"])
+            cb = plt.colorbar()
+            cb.set_label("Kelvin (K)")
+            plt.colorbar()
+            plt.show()
