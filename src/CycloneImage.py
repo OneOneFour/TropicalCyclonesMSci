@@ -76,8 +76,14 @@ class CycloneImage:
             ci = pickle.load(file)
         assert isinstance(ci, CycloneImage)
         ci.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
-        ci.pixel_x = ci.core_scene["I04"].area.pixel_size_x
-        ci.pixel_y = ci.core_scene["I04"].area.pixel_size_y
+        if not hasattr(ci,"I04"):
+            ci.I04 = ci.core_scene["I04"].values
+        if not hasattr(ci, "I05"):
+            ci.I05 = ci.core_scene["I04"].values
+        if not hasattr(ci, "pixel_x"):
+            ci.pixel_x = ci.core_scene["I04"].area.pixel_size_x
+        if not hasattr(ci, "pixel_y"):
+            ci.pixel_y = ci.core_scene["I04"].area.pixel_size_y
         return ci
 
     def __init__(self, core_scene=None, center=None, **kwargs):
