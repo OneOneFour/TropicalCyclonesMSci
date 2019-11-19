@@ -2,6 +2,7 @@ import os
 import pickle
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
 from pyresample import create_area_def
 from satpy import Scene
@@ -169,7 +170,12 @@ class CycloneImage:
         plt.ylabel("Cloud Top Temperature (K)")
         plt.xlabel("I4 band reflectance (K)")
         plt.subplot(1, 2, 2)
-        plt.imshow(i04_splice, extent=[center[0] - w / 2, center[0] + w / 2, center[1] - h / 2, center[1] + h / 2])
+        plt.imshow(self.I04, origin="upper",
+                   extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
+                           self.pixel_x * self.I04.shape[0] * 0.5,
+                           -self.pixel_y * self.I04.shape[1] * 0.5,
+                           self.pixel_y * self.I04.shape[1] * 0.5])
+        plt.gca().add_patch(Rectangle(center,w,h),linewidth=1,edgecolor="r",facecolor="none")
         cb = plt.colorbar()
         cb.set_label("Kelvin (K)")
         plt.show()
