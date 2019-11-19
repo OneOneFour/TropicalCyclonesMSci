@@ -32,13 +32,14 @@ def get_eye(start_point, end_point, **kwargs):
     avgrmw_nm = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 2
     avgrmw_deg = avgrmw_nm / 60
     dayOrNight = kwargs.get("dayOrNight", "DNB")
-    files, urls = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(),
-                           end_point["ISO_TIME"].to_pydatetime(),
-                           north=max(lat) + DEFAULT_MARGIN,
-                           south=min(lat) - DEFAULT_MARGIN, east=wrap(max(lon) + DEFAULT_MARGIN),
-                           west=wrap(min(lon) - DEFAULT_MARGIN),
-                           dayOrNight=dayOrNight)
-    if files is None:
+    try:
+        files, urls = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(),
+                               end_point["ISO_TIME"].to_pydatetime(),
+                               north=max(lat) + DEFAULT_MARGIN,
+                               south=min(lat) - DEFAULT_MARGIN, east=wrap(max(lon) + DEFAULT_MARGIN),
+                               west=wrap(min(lon) - DEFAULT_MARGIN),
+                               dayOrNight=dayOrNight)
+    except FileNotFoundError:
         return None
     raw_scene = Scene(filenames=files, reader="viirs_l1b")
     raw_scene.load(["I04", "I05", "i_lat", "i_lon"])

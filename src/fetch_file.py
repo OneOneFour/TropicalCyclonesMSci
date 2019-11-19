@@ -83,9 +83,7 @@ def download_files_from_server(root_dir, file_urls):
     return fpath
 
 
-def get_data(root_dir, start_time, end_time, north=90, south=-90, west=-180, east=180, collection="5110",
-             dayOrNight="DNB",
-             mode="download"):
+def get_data(root_dir, start_time, end_time, north=90, south=-90, west=-180, east=180, collection="5110",dayOrNight="DNB"):
     '''
     Use SatPy to check if data exists already in root dir. If not contact the NASA LAADS DAC server to download the required data.
     '''
@@ -110,7 +108,7 @@ def get_data(root_dir, start_time, end_time, north=90, south=-90, west=-180, eas
     root_fids = ET.fromstring(query_response.content)
     for child in root_fids:
         if child.text == "No results":
-            return None
+            raise FileNotFoundError
         fileIdStr += child.text + ","
     file_name_response = requests.get(WEBSERVER_QUERY_URL + GET_FILE_URLS, params={"fileIds": fileIdStr})
     if file_name_response.status_code != 200:
