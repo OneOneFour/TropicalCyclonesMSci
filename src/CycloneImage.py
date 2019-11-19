@@ -15,12 +15,13 @@ RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 
 
-def wrap(x):
-    if x < -180:
-        x += 360
-    elif x > 180:
-        x -= 360
-    return x
+
+def __wrap(x, min_v, max_v):
+    return max(min(x, max_v), min_v)
+
+def zero_clamp(x):
+    return __wrap(x,0,np.inf)
+
 
 
 def nm_to_degrees(nm):
@@ -155,8 +156,8 @@ class CycloneImage:
             ix, iy = (self.I04.shape[0] / 2) + center[0] / self.pixel_x, (self.I04.shape[1] / 2) + center[
                 1] / self.pixel_y
             iw, ih = w / self.pixel_x, h / self.pixel_y
-            i04_splice = self.I04[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
-            i05_splice = self.I05[round(iy - ih / 2):round(iy + ih / 2), round(ix - iw / 2):round(ix + iw / 2)]
+            i04_splice = self.I04[zero_clamp(round(iy - ih / 2)):round(iy + ih / 2), zero_clamp(round(ix - iw / 2)):round(ix + iw / 2)]
+            i05_splice = self.I05[zero_clamp(round(iy - ih / 2)):round(iy + ih / 2), zero_clamp(round(ix - iw / 2)):round(ix + iw / 2)]
         except AttributeError:
             splice = self.core_scene.crop(
                 xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
