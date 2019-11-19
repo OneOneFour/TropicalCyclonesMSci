@@ -164,7 +164,7 @@ class CycloneImage:
             i05_splice = splice["I05"].data.flatten()
 
         plt.subplot(1, 2, 1)
-        plt.scatter(i04_splice.flatten(), i05_splice.flatten(), s=kwargs.get("s", 0.2))
+        plt.scatter(i04_splice.flatten(), i05_splice.flatten(), s=kwargs.get("s", 0.25))
         plt.gca().invert_yaxis()
         plt.gca().invert_xaxis()
         plt.ylabel("Cloud Top Temperature (K)")
@@ -175,7 +175,8 @@ class CycloneImage:
                            self.pixel_x * self.I04.shape[0] * 0.5,
                            -self.pixel_y * self.I04.shape[1] * 0.5,
                            self.pixel_y * self.I04.shape[1] * 0.5])
-        plt.gca().add_patch(Rectangle(center,w,h),linewidth=1,edgecolor="r",facecolor="none")
+        plt.gca().add_patch(
+            Rectangle((center[0] - w / 2, center[1] - h / 2), w, h, linewidth=1, edgecolor="r", facecolor="none"))
         cb = plt.colorbar()
         cb.set_label("Kelvin (K)")
         plt.show()
