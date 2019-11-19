@@ -14,13 +14,18 @@ DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 
+def wrap(x):
+    if x > 180:
+        return x - 360
+    elif x < -180:
+        return x + 360
+    return x
 
-
-def __wrap(x, min_v, max_v):
+def __clamp(x, min_v, max_v):
     return max(min(x, max_v), min_v)
 
 def zero_clamp(x):
-    return __wrap(x,0,np.inf)
+    return __clamp(x,0,np.inf)
 
 
 
