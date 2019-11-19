@@ -193,4 +193,5 @@ class CycloneImage:
             Rectangle((center[0] - w / 2, center[1] - h / 2), w, h, linewidth=1, edgecolor="r", facecolor="none"))
         cb = plt.colorbar()
         cb.set_label("Kelvin (K)")
+        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
         plt.show()
