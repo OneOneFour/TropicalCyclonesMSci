@@ -23,8 +23,12 @@ for name, cyclone in cat_4_5_all_basins_group:
                      cat=start_point["USA_SSHS"],dayOrNight="D")
         if ci is not None:
             with ProgressBar():
+                # box is four times RMW
                 ci.draw_eye("I04")
                 ci.draw_eye("I05")
                 ci.save_object()
-                ci.draw_rect((0, 0), ci.rmw*1.5, ci.rmw*1.5)
+                for y in range(-2,2):
+                    for x in range(-2,2):
+                        ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
+
 
