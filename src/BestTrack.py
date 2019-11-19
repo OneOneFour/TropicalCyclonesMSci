@@ -26,9 +26,10 @@ for name, cyclone in cat_4_5_all_basins_group:
                 # box is four times RMW
                 ci.draw_eye("I04")
                 ci.draw_eye("I05")
-                ci.save_object()
-                for y in range(-2,2):
-                    for x in range(-2,2):
-                        ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
+                if ci.is_complete:
+                    ci.save_object()
+                    for y in range(-2,2):
+                        for x in range(-2,2):
+                            ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
 
 
