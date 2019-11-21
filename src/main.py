@@ -197,11 +197,19 @@ if __name__ == "__main__":
         pickle_paths = glob_pickle_files(dirpath)
         for pickle in pickle_paths:
             ci = CycloneImage.load_cyclone_image(pickle)
+            filename_idx = 0
             if ci.is_complete:
                 hottest_idx, l, r, t, b = ci.find_eye()
-                print(hottest_idx)
+                eye_centre_idx = (r - l)/2 + l, (b - t)/2 + t
                 for y in [-1, 1]:
                     for x in [-1, 1]:
-                        cyclone_centre_m_x = -ci.pixel_x * ci.I04.shape[0] * 0.5 + hottest_idx[1] * ci.pixel_x
-                        cyclone_centre_m_y = ci.pixel_y * ci.I04.shape[1] * 0.5 - hottest_idx[0] * ci.pixel_y
-                        ci.draw_rect((int(cyclone_centre_m_x + ci.rmw * x/4), int(cyclone_centre_m_y + ci.rmw * y/4)),  ci.rmw/2, ci.rmw/2, (hottest_idx[1] + ci.rmw/ci.pixel_x *x/4, hottest_idx[0] + ci.rmw/ci.pixel_y *y/4))
+                        filename_idx += 1
+                        cyclone_centre_m_x = int(-ci.pixel_x * ci.I04.shape[0] * 0.5 + eye_centre_idx[0] * ci.pixel_x + ci.rmw * x/4)
+                        cyclone_centre_m_y = int(ci.pixel_y * ci.I04.shape[1] * 0.5 - eye_centre_idx[1] * ci.pixel_y - ci.rmw * y/4)
+                        x_pixel_centre = eye_centre_idx[0] + (ci.rmw/ci.pixel_x) *x/4
+                        y_pixel_centre = eye_centre_idx[1] + (ci.rmw/ci.pixel_y) *y/4
+                        try:
+                            ci.draw_rect((cyclone_centre_m_x, cyclone_centre_m_y),  ci.rmw/2, ci.rmw/2, (x_pixel_centre, y_pixel_centre), filename_idx)
+                        except IndexError:
+                            print("Data outside image")
+

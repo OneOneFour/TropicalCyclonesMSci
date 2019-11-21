@@ -167,17 +167,12 @@ class CycloneImage:
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
             plt.show()
 
-    def draw_rect(self, center, w, h, center_pixel,  **kwargs):
+    def draw_rect(self, center, w, h, center_pixel, filename_idx, **kwargs):
         try:
-            #ix, iy = (self.I04.shape[0] / 2) + center[0] / self.pixel_x, (self.I04.shape[1] / 2) + center[
-            #    1] / self.pixel_y
             ix,iy = center_pixel[0], center_pixel[1]
             iw, ih = w / self.pixel_x, h / self.pixel_y
-            print(round(iy - ih / 2), round(iy + ih / 2), round(ix - iw / 2), round(ix + iw / 2))
-            print(ix,iy)
             i04_splice = self.I04[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)), zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
             i05_splice = self.I05[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)), zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
-            print(self.I04[int(iy), int(ix)])
         except AttributeError:
             splice = self.core_scene.crop(
                 xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
@@ -201,7 +196,7 @@ class CycloneImage:
         cb = plt.colorbar()
         cb.set_label("Kelvin (K)")
         plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
-        plt.show()
+        plt.savefig(f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
 
     def find_eye(self, band='I04'):
         I04array = np.array(self.I04)
@@ -212,8 +207,11 @@ class CycloneImage:
             max_band_array = self.I05
 
         hot_point = np.amax(max_band_array)
+        cold_point = np.amin(max_band_array)
+        threshold = (hot_point - cold_point) / 3
+        print(hot_point, cold_point, threshold)
+
         hot_point_ind = np.unravel_index(np.argmax(max_band_array, axis=None), max_band_array.shape)
-        threshold = 50
 
         for y in range(0, hot_point_ind[0]):
             if max_band_array[hot_point_ind[0] - y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
