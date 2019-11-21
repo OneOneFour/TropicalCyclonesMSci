@@ -167,7 +167,7 @@ class CycloneImage:
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
             plt.show()
 
-    def draw_rect(self, center, w, h, center_pixel, filename_idx, **kwargs):
+    def draw_rect(self, center, w, h, center_pixel, filename_idx, save, **kwargs):
         try:
             ix,iy = center_pixel[0], center_pixel[1]
             iw, ih = w / self.pixel_x, h / self.pixel_y
@@ -196,11 +196,12 @@ class CycloneImage:
         cb = plt.colorbar()
         cb.set_label("Kelvin (K)")
         plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
-        plt.savefig(f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
+        if save is True:
+            plt.savefig(f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
+        else:
+            plt.show()
 
     def find_eye(self, band='I04'):
-        I04array = np.array(self.I04)
-        I05array = np.array(self.I05)
         if band == 'I04':
             max_band_array = self.I04
         elif band == 'I05':
@@ -209,7 +210,6 @@ class CycloneImage:
         hot_point = np.amax(max_band_array)
         cold_point = np.amin(max_band_array)
         threshold = (hot_point - cold_point) / 3
-        print(hot_point, cold_point, threshold)
 
         hot_point_ind = np.unravel_index(np.argmax(max_band_array, axis=None), max_band_array.shape)
 
@@ -237,11 +237,5 @@ class CycloneImage:
                 break
             elif x == len(max_band_array[0]) - hot_point_ind[1] - 1:
                 right_x = len(max_band_array[0])
-
-        eye_data = max_band_array[top_y:bot_y, left_x:right_x]
-        mid_row = int((top_y - bot_y) / 2 + bot_y)
-        width = 3
-        eye_row_I05 = np.mean(I05array[mid_row - width:mid_row + width, left_x:right_x], axis=0)
-        eye_row_I04 = np.mean(I04array[mid_row - width:mid_row + width, left_x:right_x], axis=0)
 
         return hot_point_ind, left_x, right_x, top_y, bot_y
