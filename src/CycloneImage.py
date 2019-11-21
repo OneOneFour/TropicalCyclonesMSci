@@ -197,7 +197,16 @@ class CycloneImage:
         cb.set_label("Kelvin (K)")
         plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
         if save is True:
-            plt.savefig(f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
+            plt.savefig(
+                f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
+
+            # Code below used for pickling slices of data while knowing the graph data.
+            #for pic_name in ["2013-10-19Cat4(2)", "2014-08-09Cat4(3)", "2014-10-16Cat4(4)", "2014-11-04Cat4(3)", "2015-08-30Cat4(3)"]:
+            #    if pic_name == f"{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx})":
+            #        file_name = f"proc/pic_dat_test/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).pickle"
+            #        with open(file_name, "wb") as file:
+            #            pickle.dump([i04_splice, i05_splice], file)
+
         else:
             plt.show()
 
@@ -212,6 +221,11 @@ class CycloneImage:
         threshold = (hot_point - cold_point) / 3
 
         hot_point_ind = np.unravel_index(np.argmax(max_band_array, axis=None), max_band_array.shape)
+
+        if hot_point_ind[0] == 0:
+            top_y = 0
+        elif hot_point_ind[1] == 0:
+            left_x = 0
 
         for y in range(0, hot_point_ind[0]):
             if max_band_array[hot_point_ind[0] - y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
@@ -238,4 +252,4 @@ class CycloneImage:
             elif x == len(max_band_array[0]) - hot_point_ind[1] - 1:
                 right_x = len(max_band_array[0])
 
-        return hot_point_ind, left_x, right_x, top_y, bot_y
+        return hot_point_ind, right_x, left_x, top_y, bot_y

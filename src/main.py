@@ -191,15 +191,14 @@ def pickle_file():
 
 
 if __name__ == "__main__":
-    #dirpath = input("Enter directory containing pickle files")
-    dirpath = "proc/pic_dat2"
+    dirpath = input("Enter directory containing pickle files")
     with ProgressBar():
         pickle_paths = glob_pickle_files(dirpath)
         for pickle in pickle_paths:
             ci = CycloneImage.load_cyclone_image(pickle)
             filename_idx = 0
             if ci.is_complete:
-                hottest_idx, l, r, t, b = ci.find_eye()
+                hottest_idx, r, l, t, b = ci.find_eye()
                 eye_centre_idx = (r - l)/2 + l, (b - t)/2 + t
                 for y in [-1, 1]:
                     for x in [-1, 1]:
