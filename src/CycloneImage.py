@@ -1,21 +1,18 @@
 import os
 import pickle
 import dask
-from multiprocessing.pool import ThreadPool
-dask.config.set(pool=ThreadPool(2))
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
 from pyresample import create_area_def
 from satpy import Scene
-
 from fetch_file import get_data
-
 
 DATA_DIRECTORY = "data"
 DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
+
 
 def wrap(x):
     if x > 180:
@@ -24,12 +21,13 @@ def wrap(x):
         return x + 360
     return x
 
+
 def __clamp(x, min_v, max_v):
     return max(min(x, max_v), min_v)
 
-def zero_clamp(x):
-    return __clamp(x,0,np.inf)
 
+def zero_clamp(x):
+    return __clamp(x, 0, np.inf)
 
 
 def nm_to_degrees(nm):
@@ -79,7 +77,7 @@ class CycloneImage:
             ci = pickle.load(file)
         assert isinstance(ci, CycloneImage)
         ci.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
-        if not hasattr(ci,"I04"):
+        if not hasattr(ci, "I04"):
             ci.I04 = ci.core_scene["I04"].values
         if not hasattr(ci, "I05"):
             ci.I05 = ci.core_scene["I04"].values
@@ -106,6 +104,8 @@ class CycloneImage:
             self.I05 = self.core_scene["I05"].values
             self.pixel_x = self.core_scene["I04"].area.pixel_size_x
             self.pixel_y = self.core_scene["I05"].area.pixel_size_y
+            self.width = self.I04.shape[0]
+            self.height = self.I04.shape[1]
         else:
             raise ValueError("You must provide either a Scene object or a filepath to a scene object")
         self.center = center
@@ -167,89 +167,96 @@ class CycloneImage:
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
             plt.show()
 
-    def draw_rect(self, center, w, h, center_pixel, filename_idx, save, **kwargs):
+    def draw_rect(self, center, w, h, plot=True, filename_idx=0, save=False, **kwargs):
+        """
+        :param center: center coordinates of the cyclone in meter offset from the center of the core image
+        :param w: width in meters
+        :param h: height in meters
+        :param plot:
+        :param filename_idx:
+        :param save:
+        :param kwargs:
+        :return:
+        """
         try:
-            ix,iy = center_pixel[0], center_pixel[1]
+            ix, iy = self.width / 2 + center[0] // self.pixel_x, self.height / 2 + center[1] // self.pixel_y
             iw, ih = w / self.pixel_x, h / self.pixel_y
-            i04_splice = self.I04[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)), zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
-            i05_splice = self.I05[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)), zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
+            i04_splice = self.I04[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)),
+                         zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
+            i05_splice = self.I05[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)),
+                         zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
         except AttributeError:
             splice = self.core_scene.crop(
                 xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
             i04_splice = splice["I04"].data.flatten()
             i05_splice = splice["I05"].data.flatten()
-        plt.figure()
-        plt.subplot(1, 2, 1)
-        plt.scatter(i04_splice.flatten(), i05_splice.flatten(), s=kwargs.get("s", 0.25))
-        plt.gca().invert_yaxis()
-        plt.gca().invert_xaxis()
-        plt.ylabel("Cloud Top Temperature (K)")
-        plt.xlabel("I4 band reflectance (K)")
-        plt.subplot(1, 2, 2)
-        plt.imshow(self.I04, origin="upper",
-                   extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
-                           self.pixel_x * self.I04.shape[0] * 0.5,
-                           -self.pixel_y * self.I04.shape[1] * 0.5,
-                           self.pixel_y * self.I04.shape[1] * 0.5])
-        plt.gca().add_patch(
-            Rectangle((center[0] - w / 2, center[1] - h / 2), w, h, linewidth=1, edgecolor="r", facecolor="none"))
-        cb = plt.colorbar()
-        cb.set_label("Kelvin (K)")
-        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
-        if save is True:
-            plt.savefig(
-                f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
+        if plot:
+            plt.figure()
+            plt.subplot(1, 2, 1)
+            plt.scatter(i04_splice.flatten(), i05_splice.flatten(), s=kwargs.get("s", 0.25))
+            plt.gca().invert_yaxis()
+            plt.gca().invert_xaxis()
+            plt.ylabel("Cloud Top Temperature (K)")
+            plt.xlabel("I4 band reflectance (K)")
+            plt.subplot(1, 2, 2)
+            plt.imshow(self.I04, origin="upper",
+                       extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
+                               self.pixel_x * self.I04.shape[0] * 0.5,
+                               -self.pixel_y * self.I04.shape[1] * 0.5,
+                               self.pixel_y * self.I04.shape[1] * 0.5])
+            plt.gca().add_patch(
+                Rectangle((center[0] - w / 2, center[1] - h / 2), w, h, linewidth=1, edgecolor="r", facecolor="none"))
+            cb = plt.colorbar()
+            cb.set_label("Kelvin (K)")
+            plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
+            if save is True:
+                plt.savefig(
+                    f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
+            else:
+                plt.show()
+        return i04_splice, i05_splice
 
-            # Code below used for pickling slices of data while knowing the graph data.
-            #for pic_name in ["2013-10-19Cat4(2)", "2014-08-09Cat4(3)", "2014-10-16Cat4(4)", "2014-11-04Cat4(3)", "2015-08-30Cat4(3)"]:
-            #    if pic_name == f"{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx})":
-            #        file_name = f"proc/pic_dat_test/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).pickle"
-            #        with open(file_name, "wb") as file:
-            #            pickle.dump([i04_splice, i05_splice], file)
 
-        else:
-            plt.show()
+def find_eye(self, band='I04'):
+    if band == 'I04':
+        max_band_array = self.I04
+    elif band == 'I05':
+        max_band_array = self.I05
 
-    def find_eye(self, band='I04'):
-        if band == 'I04':
-            max_band_array = self.I04
-        elif band == 'I05':
-            max_band_array = self.I05
+    hot_point = np.amax(max_band_array)
+    cold_point = np.amin(max_band_array)
+    threshold = (hot_point - cold_point) / 3
 
-        hot_point = np.amax(max_band_array)
-        cold_point = np.amin(max_band_array)
-        threshold = (hot_point - cold_point) / 3
+    hot_point_ind = np.unravel_index(np.argmax(max_band_array, axis=None), max_band_array.shape)
 
-        hot_point_ind = np.unravel_index(np.argmax(max_band_array, axis=None), max_band_array.shape)
+    if hot_point_ind[0] == 0:
+        top_y = 0
+    elif hot_point_ind[1] == 0:
+        left_x = 0
 
-        if hot_point_ind[0] == 0:
+    for y in range(0, hot_point_ind[0]):
+        if max_band_array[hot_point_ind[0] - y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
+            top_y = hot_point_ind[0] - y
+            break
+        elif y == hot_point_ind[0] - 1:
             top_y = 0
-        elif hot_point_ind[1] == 0:
+    for y in range(0, len(max_band_array) - hot_point_ind[0]):
+        if max_band_array[hot_point_ind[0] + y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
+            bot_y = hot_point_ind[0] + y
+            break
+        elif y == len(max_band_array) - hot_point_ind[0] - 1:
+            bot_y = len(max_band_array)
+    for x in range(0, hot_point_ind[1]):
+        if max_band_array[hot_point_ind[0], hot_point_ind[1] - x] < max_band_array[hot_point_ind] - threshold:
+            left_x = hot_point_ind[1] - x
+            break
+        elif x == hot_point_ind[1] - 1:
             left_x = 0
+    for x in range(0, len(max_band_array[0]) - hot_point_ind[1]):
+        if max_band_array[hot_point_ind[0], hot_point_ind[1] + x] < max_band_array[hot_point_ind] - threshold:
+            right_x = hot_point_ind[1] + x
+            break
+        elif x == len(max_band_array[0]) - hot_point_ind[1] - 1:
+            right_x = len(max_band_array[0])
 
-        for y in range(0, hot_point_ind[0]):
-            if max_band_array[hot_point_ind[0] - y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
-                top_y = hot_point_ind[0] - y
-                break
-            elif y == hot_point_ind[0] - 1:
-                top_y = 0
-        for y in range(0, len(max_band_array) - hot_point_ind[0]):
-            if max_band_array[hot_point_ind[0] + y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
-                bot_y = hot_point_ind[0] + y
-                break
-            elif y == len(max_band_array) - hot_point_ind[0] - 1:
-                bot_y = len(max_band_array)
-        for x in range(0, hot_point_ind[1]):
-            if max_band_array[hot_point_ind[0], hot_point_ind[1] - x] < max_band_array[hot_point_ind] - threshold:
-                left_x = hot_point_ind[1] - x
-                break
-            elif x == hot_point_ind[1]-1:
-                left_x = 0
-        for x in range(0, len(max_band_array[0]) - hot_point_ind[1]):
-            if max_band_array[hot_point_ind[0], hot_point_ind[1] + x] < max_band_array[hot_point_ind] - threshold:
-                right_x = hot_point_ind[1] + x
-                break
-            elif x == len(max_band_array[0]) - hot_point_ind[1] - 1:
-                right_x = len(max_band_array[0])
-
-        return hot_point_ind, right_x, left_x, top_y, bot_y
+    return hot_point_ind, right_x, left_x, top_y, bot_y

@@ -191,23 +191,20 @@ def pickle_file():
 
 
 if __name__ == "__main__":
-    dirpath = input("Enter directory containing pickle files")
-    with ProgressBar():
-        pickle_paths = glob_pickle_files(dirpath)
-        for pickle in pickle_paths:
-            ci = CycloneImage.load_cyclone_image(pickle)
-            filename_idx = 0
-            if ci.is_complete:
-                hottest_idx, r, l, t, b = ci.find_eye()
-                eye_centre_idx = (r - l)/2 + l, (b - t)/2 + t
-                for y in [-1, 1]:
-                    for x in [-1, 1]:
-                        filename_idx += 1
-                        cyclone_centre_m_x = int(-ci.pixel_x * ci.I04.shape[0] * 0.5 + eye_centre_idx[0] * ci.pixel_x + ci.rmw * x/2)
-                        cyclone_centre_m_y = int(ci.pixel_y * ci.I04.shape[1] * 0.5 - eye_centre_idx[1] * ci.pixel_y - ci.rmw * y/2)
-                        x_pixel_centre = eye_centre_idx[0] + (ci.rmw/ci.pixel_x) *x/2
-                        y_pixel_centre = eye_centre_idx[1] + (ci.rmw/ci.pixel_y) *y/2
-                        try:
-                            ci.draw_rect((cyclone_centre_m_x, cyclone_centre_m_y),  ci.rmw, ci.rmw, (x_pixel_centre, y_pixel_centre), filename_idx, save=True)
-                        except IndexError:
-                            print("Data outside image")
+    if input("Do you want to iterate folders? (y/n)").lower() == 'y':
+        path = input("Enter directory containing pickle files")
+        with ProgressBar():
+            pickle_paths = glob_pickle_files(path)
+            for pickle in pickle_paths:
+                ci = CycloneImage.load_cyclone_image(pickle)
+                if ci.is_complete:
+                    for y in range(-2, 2):
+                        for x in range(-2, 2):
+                            ci.draw_rect((ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw, ci.rmw)
+    else:
+        path = input("Enter pickle file")
+        ci = CycloneImage.load_cyclone_image(path)
+        ci.draw_eye()
+        for y in range(-2, 2):
+            for x in range(-2, 2):
+                ci.draw_rect((ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw, ci.rmw)
