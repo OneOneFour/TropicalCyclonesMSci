@@ -71,13 +71,17 @@ def gt_two_line_fit(i04flat, i05flat, mode="min", plot=False):
 
     minimised_i05_fit_data = np.arange(int(min(i05_fit_data)), int(max(i05_fit_data)), 1)
     minimised_i04_fit_data = []
+    num_vals = 0
+    found_middle = False
 
     for i in minimised_i05_fit_data:
         min_idxs = np.where(np.logical_and(i05_fit_data > (i - 0.5), i05_fit_data < (i + 0.5)))[0]
         i04_min_vals = []
         for idx in min_idxs:
             i04_min_vals.append(i04_fit_data[idx])
+
         if len(i04_min_vals) > 0:
+            num_vals += len(i04_min_vals)
             if mode == "mean":
                 minimised_i04_fit_data.append(np.mean(i04_min_vals))
             elif mode == "min":
@@ -85,26 +89,36 @@ def gt_two_line_fit(i04flat, i05flat, mode="min", plot=False):
         else:
             minimised_i05_fit_data = np.delete(minimised_i05_fit_data, np.where(minimised_i05_fit_data == i)[0])
 
-    i05_lower_fit_data = minimised_i05_fit_data[:int(round(len(minimised_i05_fit_data)/2))]
-    i05_upper_fit_data = minimised_i05_fit_data[int(round(len(minimised_i05_fit_data)/2)):]
-    i04_lower_fit_data = minimised_i04_fit_data[:int(round(len(minimised_i04_fit_data)/2))]
-    i04_upper_fit_data = minimised_i04_fit_data[int(round(len(minimised_i04_fit_data)/2)):]
+        if not found_middle:
+            if num_vals >= len(i04_fit_data)/2:
+                mid_point = np.where(minimised_i05_fit_data==i)[0]
+                found_middle = True
 
-    lower_params, lower_cov = sp.curve_fit(straight_line_func, i05_lower_fit_data, i04_lower_fit_data)
-    upper_params, upper_cov = sp.curve_fit(straight_line_func, i05_upper_fit_data, i04_upper_fit_data)
-    xvalues = np.arange(min(minimised_i05_fit_data), max(minimised_i05_fit_data), 1)
-    lower_yvalues = straight_line_func(xvalues, lower_params[0], lower_params[1])
-    upper_yvalues = straight_line_func(xvalues, upper_params[0], upper_params[1])
-    intersection_idx = np.where(lower_yvalues<upper_yvalues)[0][0]
-    gt = xvalues[intersection_idx]
+    for i in mid_point:
+        i05_lower_fit_data = minimised_i05_fit_data[:i]
+        i05_upper_fit_data = minimised_i05_fit_data[i:]
+        i04_lower_fit_data = minimised_i04_fit_data[:i]
+        i04_upper_fit_data = minimised_i04_fit_data[i:]
 
-    if plot:
-        plt.scatter(i05flat, i04flat, s=0.25)
-        plt.plot(i05_lower_fit_data, i04_lower_fit_data)
-        plt.plot(i05_upper_fit_data, i04_upper_fit_data)
-        plt.plot(xvalues[:intersection_idx], lower_yvalues[:intersection_idx])
-        plt.plot(xvalues[intersection_idx:], upper_yvalues[intersection_idx:])
-        plt.show()
+        lower_params, lower_cov = sp.curve_fit(straight_line_func, i05_lower_fit_data, i04_lower_fit_data)
+        upper_params, upper_cov = sp.curve_fit(straight_line_func, i05_upper_fit_data, i04_upper_fit_data)
+        xvalues = np.arange(min(minimised_i05_fit_data), max(minimised_i05_fit_data), 1)
+        lower_yvalues = straight_line_func(xvalues, lower_params[0], lower_params[1])
+        upper_yvalues = straight_line_func(xvalues, upper_params[0], upper_params[1])
+
+        try:
+            intersection_idx = np.where(lower_yvalues<upper_yvalues)[0][0]
+            gt = xvalues[intersection_idx]
+
+            if plot:
+                plt.scatter(i05flat, i04flat, s=0.25)
+                plt.plot(i05_lower_fit_data, i04_lower_fit_data)
+                plt.plot(i05_upper_fit_data, i04_upper_fit_data)
+                plt.plot(xvalues[:intersection_idx], lower_yvalues[:intersection_idx])
+                plt.plot(xvalues[intersection_idx:], upper_yvalues[intersection_idx:])
+                plt.show()
+        except IndexError:
+            print("No min value")
 
     return gt
 
@@ -121,5 +135,5 @@ if __name__ == "__main__":
 
         gt_min = gt_min_i04(i04.flatten(), i05.flatten())
         gt_curve = gt_curve_fit(i04.flatten(), i05.flatten(), mode="min", plot=False)
-        gt_straight = gt_two_line_fit(i04.flatten(), i05.flatten(), mode="min", plot=False)
+        gt_straight = gt_two_line_fit(i04.flatten(), i05.flatten(), mode="min", plot=True)
         print("Curve gt: %f, Straight Line gt: %f, Min gt: %f" % (gt_curve, gt_straight, gt_min))
