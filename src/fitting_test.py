@@ -65,7 +65,7 @@ def gt_curve_fit(i04flat, i05flat, mode="min", plot=False):
 
 
 def gt_two_line_fit(i04flat, i05flat, mode="min", plot=False):
-    idxs = np.nonzero(i05flat < 200)
+    idxs = np.nonzero(i05flat < 210)
     i04_fit_data = np.delete(i04flat, idxs[0])
     i05_fit_data = np.delete(i05flat, idxs[0])
 
@@ -119,6 +119,7 @@ def gt_two_line_fit(i04flat, i05flat, mode="min", plot=False):
                 plt.show()
         except IndexError:
             print("No min value")
+            gt = 0
 
     return gt
 
@@ -134,6 +135,11 @@ if __name__ == "__main__":
             i04, i05 = pickle.load(file)
 
         gt_min = gt_min_i04(i04.flatten(), i05.flatten())
-        gt_curve = gt_curve_fit(i04.flatten(), i05.flatten(), mode="min", plot=False)
-        gt_straight = gt_two_line_fit(i04.flatten(), i05.flatten(), mode="min", plot=True)
+        gt_curve = gt_curve_fit(i04.flatten(), i05.flatten(), mode="min", plot=True)
+        gt_straight = gt_two_line_fit(i04.flatten(), i05.flatten(), mode="min", plot=False)
+        curve_min_diff = abs(gt_curve - gt_min) / gt_min * 100
+        straight_min_diff = abs(gt_straight - gt_min) / gt_min * 100
+        curve_straight_diff = abs(gt_curve - gt_straight) / gt_straight * 100
         print("Curve gt: %f, Straight Line gt: %f, Min gt: %f" % (gt_curve, gt_straight, gt_min))
+        print("Curve-Straight Diff = %f, Curve-Min diff = %f, Straight-Min diff = %f"
+              % (curve_straight_diff, curve_min_diff, straight_min_diff))
