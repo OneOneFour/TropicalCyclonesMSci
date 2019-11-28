@@ -198,13 +198,16 @@ if __name__ == "__main__":
             for pickle in pickle_paths:
                 ci = CycloneImage.load_cyclone_image(pickle)
                 if ci.is_complete:
-                    for y in range(-2, 2):
-                        for x in range(-2, 2):
-                            ci.draw_rect((ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw, ci.rmw)
+                    for y in range(-1, 1):
+                        for x in range(-1, 1):
+                            subimg = ci.new_rect(f"{x, y}", (ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw,
+                                                 ci.rmw)
+                            ci.draw_rect(f"{x, y}")
     else:
         path = input("Enter pickle file")
         ci = CycloneImage.load_cyclone_image(path)
         ci.draw_eye()
-        for y in range(-2, 2):
-            for x in range(-2, 2):
-                ci.draw_rect((ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw, ci.rmw)
+        for y in range(-1, 1):
+            for x in range(-1, 1):
+                subimg = ci.new_rect(f"{x, y}", (ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw, ci.rmw)
+                ci.draw_rect(f"{x,y}")

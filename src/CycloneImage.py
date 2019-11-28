@@ -6,6 +6,8 @@ from matplotlib.patches import Rectangle
 import numpy as np
 from pyresample import create_area_def
 from satpy import Scene
+
+from SubImage import SubImage, cubic
 from fetch_file import get_data
 
 DATA_DIRECTORY = "data"
@@ -37,6 +39,12 @@ def nm_to_degrees(nm):
 def get_eye(start_point, end_point, **kwargs):
     lat = start_point["LAT"], end_point["LAT"]
     lon = start_point["LON"], end_point["LON"]
+    vel_x = start_point["STORM_SPEED"] * np.sin(start_point["STORM_DIR"]) / (60 * 3600), end_point[
+        "STORM_SPEED"] * np.sin(
+        end_point["STORM_DIR"]) / (60 * 3600)
+    vel_y = start_point["STORM_SPEED"] * np.cos(start_point["STORM_DIR"]) / (60 * 3600), end_point[
+        "STORM_SPEED"] * np.cos(
+        end_point["STORM_DIR"]) / (60 * 3600)
     avgrmw_nm = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 2
     avgrmw_deg = avgrmw_nm / 60
     dayOrNight = kwargs.get("dayOrNight", "DNB")
@@ -56,6 +64,13 @@ def get_eye(start_point, end_point, **kwargs):
     frac = delta_time.seconds / (3 * 3600)
     lat_int = (lat[1] - lat[0]) * frac + lat[0]
     lon_int = (lon[1] - lon[0]) * frac + lon[0]
+
+    # vel_x_int = (vel_x[1] - vel_x[0]) * frac + vel_x[0]
+    # vel_y_int = (vel_y[1] - vel_y[0]) * frac + vel_y[0]
+
+    lat_int_2 = lat[0] + vel_y[0] * delta_time.seconds + (vel_y[1] - vel_y[0]) * (delta_time.seconds ** 2) / (6 * 3600)
+    lon_int_2 = lon[0] + vel_x[0] * delta_time.seconds + (vel_x[1] - vel_x[0]) * (delta_time.seconds ** 2) / (6 * 3600)
+
     area = create_area_def("eye_area",
                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int, "lon_0": lon_int,
                             "lat_1": lat_int},
@@ -63,7 +78,20 @@ def get_eye(start_point, end_point, **kwargs):
                            area_extent=[lon_int - 2 * avgrmw_deg, lat_int - 2 * avgrmw_deg,
                                         lon_int + 2 * avgrmw_deg, lat_int + 2 * avgrmw_deg]
                            )
+    area2 = create_area_def("eye_area_2",
+                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int_2, "lon_0": lon_int_2,
+                             "lat_1": lat_int_2},
+                            resolution=RESOLUTION_DEF, units="degrees",
+                            area_extent=[lon_int_2 - 2 * avgrmw_deg, lat_int_2 - 2 * avgrmw_deg,
+                                         lon_int_2 + 2 * avgrmw_deg, lat_int + 2 * avgrmw_deg]
+                            )
     core_scene = raw_scene.resample(area)
+    test_scene = raw_scene.resample(area2)
+
+    core_scene["I04"].plot.imshow()
+    plt.show()
+    test_scene["I04"].plot.imshow()
+    plt.show()
     return CycloneImage(core_scene, center=(lat_int, lon_int), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
                         day_or_night=dayOrNight, **kwargs)
@@ -85,6 +113,12 @@ class CycloneImage:
             ci.pixel_x = ci.core_scene["I04"].area.pixel_size_x
         if not hasattr(ci, "pixel_y"):
             ci.pixel_y = ci.core_scene["I04"].area.pixel_size_y
+        if not hasattr(ci, "rects"):
+            ci.rects = {}
+        if not hasattr(ci, "width"):
+            ci.width = ci.I04.shape[0]
+        if not hasattr(ci, "height"):
+            ci.height = ci.I04.shape[1]
         return ci
 
     def __init__(self, core_scene=None, center=None, **kwargs):
@@ -108,6 +142,7 @@ class CycloneImage:
             self.height = self.I04.shape[1]
         else:
             raise ValueError("You must provide either a Scene object or a filepath to a scene object")
+        self.rects = {}
         self.center = center
         self.margin = DEFAULT_MARGIN
         self.day_or_night = "DNB"
@@ -167,16 +202,16 @@ class CycloneImage:
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
             plt.show()
 
-    def draw_rect(self, center, w, h, plot=True, filename_idx=0, save=False, **kwargs):
+    def new_rect(self, key, center, w, h, **kwargs):
         """
         :param center: center coordinates of the cyclone in meter offset from the center of the core image
         :param w: width in meters
         :param h: height in meters
-        :param plot:
-        :param filename_idx:
-        :param save:
-        :param kwargs:
-        :return:
+        :param plot: should we plot
+        :param filename_idx: filename index
+        :param save: save figure
+        :param kwargs: additional arguments
+        :return: i04_splice, i05_splice of selected rectangle
         """
         try:
             ix, iy = self.width / 2 + center[0] // self.pixel_x, self.height / 2 + center[1] // self.pixel_y
@@ -190,31 +225,55 @@ class CycloneImage:
                 xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
             i04_splice = splice["I04"].data.flatten()
             i05_splice = splice["I05"].data.flatten()
-        if plot:
-            plt.figure()
-            plt.subplot(1, 2, 1)
-            plt.scatter(i04_splice.flatten(), i05_splice.flatten(), s=kwargs.get("s", 0.25))
-            plt.gca().invert_yaxis()
-            plt.gca().invert_xaxis()
-            plt.ylabel("Cloud Top Temperature (K)")
-            plt.xlabel("I4 band reflectance (K)")
-            plt.subplot(1, 2, 2)
-            plt.imshow(self.I04, origin="upper",
-                       extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
-                               self.pixel_x * self.I04.shape[0] * 0.5,
-                               -self.pixel_y * self.I04.shape[1] * 0.5,
-                               self.pixel_y * self.I04.shape[1] * 0.5])
-            plt.gca().add_patch(
-                Rectangle((center[0] - w / 2, center[1] - h / 2), w, h, linewidth=1, edgecolor="r", facecolor="none"))
-            cb = plt.colorbar()
-            cb.set_label("Kelvin (K)")
-            plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
-            if save is True:
-                plt.savefig(
-                    f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({filename_idx}).png")
-            else:
-                plt.show()
-        return i04_splice, i05_splice
+        self.rects[key] = SubImage(i04_splice, i05_splice, w, h, center)
+        return self.rects[key]
+
+    def get_curve_fit(self, key, mode="mean", plot=False):
+        sub_img = self.rects[key]
+        gt, gt_err = sub_img.curve_fit(mode, plot)
+        print(f"Glaciation temperature {gt}, error{gt_err}")
+
+    def draw_rect(self, key, save=False, **kwargs):
+        rect = self.rects[key]
+        plt.figure()
+        plt.subplot(1, 2, 1)
+        plt.scatter(rect.i04.flatten(), rect.i05.flatten(), s=kwargs.get("s", 0.25))
+        bottom,top = plt.ylim()
+        left,right = plt.xlim()
+        x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
+        try:
+            gt, gt_err, params = rect.curve_fit(mode="mean")
+            plt.plot([cubic(x_i, *params) for x_i in x],x,label="Mean")
+            gt, gt_err, params = rect.curve_fit(mode="min")
+            plt.plot([cubic(x_i, *params) for x_i in x], x, label="Minimum")
+            gt, gt_err, params = rect.curve_fit(mode="median")
+            plt.plot([cubic(x_i, *params) for x_i in x], x, label="Median")
+            plt.legend()
+        except TypeError:
+            pass
+        plt.gca().set_ylim([bottom,top])
+        plt.gca().set_xlim([left,right])
+        plt.gca().invert_yaxis()
+        plt.gca().invert_xaxis()
+        plt.ylabel("Cloud Top Temperature (K)")
+        plt.xlabel("I4 band reflectance (K)")
+        plt.subplot(1, 2, 2)
+        plt.imshow(self.I04, origin="upper",
+                   extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
+                           self.pixel_x * self.I04.shape[0] * 0.5,
+                           -self.pixel_y * self.I04.shape[1] * 0.5,
+                           self.pixel_y * self.I04.shape[1] * 0.5])
+        plt.gca().add_patch(
+            Rectangle((rect.center[0] - rect.width / 2, rect.center[1] - rect.height / 2), rect.width, rect.height,
+                      linewidth=1, edgecolor="r", facecolor="none"))
+        cb = plt.colorbar()
+        cb.set_label("Kelvin (K)")
+        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
+        if save is True:
+            plt.savefig(
+                f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({key}).png")
+        else:
+            plt.show()
 
 
 def find_eye(self, band='I04'):
