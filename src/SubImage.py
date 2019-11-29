@@ -7,6 +7,11 @@ MIN_CUTOFF = 210
 
 cubic = lambda x, a, b, c, d: a * x ** 3 + b * x ** 2 + c * x + d
 
+d_gt_d_a = lambda a, b, c: (3 * a * c + 2 * b * (-b + np.sqrt(b ** 2 - 3 * a * c))) / (
+        6 * a ** 2 * np.sqrt(b ** 2 - 3 * a * c))
+d_gt_d_b = lambda a, b, c: (-1 + b / np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
+d_gt_d_c = lambda a, b, c: -1 / (2 * np.sqrt(b ** 2 - 3 * a * c))
+
 
 class SubImage:
     def __init__(self, i04, i05, w, h, center):
@@ -44,7 +49,7 @@ class SubImage:
     def center(self):
         return self.__center
 
-    def curve_fit(self, mode="mean", plot=False):
+    def curve_fit(self, mode="mean"):
         x_i05 = np.arange(MIN_CUTOFF, int(max(self.i05_flat)), 1)
         if len(x_i05) < 1:
             return
@@ -74,30 +79,24 @@ class SubImage:
         y_i04 = np.delete(y_i04, zero_args)
         point_errs = np.delete(point_errs, zero_args)
 
-        params, cov = sp.curve_fit(cubic, x_i05, y_i04)
-        # perr = np.sqrt(np.diag(cov))
+        params, cov = sp.curve_fit(cubic, x_i05, y_i04, absolute_sigma=True)
+        perr = np.sqrt(np.diag(cov))
 
         xvalues = np.arange(min(x_i05), max(x_i05), 1)
-        yvalues = cubic(xvalues, params[0], params[1], params[2], params[3])
-        roots = np.roots([3 * params[0], 2 * params[1], params[2]])
-        if np.iscomplex(roots).all():
+        yvalues = cubic(xvalues, *params)
+        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
+        if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
             return
-        gt = roots[~np.iscomplex(roots)][0].real
-
+        print("\n".join([f"{i}: Value: {param}, error:{perr[i]}" for i, param in enumerate(params)]))
         # satellite_data_error = ??
-        curve_fit_err = 0.5 * abs(3 * params[0] * gt ** 2 + 2 * params[1] * gt + params[2])
-        gt_err = np.sqrt(curve_fit_err ** 2 + sum(x**2 for x in point_errs))
+        curve_fit_err = np.sqrt(
+            (d_gt_d_a(*params[:-1]) * perr[0]) ** 2 +
+            (d_gt_d_b(*params[:-1]) * perr[1]) ** 2 +
+            (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
+        )
+        gt_err = curve_fit_err
 
-
-        if plot:
-            plt.scatter(self.i04_flat, self.i05_flat, s=0.25)
-            plt.plot(yvalues, xvalues, label="Line of best fit")
-
-            #plt.errorbar(x_i05, y_i04, yerr=point_errs)
-            plt.legend()
-            plt.show()
-
-        return gt, gt_err,params
+        return gt_ve, gt_err, params
 
     def draw(self, band="I04"):
         if band == "I04":
