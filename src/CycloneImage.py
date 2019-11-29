@@ -242,10 +242,9 @@ class CycloneImage:
         left, right = plt.xlim()
         try:
             x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
-            for mode in ["median","mean","min"]:
-                gt, gt_err, params = rect.curve_fit(mode=mode)
-                plt.plot([cubic(x_i, *params) for x_i in x], x, label=mode)
-                print(f"{mode}\nGlaciation temperature:{gt}\nError {gt_err}\n")
+            gt, gt_err, params = rect.curve_fit()
+            plt.plot([cubic(x_i, *params) for x_i in x], x, label="Curve fit")
+            plt.hlines(gt, xmin=left, xmax=right, colors="r")
             plt.legend()
         except TypeError:
             pass
