@@ -207,7 +207,5 @@ if __name__ == "__main__":
         path = input("Enter pickle file")
         ci = CycloneImage.load_cyclone_image(path)
         ci.draw_eye()
-        for y in range(-1, 1):
-            for x in range(-1, 1):
-                subimg = ci.new_rect(f"{x, y}", (ci.rmw / 2 + ci.rmw * y, ci.rmw / 2 + ci.rmw * x), ci.rmw, ci.rmw)
-                ci.draw_rect(f"{x,y}")
+        subimg = ci.new_rect(f"da whole thing", (-5000, -5000), ci.rmw * 2,ci.rmw * 2)
+        ci.draw_rect(f"da whole thing")

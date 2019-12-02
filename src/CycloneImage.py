@@ -7,7 +7,7 @@ import numpy as np
 from pyresample import create_area_def
 from satpy import Scene
 
-from SubImage import SubImage, cubic
+from SubImage import SubImage, cubic, quadratic
 from fetch_file import get_data
 
 DATA_DIRECTORY = "data"
@@ -242,8 +242,9 @@ class CycloneImage:
         left, right = plt.xlim()
         try:
             x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
-            gt, gt_err, params = rect.curve_fit()
-            plt.plot([cubic(x_i, *params) for x_i in x], x, label="Curve fit")
+            gt, gt_err, params = rect.curve_fit(cubic)
+            print(gt, gt_err)
+            plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
             plt.hlines(gt, xmin=left, xmax=right, colors="r")
             plt.legend()
         except TypeError:
