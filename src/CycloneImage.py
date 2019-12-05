@@ -15,7 +15,7 @@ DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 
-spline_c = lambda dx, dv, T, v0: (3 * (dx - 3 * T * v0) - dv * T) / (T * T)
+spline_c = lambda dx, dv, T, v0: (3 * (dx - T * v0) - dv * T) / (T * T)
 spline_d = lambda dx, dv, T, v0: (2 * (T * v0 - dx) + dv * T) / (T * T * T)
 
 
@@ -40,14 +40,14 @@ def nm_to_degrees(nm):
 
 
 def get_eye_cubic(start_point, end_point, **kwargs):
-    lat_0, lat_1 = start_point["LAT"], end_point["LAT"]
-    lon_0, lon_1 = start_point["LON"], end_point["LON"]
-    vel_x_0, vel_x_1 = start_point["STORM_SPEED"] * np.sin(start_point["STORM_DIR"]) / (60 * 3600), end_point[
+    lat_0, lat_1 = start_point["USA_LAT"], end_point["USA_LAT"]
+    lon_0, lon_1 = start_point["USA_LON"], end_point["USA_LON"]
+    vel_lon_0, vel_lon_1 = start_point["STORM_SPEED"] * np.sin(start_point["STORM_DIR"] * np.pi / 180) / 60, end_point[
         "STORM_SPEED"] * np.sin(
-        end_point["STORM_DIR"]) / (60 * 3600)
-    vel_y_0, vel_y_1 = start_point["STORM_SPEED"] * np.cos(start_point["STORM_DIR"]) / (60 * 3600), end_point[
+        end_point["STORM_DIR"] * np.pi / 180) / 60
+    vel_lat_0, vel_lat_1 = start_point["STORM_SPEED"] * np.cos(start_point["STORM_DIR"] * np.pi / 180) / 60, end_point[
         "STORM_SPEED"] * np.cos(
-        end_point["STORM_DIR"]) / (60 * 3600)
+        end_point["STORM_DIR"] * np.pi / 180) / 60
     avgrmw_nm = (start_point["USA_RMW"] + end_point["USA_RMW"]) / 2
     avgrmw_deg = avgrmw_nm / 60
     dayOrNight = kwargs.get("dayOrNight", "DNB")
@@ -64,10 +64,10 @@ def get_eye_cubic(start_point, end_point, **kwargs):
     raw_scene.load(["I04", "I05", "i_lat", "i_lon"])
 
     delta_time = raw_scene.start_time - start_point["ISO_TIME"].to_pydatetime()
-    lat_int = cubic(delta_time, lat_0, vel_x_0, spline_c(lat_1 - lat_0, vel_x_1 - vel_x_0, 10800, vel_x_0),
-                    spline_d(lat_1 - lat_0, vel_x_1 - vel_x_0, 10800, vel_x_0))
-    lon_int = cubic(delta_time, lon_0, vel_y_0, spline_c(lon_1 - lon_0, vel_y_1 - vel_y_0, 10800, vel_y_0),
-                    spline_d(lon_1 - lon_0, vel_y_1 - vel_y_0, 10800, vel_y_0))
+    lat_int = cubic(delta_time.seconds / 3600, spline_d(lat_1 - lat_0, vel_lat_1 - vel_lat_0, 3, vel_lat_0),
+                    spline_c(lat_1 - lat_0, vel_lat_1 - vel_lat_0, 3, vel_lat_0), vel_lat_0, lat_0)
+    lon_int = cubic(delta_time.seconds / 3600, spline_d(lon_1 - lon_0, vel_lon_1 - vel_lon_0, 3, vel_lon_0),
+                    spline_c(lon_1 - lon_0, vel_lon_1 - vel_lon_0, 3, vel_lon_0), vel_lon_0, lon_0)
 
     area = create_area_def("eye_area",
                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int, "lon_0": lon_int,
@@ -76,11 +76,11 @@ def get_eye_cubic(start_point, end_point, **kwargs):
                            area_extent=[lon_int - 2 * avgrmw_deg, lat_int - 2 * avgrmw_deg,
                                         lon_int + 2 * avgrmw_deg, lat_int + 2 * avgrmw_deg]
                            )
-
     core_scene = raw_scene.resample(area)
     return CycloneImage(core_scene, center=(lat_int, lon_int), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
                         day_or_night=dayOrNight, **kwargs)
+
 
 def get_eye(start_point, end_point, **kwargs):
     lat = start_point["LAT"], end_point["LAT"]
@@ -105,7 +105,6 @@ def get_eye(start_point, end_point, **kwargs):
     lat_int = (lat[1] - lat[0]) * frac + lat[0]
     lon_int = (lon[1] - lon[0]) * frac + lon[0]
 
-
     area = create_area_def("eye_area",
                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int, "lon_0": lon_int,
                             "lat_1": lat_int},
@@ -113,9 +112,17 @@ def get_eye(start_point, end_point, **kwargs):
                            area_extent=[lon_int - 2 * avgrmw_deg, lat_int - 2 * avgrmw_deg,
                                         lon_int + 2 * avgrmw_deg, lat_int + 2 * avgrmw_deg]
                            )
-
-    core_scene = raw_scene.resample(area)
-    return CycloneImage(core_scene, center=(lat_int, lon_int), urls=urls, rmw=avgrmw_nm * NM_TO_M,
+    tmp_scene = raw_scene.resample(area)
+    centered_lon, centered_lat = area.get_lonlat(
+        *np.unravel_index(tmp_scene["I05"].values.argmax(), tmp_scene["I05"].shape))
+    recentered_area = create_area_def("better_eye_area",
+                                      {"proj": "lcc", "ellps": "WGS84", "lat_0": centered_lat, "lon_0": centered_lon,
+                                       "lat_1": lat_int}, units="degrees", resolution=RESOLUTION_DEF, area_extent=[
+            centered_lon - 2 * avgrmw_deg, centered_lat - 2 * avgrmw_deg,
+            centered_lon + 2 * avgrmw_deg, centered_lat + 2 * avgrmw_deg
+        ])
+    new_scene = raw_scene.resample(recentered_area)
+    return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
                         day_or_night=dayOrNight, **kwargs)
 
