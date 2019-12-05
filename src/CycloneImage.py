@@ -273,9 +273,10 @@ class CycloneImage:
         gt, gt_err, params = sub_img.curve_fit(cubic)
         self.gt = [gt, gt_err]
         cat = self.__dict__["cat"]
-        start_intensity = self.__dict__["start_intensity"]
-        end_intensity = self.__dict__["end_intensity"]
-        return gt, (start_intensity + end_intensity)/2
+        start_intensity =0 #self.__dict__["start_intensity"]
+        end_intensity =0 #self.__dict__["end_intensity"]
+        basin = self.__dict__["basin"]
+        return gt, (start_intensity + end_intensity)/2, basin
 
     def draw_rect(self, key, save=False, plot=False, **kwargs):
         rect = self.rects[key]
