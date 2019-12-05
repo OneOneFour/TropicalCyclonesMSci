@@ -68,7 +68,7 @@ class SubImage:
         gt_err = curve_fit_err
         return gt_ve, gt_err, (a, b, c, d)
 
-    def curve_fit_bins(self, mode="mean"):
+    def curve_fit_bins(self, mode="median"):
         x_i05 = np.arange(MIN_CUTOFF, int(max(self.i05_flat)), 1)
         if len(x_i05) < 1:
             return

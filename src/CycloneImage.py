@@ -103,7 +103,7 @@ class CycloneImage:
     def load_cyclone_image(fpath):
         with open(fpath, "rb") as file:
             ci = pickle.load(file)
-        assert isinstance(ci, CycloneImage)
+        # assert isinstance(ci, CycloneImage)
         ci.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
         if not hasattr(ci, "I04"):
             ci.I04 = ci.core_scene["I04"].values
@@ -228,7 +228,7 @@ class CycloneImage:
         self.rects[key] = SubImage(i04_splice, i05_splice, w, h, center)
         return self.rects[key]
 
-    def get_curve_fit(self, key, mode="mean", plot=False):
+    def get_curve_fit(self, key, mode="median", plot=False):
         sub_img = self.rects[key]
         gt, gt_err = sub_img.curve_fit(mode, plot)
         print(f"Glaciation temperature {gt}, error{gt_err}")

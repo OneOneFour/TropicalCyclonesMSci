@@ -191,7 +191,7 @@ def pickle_file():
 
 
 if __name__ == "__main__":
-    if input("Do you want to iterate folders? (y/n)").lower() == 'y':
+    if input("Do you want to quarter the eye image and plot? (y/n)").lower() == 'y':
         path = input("Enter directory containing pickle files")
         with ProgressBar():
             pickle_paths = glob_pickle_files(path)
@@ -204,8 +204,13 @@ if __name__ == "__main__":
                                                  ci.rmw)
                             ci.draw_rect(f"{x, y}")
     else:
-        path = input("Enter pickle file")
-        ci = CycloneImage.load_cyclone_image(path)
-        ci.draw_eye()
-        subimg = ci.new_rect(f"da whole thing", (-5000, -5000), ci.rmw * 2,ci.rmw * 2)
-        ci.draw_rect(f"da whole thing")
+        path = input("Enter pickle folder")
+        pickle_paths = glob_pickle_files(path)
+        for path in pickle_paths:
+            try:
+                ci = CycloneImage.load_cyclone_image(path)
+                ci.draw_eye()
+                subimg = ci.new_rect(f"da whole thing", (0, 0), ci.rmw * 2,ci.rmw * 2)
+                ci.draw_rect(f"da whole thing")
+            except:
+                continue
