@@ -1,12 +1,12 @@
 import pandas as pd
 import os
-from CycloneImage import get_eye, wrap,get_eye_cubic
+from CycloneImage import get_eye, wrap, get_eye_cubic
 from dask.diagnostics.progress import ProgressBar
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False,
                             usecols=["SID", "ISO_TIME", "USA_SSHS", "LAT", "LON", "USA_STATUS", "USA_WIND", "USA_PRES",
-                                     "USA_RMW", "BASIN", "NAME", "STORM_SPEED", "STORM_DIR"])
+                                     "USA_RMW", "BASIN", "NAME", "STORM_SPEED", "STORM_DIR", "USA_LAT", "USA_LON"])
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
 
 
@@ -35,13 +35,23 @@ def all_cyclones_since(year, month, day):
 
 
 def cyclone_track(NAME):
-    df_cyclone = best_track_df.loc[best_track_df["NAME"] == NAME]
+    df_cyclone = best_track_df.loc[(best_track_df["NAME"] == NAME) & (best_track_df["USA_SSHS"] > 3)]
     df_cyclone["LON"] = df_cyclone["LON"].map(wrap)
     dict_cy = df_cyclone.to_dict(orient="records")
-    for i ,cyclone_point in enumerate(dict_cy[:-1]):
+    for i, cyclone_point in enumerate(dict_cy[:-1]):
         start_point = cyclone_point
-        end_point = dict_cy[i+1]
+        end_point = dict_cy[i + 1]
         with ProgressBar():
-            ci = get_eye_cubic(start_point,end_point,name=NAME,basin=start_point["BASIN"],cat=start_point["USA_SSHS"],dayOrNight="D")
+            # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
+            #                    cat=start_point["USA_SSHS"], dayOrNight="D")
+            # if ci is not None:
+            #     ci.draw_eye()
+            #     return ci
+            ci = get_eye(start_point, end_point, name=NAME, basin=start_point["BASIN"],
+                         cat=start_point["USA_SSHS"], dayOrNight="D")
             if ci is not None:
                 ci.draw_eye()
+                return ci
+
+
+ci = cyclone_track("GONI")
