@@ -21,6 +21,7 @@ class SubImage:
         self.__w = w
         self.__h = h
         self.__center = center
+        self.gt = []
 
     @property
     def i04(self):
@@ -66,6 +67,7 @@ class SubImage:
 
         curve_fit_err = np.sqrt(((b_err*c)/(2*b*b))**2 + (c_err/2*b)**2)
         gt_err = curve_fit_err
+        self.gt = [gt_ve, gt_err]
         return gt_ve, gt_err, (a, b, c, d)
 
     def curve_fit_bins(self, mode="median"):
@@ -114,6 +116,7 @@ class SubImage:
             (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
         )
         gt_err = curve_fit_err
+        self.gt = [gt_ve, gt_err]
 
         return gt_ve, gt_err, params
 
@@ -124,3 +127,4 @@ class SubImage:
         else:
             plt.imshow(self.__i05)
             plt.show()
+

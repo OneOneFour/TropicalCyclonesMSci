@@ -126,7 +126,7 @@ class CycloneImage:
     def load_cyclone_image(fpath):
         with open(fpath, "rb") as file:
             ci = pickle.load(file)
-        # assert isinstance(ci, CycloneImage)
+        assert isinstance(ci, CycloneImage)
         ci.core_scene.load(["I05", "I04", "i_lat", "i_lon"])
         if not hasattr(ci, "I04"):
             ci.I04 = ci.core_scene["I04"].values
@@ -166,6 +166,7 @@ class CycloneImage:
         else:
             raise ValueError("You must provide either a Scene object or a filepath to a scene object")
         self.rects = {}
+        self.gt = []
         self.center = center
         self.margin = DEFAULT_MARGIN
         self.day_or_night = "DNB"
@@ -251,12 +252,16 @@ class CycloneImage:
         self.rects[key] = SubImage(i04_splice, i05_splice, w, h, center)
         return self.rects[key]
 
-    def get_curve_fit(self, key, mode="median", plot=False):
+    def get_gt_and_intensity(self, key, mode="median", plot=False):
         sub_img = self.rects[key]
-        gt, gt_err = sub_img.curve_fit(mode, plot)
-        print(f"Glaciation temperature {gt}, error{gt_err}")
+        gt, gt_err, params = sub_img.curve_fit(cubic)
+        self.gt = [gt, gt_err]
+        cat = self.__dict__["cat"]
+        start_intensity = self.__dict__["start_intensity"]
+        end_intensity = self.__dict__["end_intensity"]
+        return gt, (start_intensity + end_intensity)/2
 
-    def draw_rect(self, key, save=False, **kwargs):
+    def draw_rect(self, key, save=False, plot=False, **kwargs):
         rect = self.rects[key]
         plt.figure()
         plt.subplot(1, 2, 1)
@@ -266,35 +271,37 @@ class CycloneImage:
         try:
             x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
             gt, gt_err, params = rect.curve_fit(cubic)
-            print(gt, gt_err)
-            plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
-            plt.hlines(gt, xmin=left, xmax=right, colors="r")
-            plt.legend()
+            self.gt = [gt, gt_err]
+            if plot:
+                plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
+                plt.hlines(gt, xmin=left, xmax=right, colors="r")
+                plt.legend()
         except TypeError:
             pass
-        plt.gca().set_ylim([bottom, top])
-        plt.gca().set_xlim([left, right])
-        plt.gca().invert_yaxis()
-        plt.gca().invert_xaxis()
-        plt.ylabel("Cloud Top Temperature (K)")
-        plt.xlabel("I4 band reflectance (K)")
-        plt.subplot(1, 2, 2)
-        plt.imshow(self.I04, origin="upper",
-                   extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
-                           self.pixel_x * self.I04.shape[0] * 0.5,
-                           -self.pixel_y * self.I04.shape[1] * 0.5,
-                           self.pixel_y * self.I04.shape[1] * 0.5])
-        plt.gca().add_patch(
-            Rectangle((rect.center[0] - rect.width / 2, rect.center[1] - rect.height / 2), rect.width, rect.height,
-                      linewidth=1, edgecolor="r", facecolor="none"))
-        cb = plt.colorbar()
-        cb.set_label("Kelvin (K)")
-        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
-        if save is True:
-            plt.savefig(
-                f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({key}).png")
-        else:
-            plt.show()
+        if plot:
+            plt.gca().set_ylim([bottom, top])
+            plt.gca().set_xlim([left, right])
+            plt.gca().invert_yaxis()
+            plt.gca().invert_xaxis()
+            plt.ylabel("Cloud Top Temperature (K)")
+            plt.xlabel("I4 band reflectance (K)")
+            plt.subplot(1, 2, 2)
+            plt.imshow(self.I04, origin="upper",
+                       extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
+                               self.pixel_x * self.I04.shape[0] * 0.5,
+                               -self.pixel_y * self.I04.shape[1] * 0.5,
+                               self.pixel_y * self.I04.shape[1] * 0.5])
+            plt.gca().add_patch(
+                Rectangle((rect.center[0] - rect.width / 2, rect.center[1] - rect.height / 2), rect.width, rect.height,
+                          linewidth=1, edgecolor="r", facecolor="none"))
+            cb = plt.colorbar()
+            cb.set_label("Kelvin (K)")
+            plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
+            if save is True:
+                plt.savefig(
+                    f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({key}).png")
+            else:
+                plt.show()
 
 
 def find_eye(self, band='I04'):

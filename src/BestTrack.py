@@ -23,14 +23,15 @@ def all_cyclones_since(year, month, day):
             end_point = dict_cy[i + 1]
             with ProgressBar():
                 ci = get_eye(start_point, end_point, name=start_point["NAME"], basin=start_point["BASIN"],
-                             cat=start_point["USA_SSHS"], dayOrNight="D")
+                             cat=start_point["USA_SSHS"], dayOrNight="D", start_intensity=start_point["USA_WIND"],
+                             end_intensity=end_point["USA_WIND"])
                 if ci is not None:
                     # box is four times RMW
                     if ci.is_complete:
                         ci.save_object()
-                        # for y in range(-2,2):
-                        #     for x in range(-2,2):
-                        #         ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
+                        for y in range(-2,2):
+                            for x in range(-2,2):
+                                ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
 
 
 def cyclone_track(NAME):
@@ -44,4 +45,3 @@ def cyclone_track(NAME):
             ci = get_eye_cubic(start_point,end_point,name=NAME,basin=start_point["BASIN"],cat=start_point["USA_SSHS"],dayOrNight="D")
             if ci is not None:
                 ci.draw_eye()
-
