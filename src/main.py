@@ -206,24 +206,16 @@ if __name__ == "__main__":
     else:
         path = input("Enter pickle folder")
         pickle_paths = glob_pickle_files(path)
-        gts = {}
-        intenses = {}
+        points = []
         for path in pickle_paths:
             try:
                 ci = CycloneImage.load_cyclone_image(path)
-                subimg = ci.new_rect(f"da whole thing", (0, 0), ci.rmw * 2,ci.rmw * 2)
-                gt, intensity, basin = ci.get_gt_and_intensity("da whole thing", mode="median")
+                subimg = ci.new_rect(f"da whole thing", (0, 0), ci.rmw * 2, ci.rmw * 2)
+                gt, cat, basin, max_wind = ci.get_gt_and_intensity("da whole thing", mode="median")
                 if 200 < gt < 270:
-                    if basin not in gts.keys():
-                        gts[basin] = []
-                        intenses[basin] = []
-                    gts[basin].append(gt)
-                    intenses[basin].append(intensity)
-            except:
-                continue
+                    points.append({"gt": gt, "cat": cat, "basin": basin, "max_wind": max_wind})
+            except Exception as e:
+                print(f"{path} --> error :{e}")
 
-        for basin in gts.keys():
-            plt.hist(gts[basin])
-            # plt.hist(intenses[basin])
-            plt.title("GT of %s Basin" % basin)
-            plt.show()
+        plt.scatter((elem["gt"] for elem in points), (elem["max_wind"] for elem in points))
+        plt.show()

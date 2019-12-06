@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from CycloneImage import get_eye, wrap, get_eye_cubic
+from CycloneImage import get_eye, wrap
 from dask.diagnostics.progress import ProgressBar
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv")
@@ -49,9 +49,11 @@ def cyclone_track(NAME):
             #     return ci
             ci = get_eye(start_point, end_point, name=NAME, basin=start_point["BASIN"],
                          cat=start_point["USA_SSHS"], dayOrNight="D")
+
             if ci is not None:
                 ci.draw_eye()
-                return ci
+                # return ci
+
 
 
 ci = cyclone_track("GONI")

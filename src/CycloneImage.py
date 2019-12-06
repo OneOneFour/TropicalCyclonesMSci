@@ -69,6 +69,9 @@ def get_eye(start_point, end_point, **kwargs):
     lon_int = cubic(delta_time.seconds / 3600, spline_d(lon_1 - lon_0, vel_lon_1 - vel_lon_0, 3, vel_lon_0),
                     spline_c(lon_1 - lon_0, vel_lon_1 - vel_lon_0, 3, vel_lon_0), vel_lon_0, lon_0)
 
+    interpolated_w_max = delta_time.seconds * (end_point["USA_WIND"] - start_point["USA_WIND"]) / (3 * 3600) + \
+                         start_point["USA_WIND"]
+
     area = create_area_def("eye_area",
                            {"proj": "lcc", "ellps": "WGS84", "lat_0": lat_int, "lon_0": lon_int,
                             "lat_1": lat_int},
@@ -88,7 +91,7 @@ def get_eye(start_point, end_point, **kwargs):
     new_scene = raw_scene.resample(recentered_area)
     return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
-                        day_or_night=dayOrNight, **kwargs)
+                        day_or_night=dayOrNight,max_wind=interpolated_w_max, **kwargs)
 
 
 def get_eye_legacy(start_point, end_point, **kwargs):
@@ -133,7 +136,7 @@ def get_eye_legacy(start_point, end_point, **kwargs):
     new_scene = raw_scene.resample(recentered_area)
     return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
-                        day_or_night=dayOrNight, **kwargs)
+                        day_or_night=dayOrNight,**kwargs)
 
 
 class CycloneImage:
@@ -272,11 +275,11 @@ class CycloneImage:
         sub_img = self.rects[key]
         gt, gt_err, params = sub_img.curve_fit(cubic)
         self.gt = [gt, gt_err]
-        cat = self.__dict__["cat"]
-        start_intensity =0 #self.__dict__["start_intensity"]
-        end_intensity =0 #self.__dict__["end_intensity"]
-        basin = self.__dict__["basin"]
-        return gt, (start_intensity + end_intensity)/2, basin
+        cat = self.cat
+        start_intensity = 0  # self.__dict__["start_intensity"]
+        end_intensity = 0  # self.__dict__["end_intensity"]
+        basin = self.basin
+        return gt,cat, basin,self.max_wind
 
     def draw_rect(self, key, save=False, plot=False, **kwargs):
         rect = self.rects[key]
