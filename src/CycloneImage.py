@@ -1,16 +1,15 @@
-import os
 import pickle
-import dask
+import os
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 import numpy as np
+from matplotlib.patches import Rectangle
 from pyresample import create_area_def
 from satpy import Scene
 
-from SubImage import SubImage, cubic, quadratic
+from SubImage import SubImage, cubic
 from fetch_file import get_data
 
-DATA_DIRECTORY = "data"
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY","data")
 DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
@@ -89,9 +88,10 @@ def get_eye(start_point, end_point, **kwargs):
             centered_lon + 2 * avgrmw_deg, centered_lat + 2 * avgrmw_deg
         ])
     new_scene = raw_scene.resample(recentered_area)
+    print(interpolated_w_max)
     return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
-                        day_or_night=dayOrNight,max_wind=interpolated_w_max, **kwargs)
+                        day_or_night=dayOrNight, max_wind=interpolated_w_max, **kwargs)
 
 
 def get_eye_legacy(start_point, end_point, **kwargs):
@@ -136,7 +136,7 @@ def get_eye_legacy(start_point, end_point, **kwargs):
     new_scene = raw_scene.resample(recentered_area)
     return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
-                        day_or_night=dayOrNight,**kwargs)
+                        day_or_night=dayOrNight, **kwargs)
 
 
 class CycloneImage:
@@ -279,7 +279,7 @@ class CycloneImage:
         start_intensity = 0  # self.__dict__["start_intensity"]
         end_intensity = 0  # self.__dict__["end_intensity"]
         basin = self.basin
-        return gt,cat, basin,self.max_wind
+        return gt, cat, basin, self.max_wind
 
     def draw_rect(self, key, save=False, plot=False, **kwargs):
         rect = self.rects[key]
