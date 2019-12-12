@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pandas as pd
 import os
 from CycloneImage import get_eye, wrap
@@ -21,17 +23,19 @@ def all_cyclones_since(year, month, day):
         for i, cyclone_point in enumerate(dict_cy[:-1]):
             start_point = cyclone_point
             end_point = dict_cy[i + 1]
+            if end_point["ISO_TIME"] - start_point["ISO_TIME"] > timedelta(hours=3):
+                continue
             with ProgressBar():
                 ci = get_eye(start_point, end_point, name=start_point["NAME"], basin=start_point["BASIN"],
-                             cat=start_point["USA_SSHS"], dayOrNight="D", start_intensity=start_point["USA_WIND"],
-                             end_intensity=end_point["USA_WIND"])
+                             cat=start_point["USA_SSHS"], dayOrNight="D")
                 if ci is not None:
                     # box is four times RMW
                     if ci.is_complete:
+                        ci.draw_eye("I05")
                         ci.save_object()
-                        for y in range(-2,2):
-                            for x in range(-2,2):
-                                ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
+                        # for y in range(-2,2):
+                        #     for x in range(-2,2):
+                        #         ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
 
 
 def cyclone_track(NAME):
@@ -56,4 +60,4 @@ def cyclone_track(NAME):
 
 
 
-ci = cyclone_track("GONI")
+all_cyclones_since(2011,1,1)

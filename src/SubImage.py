@@ -62,7 +62,7 @@ class SubImage:
         gt_ve = (-b + np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
         # gt = -params[1] / (2 * params[0])
         # gt_err = np.sqrt((perr[1] / (2 * params[0])) ** 2 + (perr[0] * params[1] / (2 * params[0] ** 2)) ** 2)
-        if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
+        if np.iscomplex(gt_ve) or (min(x_i05) > gt_ve > max(x_i05)):
             return
 
         curve_fit_err = np.sqrt(((b_err*c)/(2*b*b))**2 + (c_err/2*b)**2)
