@@ -4,6 +4,7 @@ import dask
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
+from matplotlib.widgets import RectangleSelector
 from pyresample import create_area_def
 from satpy import Scene
 
@@ -91,7 +92,7 @@ def get_eye(start_point, end_point, **kwargs):
     new_scene = raw_scene.resample(recentered_area)
     return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
-                        day_or_night=dayOrNight,max_wind=interpolated_w_max, **kwargs)
+                        day_or_night=dayOrNight, max_wind=interpolated_w_max, **kwargs)
 
 
 def get_eye_legacy(start_point, end_point, **kwargs):
@@ -136,7 +137,7 @@ def get_eye_legacy(start_point, end_point, **kwargs):
     new_scene = raw_scene.resample(recentered_area)
     return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
-                        day_or_night=dayOrNight,**kwargs)
+                        day_or_night=dayOrNight, **kwargs)
 
 
 class CycloneImage:
@@ -245,6 +246,48 @@ class CycloneImage:
                 f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.core_scene[band].area.pixel_size_x)} meters per pixel\nBand:{band}")
             plt.show()
 
+    def show_where_pixels_are(self, key, **kwargs):
+        rect = self.rects[key]
+        fig, ax = plt.subplots()
+        ax.scatter(rect.i04_flat, rect.i05_flat, s=kwargs.get("s", 0.25))
+
+        def select_callback(eclick, erelease):
+            i4min, i4max = min(eclick.xdata, erelease.xdata), max(eclick.xdata, erelease.xdata)
+            i5min, i5max = min(eclick.ydata, erelease.ydata), max(eclick.ydata, erelease.ydata)
+            selected_points = np.argwhere(np.logical_and(np.logical_and(i4min < rect.i04, rect.i04 < i4max),np.logical_and(i5min < rect.i05, rect.i05 < i5max)))
+
+            fig,ax = plt.subplots()
+            ax.imshow(rect.i04)
+            # These are flipped due to the way the plotting is done
+            ax.scatter([p[1] for p in selected_points],[p[0] for p in selected_points],s=0.25)
+            plt.show()
+
+        bottom, top = plt.ylim()
+        left, right = plt.xlim()
+        x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
+        gt, gt_err, params = rect.curve_fit(cubic)
+        self.gt = [gt, gt_err]
+        plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
+        plt.hlines(gt, xmin=left, xmax=right, colors="r")
+        plt.legend()
+
+        def toggle_selector(event):
+            if event.key in ['B', 'b'] and not toggle_selector.RS.active:
+                print(' RectangleSelector activated.')
+                toggle_selector.RS.set_active(True)
+
+        toggle_selector.RS = RectangleSelector(
+            ax, select_callback, drawtype="box", useblit=False,
+            button=[1, 3], interactive=True, minspanx=5, minspany=5, spancoords="pixels")
+
+        ax.set_ylim([bottom, top])
+        ax.set_xlim([left, right])
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+
+        plt.connect('key_press_event', toggle_selector)
+        plt.show()
+
     def new_rect(self, key, center, w, h, **kwargs):
         """
         :param center: center coordinates of the cyclone in meter offset from the center of the core image
@@ -257,12 +300,11 @@ class CycloneImage:
         :return: i04_splice, i05_splice of selected rectangle
         """
         try:
-            ix, iy = self.width / 2 + center[0] // self.pixel_x, self.height / 2 + center[1] // self.pixel_y
-            iw, ih = w / self.pixel_x, h / self.pixel_y
-            i04_splice = self.I04[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)),
-                         zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
-            i05_splice = self.I05[zero_clamp(int(round(iy - ih / 2))):int(round(iy + ih / 2)),
-                         zero_clamp(int(round(ix - iw / 2))):int(round(ix + iw / 2))]
+            area = self.core_scene["I04"].area
+            bottom_left = area.get_xy_from_proj_coords(center[0] - w / 2, center[1] - h / 2)
+            top_right = area.get_xy_from_proj_coords(center[0] + w / 2, center[1] + h / 2)
+            i04_splice = self.I04[top_right[1]:bottom_left[1], bottom_left[0]:top_right[0]]
+            i05_splice = self.I05[top_right[1]:bottom_left[1], bottom_left[0]:top_right[0]]
         except AttributeError:
             splice = self.core_scene.crop(
                 xy_bbox=[center[0] - w / 2, center[1] - h / 2, center[0] + w / 2, center[1] + h / 2])
@@ -279,91 +321,89 @@ class CycloneImage:
         start_intensity = 0  # self.__dict__["start_intensity"]
         end_intensity = 0  # self.__dict__["end_intensity"]
         basin = self.basin
-        return gt,cat, basin,self.max_wind
+        return gt, cat, basin, self.max_wind
 
-    def draw_rect(self, key, save=False, plot=False, **kwargs):
+    def draw_rect(self, key, save=False, fit=False, **kwargs):
         rect = self.rects[key]
         plt.figure()
         plt.subplot(1, 2, 1)
         plt.scatter(rect.i04.flatten(), rect.i05.flatten(), s=kwargs.get("s", 0.25))
         bottom, top = plt.ylim()
         left, right = plt.xlim()
-        try:
-            x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
-            gt, gt_err, params = rect.curve_fit(cubic)
-            self.gt = [gt, gt_err]
-            if plot:
+        if fit:
+            try:
+                x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
+                gt, gt_err, params = rect.curve_fit(cubic)
+                self.gt = [gt, gt_err]
                 plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
                 plt.hlines(gt, xmin=left, xmax=right, colors="r")
                 plt.legend()
-        except TypeError:
-            pass
-        if plot:
-            plt.gca().set_ylim([bottom, top])
-            plt.gca().set_xlim([left, right])
-            plt.gca().invert_yaxis()
-            plt.gca().invert_xaxis()
-            plt.ylabel("Cloud Top Temperature (K)")
-            plt.xlabel("I4 band reflectance (K)")
-            plt.subplot(1, 2, 2)
-            plt.imshow(self.I04, origin="upper",
-                       extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
-                               self.pixel_x * self.I04.shape[0] * 0.5,
-                               -self.pixel_y * self.I04.shape[1] * 0.5,
-                               self.pixel_y * self.I04.shape[1] * 0.5])
-            plt.gca().add_patch(
-                Rectangle((rect.center[0] - rect.width / 2, rect.center[1] - rect.height / 2), rect.width, rect.height,
-                          linewidth=1, edgecolor="r", facecolor="none"))
-            cb = plt.colorbar()
-            cb.set_label("Kelvin (K)")
-            plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
-            if save is True:
-                plt.savefig(
-                    f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({key}).png")
-            else:
-                plt.show()
+            except TypeError:
+                pass
+        plt.gca().set_ylim([bottom, top])
+        plt.gca().set_xlim([left, right])
+        plt.gca().invert_yaxis()
+        plt.gca().invert_xaxis()
+        plt.ylabel("Cloud Top Temperature (K)")
+        plt.xlabel("I4 band reflectance (K)")
+        plt.subplot(1, 2, 2)
+        plt.imshow(self.I05, origin="upper",
+                   extent=[-self.pixel_x * self.I05.shape[0] * 0.5,
+                           self.pixel_x * self.I05.shape[0] * 0.5,
+                           -self.pixel_y * self.I05.shape[1] * 0.5,
+                           self.pixel_y * self.I05.shape[1] * 0.5])
+        plt.gca().add_patch(
+            Rectangle((rect.center[0] - rect.width / 2, rect.center[1] - rect.height / 2), rect.width, rect.height,
+                      linewidth=1, edgecolor="r", facecolor="none"))
+        cb = plt.colorbar()
+        cb.set_label("Kelvin (K)")
+        plt.title(f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)}")
+        if save is True:
+            plt.savefig(
+                f"Images/{self.core_scene.start_time.strftime('%Y-%m-%d')}Cat{int(self.cat)}({key}).png")
+        else:
+            plt.show()
 
+    def find_eye(self, band='I04'):
+        if band == 'I04':
+            max_band_array = self.I04
+        elif band == 'I05':
+            max_band_array = self.I05
 
-def find_eye(self, band='I04'):
-    if band == 'I04':
-        max_band_array = self.I04
-    elif band == 'I05':
-        max_band_array = self.I05
+        hot_point = np.amax(max_band_array)
+        cold_point = np.amin(max_band_array)
+        threshold = (hot_point - cold_point) / 3
 
-    hot_point = np.amax(max_band_array)
-    cold_point = np.amin(max_band_array)
-    threshold = (hot_point - cold_point) / 3
+        hot_point_ind = np.unravel_index(np.argmax(max_band_array, axis=None), max_band_array.shape)
 
-    hot_point_ind = np.unravel_index(np.argmax(max_band_array, axis=None), max_band_array.shape)
-
-    if hot_point_ind[0] == 0:
-        top_y = 0
-    elif hot_point_ind[1] == 0:
-        left_x = 0
-
-    for y in range(0, hot_point_ind[0]):
-        if max_band_array[hot_point_ind[0] - y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
-            top_y = hot_point_ind[0] - y
-            break
-        elif y == hot_point_ind[0] - 1:
+        if hot_point_ind[0] == 0:
             top_y = 0
-    for y in range(0, len(max_band_array) - hot_point_ind[0]):
-        if max_band_array[hot_point_ind[0] + y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
-            bot_y = hot_point_ind[0] + y
-            break
-        elif y == len(max_band_array) - hot_point_ind[0] - 1:
-            bot_y = len(max_band_array)
-    for x in range(0, hot_point_ind[1]):
-        if max_band_array[hot_point_ind[0], hot_point_ind[1] - x] < max_band_array[hot_point_ind] - threshold:
-            left_x = hot_point_ind[1] - x
-            break
-        elif x == hot_point_ind[1] - 1:
+        elif hot_point_ind[1] == 0:
             left_x = 0
-    for x in range(0, len(max_band_array[0]) - hot_point_ind[1]):
-        if max_band_array[hot_point_ind[0], hot_point_ind[1] + x] < max_band_array[hot_point_ind] - threshold:
-            right_x = hot_point_ind[1] + x
-            break
-        elif x == len(max_band_array[0]) - hot_point_ind[1] - 1:
-            right_x = len(max_band_array[0])
 
-    return hot_point_ind, right_x, left_x, top_y, bot_y
+        for y in range(0, hot_point_ind[0]):
+            if max_band_array[hot_point_ind[0] - y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
+                top_y = hot_point_ind[0] - y
+                break
+            elif y == hot_point_ind[0] - 1:
+                top_y = 0
+        for y in range(0, len(max_band_array) - hot_point_ind[0]):
+            if max_band_array[hot_point_ind[0] + y, hot_point_ind[1]] < max_band_array[hot_point_ind] - threshold:
+                bot_y = hot_point_ind[0] + y
+                break
+            elif y == len(max_band_array) - hot_point_ind[0] - 1:
+                bot_y = len(max_band_array)
+        for x in range(0, hot_point_ind[1]):
+            if max_band_array[hot_point_ind[0], hot_point_ind[1] - x] < max_band_array[hot_point_ind] - threshold:
+                left_x = hot_point_ind[1] - x
+                break
+            elif x == hot_point_ind[1] - 1:
+                left_x = 0
+        for x in range(0, len(max_band_array[0]) - hot_point_ind[1]):
+            if max_band_array[hot_point_ind[0], hot_point_ind[1] + x] < max_band_array[hot_point_ind] - threshold:
+                right_x = hot_point_ind[1] + x
+                break
+            elif x == len(max_band_array[0]) - hot_point_ind[1] - 1:
+                right_x = len(max_band_array[0])
+
+        return hot_point_ind, right_x, left_x, top_y, bot_y
