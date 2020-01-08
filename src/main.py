@@ -197,6 +197,7 @@ if __name__ == "__main__":
             pickle_paths = glob_pickle_files(path)
             for pickle in pickle_paths:
                 ci = CycloneImage.load_cyclone_image(pickle)
+
                 if ci.is_complete:
                     for y in range(-1, 1):
                         for x in range(-1, 1):

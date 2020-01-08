@@ -1,9 +1,11 @@
 import traceback
 
-from PySide2.QtWidgets import *
 from PySide2.QtCore import *
-from matplotlib.figure import Figure
+from PySide2.QtWidgets import *
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+
+from .Lines import *
 
 
 class BestTrackOptionDialog(QDialog):
@@ -43,29 +45,72 @@ class BestTrackOptionDialog(QDialog):
         self.setLayout(self.layout)
 
 
+class PickleWidget(QWidget):
+    def __init__(self, *args, **kwargs):
+        super(PickleWidget, self).__init__(*args, **kwargs)
+        self.layout = QVBoxLayout()
+        self.checkbox = QCheckBox("Enable pickling")
+        self.checkbox.toggled.connect(self.checkbox_toggle)
+        self.hlayout = QHBoxLayout()
+        self.lineEdit = QLineEdit()
+        self.lineEdit.setEnabled(False)
+        self.button = QPushButton("Browse...")
+        self.button.setEnabled(False)
+        self.button.clicked.connect(self.browsepickledir)
+        self.hlayout.addWidget(QLabel("Directory:"))
+        self.hlayout.addWidget(self.lineEdit)
+        self.hlayout.addWidget(self.button)
+
+        self.layout.addWidget(self.checkbox)
+        self.layout.addLayout(self.hlayout)
+        self.setLayout(self.layout)
+
+    def browsepickledir(self):
+        try:
+            folder = QFileDialog.getExistingDirectory(self, "Select existing directory")
+        except Exception as e:
+            error = QMessageBox(QMessageBox.Warning,
+                                "File save error",
+                                "An exception occured during saving",
+                                QMessageBox.Ok)
+            error.setDetailedText(traceback.format_exc())
+            error.exec_()
+            return
+        self.lineEdit.setText(folder)
+
+    def checkbox_toggle(self, state):
+        self.lineEdit.setEnabled(state)
+        self.button.setEnabled(state)
+
+
 class BestTrackWidget(QWidget):
-    def __init__(self, *args,**kwargs):
-        super(BestTrackWidget, self).__init__(*args,**kwargs)
+    def __init__(self, *args, **kwargs):
+        super(BestTrackWidget, self).__init__(*args, **kwargs)
         self.setSizePolicy(QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed))
-        self.layout = QHBoxLayout()
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(QLabel("Best Track file"))
         self.label = QLineEdit()
         self.pushButton = QPushButton("Browse...")
         self.optionButton = QPushButton("Options")
         self.pushButton.clicked.connect(self.get_best_track_file)
         self.optionButton.clicked.connect(self.option_selector)
-        self.layout.addWidget(self.label)
-        self.layout.addWidget(self.pushButton)
-        self.layout.addWidget(self.optionButton)
+
+        self.hlayout = QHBoxLayout()
+        self.hlayout.addWidget(QLabel("File:"))
+        self.hlayout.addWidget(self.label)
+        self.hlayout.addWidget(self.pushButton)
+        self.hlayout.addWidget(self.optionButton)
+        self.layout.addLayout(self.hlayout)
         self.setLayout(self.layout)
 
     def option_selector(self):
         option_dialog = BestTrackOptionDialog(self.parent().parent().options)
         if option_dialog.exec_():
             options = {
-                "date_from":option_dialog.date_from.date(),
-                "date_to":option_dialog.date_to.date(),
-                "cat_from":option_dialog.category_from.value(),
-                "cat_to":option_dialog.category_to.value()
+                "date_from": option_dialog.date_from.date(),
+                "date_to": option_dialog.date_to.date(),
+                "cat_from": option_dialog.category_from.value(),
+                "cat_to": option_dialog.category_to.value()
             }
             self.parent().parent().set_options(options)
 
@@ -95,6 +140,7 @@ class SaveLocationWidget(QWidget):
         self.lineEdit = QLineEdit()
         self.pushButton = QPushButton("Browse...")
         self.pushButton.clicked.connect(self.get_save_location)
+        self.layout.addWidget(QLabel("Save Directory:"))
         self.layout.addWidget(self.lineEdit)
         self.layout.addWidget(self.pushButton)
         self.setLayout(self.layout)
@@ -142,13 +188,17 @@ class CycloneWindow(QMainWindow):
             "cat_to": 5
         }
 
-
         self.layout = QVBoxLayout()
         self.best_track = BestTrackWidget()
         self.save_location = SaveLocationWidget()
         self.download_bar = DownloadBarWidget()
+        self.pickledirectory = PickleWidget()
         self.layout.addWidget(self.best_track)
+        self.layout.addWidget(QHLine())
         self.layout.addWidget(self.save_location)
+        self.layout.addWidget(QHLine())
+        self.layout.addWidget(self.pickledirectory)
+        self.layout.addWidget(QHLine())
         self.layout.addWidget(self.canvas)
         self.layout.addWidget(self.download_bar)
 
@@ -160,5 +210,5 @@ class CycloneWindow(QMainWindow):
     def options(self):
         return self.__options
 
-    def set_options(self,option):
+    def set_options(self, option):
         self.__options = option

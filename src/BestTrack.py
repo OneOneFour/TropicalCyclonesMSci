@@ -1,9 +1,10 @@
+import os
 from datetime import timedelta
 
 import pandas as pd
-import os
-from CycloneImage import get_eye, wrap
 from dask.diagnostics.progress import ProgressBar
+
+from CycloneImage import get_eye, wrap
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False,
@@ -32,6 +33,8 @@ def all_cyclones_since(year, month, day):
                     # box is four times RMW
                     if ci.is_complete:
                         ci.draw_eye("I05")
+                        ci.new_rect(f"da whole thing", (0, 0), ci.rmw * 2, ci.rmw * 2)
+                        ci.draw_rect("da whole thing", plot=True)
                         ci.save_object()
                         # for y in range(-2,2):
                         #     for x in range(-2,2):
@@ -52,12 +55,11 @@ def cyclone_track(NAME):
             #     ci.draw_eye()
             #     return ci
             ci = get_eye(start_point, end_point, name=NAME, basin=start_point["BASIN"],
-                         cat=start_point["USA_SSHS"], dayOrNight="D")
+                         cat=start_point["USA_SSHS"], dayOrNight="D",wind_speed =start_point["USA_WIND"])
 
             if ci is not None:
                 ci.draw_eye()
                 # return ci
 
 
-
-all_cyclones_since(2011,1,1)
+all_cyclones_since(2012, 5, 1)
