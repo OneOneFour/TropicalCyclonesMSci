@@ -40,6 +40,12 @@ def nm_to_degrees(nm):
     return nm / 60
 
 
+def toggle_selector(event):
+    if event.key in ['B', 'b'] and not toggle_selector.RS.active:
+        print(' RectangleSelector activated.')
+        toggle_selector.RS.set_active(True)
+
+
 def get_eye(start_point, end_point, **kwargs):
     lat_0, lat_1 = start_point["USA_LAT"], end_point["USA_LAT"]
     lon_0, lon_1 = start_point["USA_LON"], end_point["USA_LON"]
@@ -226,6 +232,32 @@ class CycloneImage:
         cb.set_label("Kelvin (K)")
         plt.show()
 
+    def box_rect(self,keyname):
+        inst = self
+
+        def select_callback(eclick, erelease):
+            x_min, y_min = min(eclick.xdata, erelease.xdata), min(eclick.ydata, erelease.ydata)
+            x_max, y_max = max(eclick.xdata, erelease.xdata), max(eclick.ydata, erelease.ydata)
+
+            inst.new_rect(keyname, ((x_min + x_max) / 2, (y_min + y_max) / 2), x_max - x_min, y_max - y_min)
+            inst.draw_rect(keyname,fit=True)
+
+        fig, ax = plt.subplots()
+        im = ax.imshow(self.I05, origin="upper",
+                       extent=[-self.pixel_x * self.I04.shape[0] * 0.5,
+                               self.pixel_x * self.I04.shape[0] * 0.5,
+                               -self.pixel_y * self.I04.shape[1] * 0.5,
+                               self.pixel_y * self.I04.shape[1] * 0.5])
+        ax.set_title(
+            f"{self.name} on {self.core_scene.start_time.strftime('%Y-%m-%d')} Cat {int(self.cat)} \n Pixel Resolution:{round(self.pixel_x)} meters per pixel")
+        cb = plt.colorbar(im)
+        cb.set_label("Kelvin (K)")
+        toggle_selector.RS = RectangleSelector(
+            ax, select_callback, drawtype="box", useblit=False,
+            button=[1, 3], interactive=True, minspanx=5, minspany=5, spancoords="pixels")
+        plt.connect("key_press_event", toggle_selector)
+        plt.show()
+
     def draw_eye(self, band="I04"):
         try:
             fig, ax = plt.subplots()
@@ -254,12 +286,14 @@ class CycloneImage:
         def select_callback(eclick, erelease):
             i4min, i4max = min(eclick.xdata, erelease.xdata), max(eclick.xdata, erelease.xdata)
             i5min, i5max = min(eclick.ydata, erelease.ydata), max(eclick.ydata, erelease.ydata)
-            selected_points = np.argwhere(np.logical_and(np.logical_and(i4min < rect.i04, rect.i04 < i4max),np.logical_and(i5min < rect.i05, rect.i05 < i5max)))
+            selected_points = np.argwhere(np.logical_and(np.logical_and(i4min < rect.i04, rect.i04 < i4max),
+                                                         np.logical_and(i5min < rect.i05, rect.i05 < i5max)))
 
-            fig,ax = plt.subplots()
+            fig, ax = plt.subplots()
             ax.imshow(rect.i04)
             # These are flipped due to the way the plotting is done
-            ax.scatter([p[1] for p in selected_points],[p[0] for p in selected_points],s=0.25)
+            ax.scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=0.25, edgecolors="r",
+                       facecolors="none")
             plt.show()
 
         bottom, top = plt.ylim()
@@ -270,11 +304,6 @@ class CycloneImage:
         plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
         plt.hlines(gt, xmin=left, xmax=right, colors="r")
         plt.legend()
-
-        def toggle_selector(event):
-            if event.key in ['B', 'b'] and not toggle_selector.RS.active:
-                print(' RectangleSelector activated.')
-                toggle_selector.RS.set_active(True)
 
         toggle_selector.RS = RectangleSelector(
             ax, select_callback, drawtype="box", useblit=False,
