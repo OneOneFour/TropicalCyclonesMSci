@@ -51,7 +51,7 @@ class SubImage:
     def center(self):
         return self.__center
 
-    def curve_fit(self, fitting_function=cubic):
+    def curve_fit_funcs(self, fitting_function=cubic):
         bbox = np.where(np.logical_and(self.i05_flat > MIN_CUTOFF, self.i05_flat < MAX_CUTOFF))
         x_i05 = self.i05_flat[bbox]
         y_i04 = self.i04_flat[bbox]
@@ -70,8 +70,8 @@ class SubImage:
         self.gt = [gt_ve, gt_err]
         return gt_ve, gt_err, (a, b, c, d)
 
-    def curve_fit_bins(self, mode="median"):
-        x_i05 = np.arange(MIN_CUTOFF, int(max(self.i05_flat)), 1)
+    def curve_fit_modes(self, mode="median"):
+        x_i05 = np.arange(MIN_CUTOFF, MAX_CUTOFF, 1)
         if len(x_i05) < 1:
             return
         y_i04 = np.array([0] * len(x_i05))
@@ -92,6 +92,12 @@ class SubImage:
                 y_i04[i] = np.median(vals)
                 median_std = 1.253 * np.std(vals) / np.sqrt(len(vals))
                 point_errs[i] = median_std ** 2
+            elif mode == "eyewall":
+                if x_i05 < 235:             # Takes minimum values lower than theoretical min gt and v.v.
+                    y_i04[i] = min(vals)
+                else:
+                    y_i04[i] = max(vals)
+                point_errs[i] = 0.5 ** 2
 
             num_vals_bins.append(len(vals))  # list of number of I04 values that were in each I05 increment (for errors)
 

@@ -211,7 +211,7 @@ if __name__ == "__main__":
             try:
                 ci = CycloneImage.load_cyclone_image(path)
                 subimg = ci.new_rect(f"da whole thing", (0, 0), ci.rmw * 2, ci.rmw * 2)
-                gt, cat, basin, max_wind = ci.get_gt_and_intensity("da whole thing", mode="median")
+                gt, cat, basin, max_wind = ci.get_gt_and_intensity("da whole thing", mode="eyewall")
                 if 200 < gt < 270:
                     points.append({"gt": gt, "cat": cat, "basin": basin, "max_wind": max_wind})
             except Exception as e:

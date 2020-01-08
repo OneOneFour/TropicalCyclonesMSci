@@ -265,7 +265,7 @@ class CycloneImage:
         bottom, top = plt.ylim()
         left, right = plt.xlim()
         x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
-        gt, gt_err, params = rect.curve_fit(cubic)
+        gt, gt_err, params = rect.curve_fit_modes(mode="eyewall")
         self.gt = [gt, gt_err]
         plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
         plt.hlines(gt, xmin=left, xmax=right, colors="r")
@@ -315,7 +315,7 @@ class CycloneImage:
 
     def get_gt_and_intensity(self, key, mode="median", plot=False):
         sub_img = self.rects[key]
-        gt, gt_err, params = sub_img.curve_fit(cubic)
+        gt, gt_err, params = sub_img.curve_fit_modes(mode="eyewall")
         self.gt = [gt, gt_err]
         cat = self.cat
         start_intensity = 0  # self.__dict__["start_intensity"]
@@ -333,7 +333,7 @@ class CycloneImage:
         if fit:
             try:
                 x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
-                gt, gt_err, params = rect.curve_fit(cubic)
+                gt, gt_err, params = rect.curve_fit_modes(mode="eyewall")
                 self.gt = [gt, gt_err]
                 plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
                 plt.hlines(gt, xmin=left, xmax=right, colors="r")
