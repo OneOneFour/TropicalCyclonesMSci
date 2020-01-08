@@ -52,7 +52,7 @@ def cyclone_track(NAME):
             #     ci.draw_eye()
             #     return ci
             ci = get_eye(start_point, end_point, name=NAME, basin=start_point["BASIN"],
-                         cat=start_point["USA_SSHS"], dayOrNight="D")
+                         cat=start_point["USA_SSHS"], dayOrNight="D",wind_speed=start_point["USA_WIND"])
 
             if ci is not None:
                 ci.draw_eye()

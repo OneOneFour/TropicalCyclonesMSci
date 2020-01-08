@@ -1,17 +1,17 @@
 import os
 import pickle
-import dask
+
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 import numpy as np
+from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
 from pyresample import create_area_def
 from satpy import Scene
 
-from SubImage import SubImage, cubic, quadratic
+from SubImage import SubImage, cubic
 from fetch_file import get_data
 
-DATA_DIRECTORY = "data"
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "../data")
 DEFAULT_MARGIN = 0.5
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
@@ -254,12 +254,13 @@ class CycloneImage:
         def select_callback(eclick, erelease):
             i4min, i4max = min(eclick.xdata, erelease.xdata), max(eclick.xdata, erelease.xdata)
             i5min, i5max = min(eclick.ydata, erelease.ydata), max(eclick.ydata, erelease.ydata)
-            selected_points = np.argwhere(np.logical_and(np.logical_and(i4min < rect.i04, rect.i04 < i4max),np.logical_and(i5min < rect.i05, rect.i05 < i5max)))
+            selected_points = np.argwhere(np.logical_and(np.logical_and(i4min < rect.i04, rect.i04 < i4max),
+                                                         np.logical_and(i5min < rect.i05, rect.i05 < i5max)))
 
-            fig,ax = plt.subplots()
+            fig, ax = plt.subplots()
             ax.imshow(rect.i04)
             # These are flipped due to the way the plotting is done
-            ax.scatter([p[1] for p in selected_points],[p[0] for p in selected_points],s=0.25)
+            ax.scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=0.25)
             plt.show()
 
         bottom, top = plt.ylim()
