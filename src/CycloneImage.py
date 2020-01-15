@@ -7,6 +7,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
 from pyresample import create_area_def
 from satpy import Scene
+import scipy.optimize as sp
 
 from SubImage import SubImage, cubic
 from fetch_file import get_data
@@ -19,6 +20,8 @@ NM_TO_M = 1852
 spline_c = lambda dx, dv, T, v0: (3 * (dx - T * v0) - dv * T) / (T * T)
 spline_d = lambda dx, dv, T, v0: (2 * (T * v0 - dx) + dv * T) / (T * T * T)
 
+MIN_CUTOFF = 220
+MAX_CUTOFF = 273.15
 
 def wrap(x):
     if x > 180:
@@ -258,15 +261,15 @@ class CycloneImage:
                                                          np.logical_and(i5min < rect.i05, rect.i05 < i5max)))
 
             fig, ax = plt.subplots()
-            ax.imshow(rect.i04)
+            ax.imshow(rect.i05)
             # These are flipped due to the way the plotting is done
-            ax.scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=0.25)
+            ax.scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=10)
             plt.show()
 
         bottom, top = plt.ylim()
         left, right = plt.xlim()
         x = np.linspace(min(rect.i05_flat), max(rect.i05_flat), 100)
-        gt, gt_err, params = rect.curve_fit_modes(mode="eyewall")
+        gt, gt_err, params = rect.curve_fit_funcs()
         self.gt = [gt, gt_err]
         plt.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
         plt.hlines(gt, xmin=left, xmax=right, colors="r")
@@ -319,8 +322,6 @@ class CycloneImage:
         gt, gt_err, params = sub_img.curve_fit_modes(mode="eyewall")
         self.gt = [gt, gt_err]
         cat = self.cat
-        start_intensity = 0  # self.__dict__["start_intensity"]
-        end_intensity = 0  # self.__dict__["end_intensity"]
         basin = self.basin
         return gt, cat, basin, self.max_wind
 
@@ -408,3 +409,90 @@ class CycloneImage:
                 right_x = len(max_band_array[0])
 
         return hot_point_ind, right_x, left_x, top_y, bot_y
+
+    def show_fitted_pixels(self, key):
+        i05_flat = self.I05.flatten()
+        i04_flat = self.I04.flatten()
+        x_i05 = np.arange(MIN_CUTOFF, 273, 1)
+        if len(x_i05) < 1:
+            return
+        y_i04 = np.array([0] * len(x_i05))
+        fig, axs = plt.subplots(1,2)
+        im = axs[1].imshow(self.I05)
+        plt.colorbar(im)
+        axs[1].set_title("%s %s" % (self.name, self.core_scene.start_time.strftime('%Y-%m-%d')))
+        axs[0].scatter(i04_flat, i05_flat, s=0.25)
+        for i, x in enumerate(x_i05):
+            vals = i04_flat[np.where(np.logical_and(i05_flat > (x - 0.5), i05_flat < (x + 0.5)))]
+            vals_5_min = []
+            vals_5_min_i05val = []
+            if len(vals) < 1:
+                continue
+            if x > 235:  # Takes minimum values lower than theoretical min gt and v.v.
+                for j in range(int(np.ceil(len(vals)/20))):
+                    if len(vals) == 0:      # Not all values of i05 will have 5 i04 values
+                        break
+
+                    vals_5_min.append(min(vals))
+                    i05s_with_same_i04 = i05_flat[np.where(i04_flat == min(vals))]
+                    for i05 in i05s_with_same_i04:
+                        if x - 0.5 < i05 < x + 0.5:
+                            vals_5_min_i05val.append(i05)
+                            if len(vals_5_min_i05val) > j:
+                                break
+
+                    vals = np.delete(vals, np.where(vals == min(vals)))
+                y_i04[i] = np.median(vals_5_min)
+                axs[0].scatter(vals_5_min, vals_5_min_i05val, color="orange", s=5)
+                rect = self.rects[key]
+                offset_x = (self.width - self.rects[key].width/self.pixel_x)/2
+                offset_y = (self.height - self.rects[key].height/self.pixel_y)/2
+                for xy in range(len(vals_5_min)):
+                    points = np.argwhere(np.logical_and(rect.i05 == vals_5_min_i05val[xy], rect.i04 == vals_5_min[xy]))
+                    axs[1].scatter([p[1] + offset_x for p in points], [p[0] + offset_y for p in points], s=5, c="red")
+            else:
+                percent_range = int(np.ceil(len(vals)/20))
+                for j in range(percent_range):
+                    if len(vals) == 0:      # Not all values of i05 will have 5 i04 values
+                        break
+                    vals.sort()
+                    idx = int((235-x)*0.025*len(vals) + j)
+                    vals_5_min.append(vals[idx])
+                    i05s_with_same_i04 = i05_flat[np.where(i04_flat == vals[idx])]
+                    for i05 in i05s_with_same_i04:
+                        if x - 0.5 < i05 < x + 0.5:
+                            vals_5_min_i05val.append(i05)
+                            if len(vals_5_min_i05val) > j:
+                                break
+
+                y_i04[i] = np.median(vals_5_min)
+                axs[0].scatter(vals_5_min, vals_5_min_i05val, color="black", s=5)
+                rect = self.rects[key]
+                offset_x = (self.width - self.rects[key].width / self.pixel_x) / 2
+                offset_y = (self.height - self.rects[key].height / self.pixel_y) / 2
+                for xy in range(len(vals_5_min)):
+                    points = np.argwhere(np.logical_and(rect.i05 == vals_5_min_i05val[xy], rect.i04 == vals_5_min[xy]))
+                    axs[1].scatter([p[1] + offset_x for p in points], [p[0] + offset_y for p in points], s=5, c="pink")
+
+        zero_args = np.where(y_i04 == 0)
+        x_i05 = np.delete(x_i05, zero_args)
+        y_i04 = np.delete(y_i04, zero_args)
+
+        params, cov = sp.curve_fit(cubic, x_i05, y_i04, absolute_sigma=True)
+
+        xvalues = np.arange(min(x_i05), max(x_i05), 1)
+        yvalues = cubic(xvalues, *params)
+
+        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
+        if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
+            return
+        self.gt = [gt_ve]
+
+        axs[0].plot(yvalues, xvalues, color="r")
+        axs[0].invert_xaxis()
+        axs[0].invert_yaxis()
+        if 300 > gt_ve > 235:
+            axs[0].axhline(gt_ve, color="r")
+        plt.show()
+
+        return gt_ve

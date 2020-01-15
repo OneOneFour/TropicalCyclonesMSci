@@ -204,18 +204,30 @@ if __name__ == "__main__":
                                                  ci.rmw)
                             ci.draw_rect(f"{x, y}")
     else:
-        path = input("Enter pickle folder")
+        # path = input("Enter pickle folder")
+        path = "proc/pic_dat_wind"
         pickle_paths = glob_pickle_files(path)
         points = []
+        gts = []
+        cats = []
+        basins = []
+        max_winds = []
         for path in pickle_paths:
             try:
                 ci = CycloneImage.load_cyclone_image(path)
-                subimg = ci.new_rect(f"da whole thing", (0, 0), ci.rmw * 2, ci.rmw * 2)
-                gt, cat, basin, max_wind = ci.get_gt_and_intensity("da whole thing", mode="eyewall")
+                subimg = ci.new_rect(f"whole", (0, 0), ci.rmw * 2, ci.rmw * 2)
+                # ci.show_fitted_pixels("whole")
+                gt, cat, basin, max_wind = ci.get_gt_and_intensity("whole", mode="eyewall")
                 if 200 < gt < 270:
                     points.append({"gt": gt, "cat": cat, "basin": basin, "max_wind": max_wind})
             except Exception as e:
                 print(f"{path} --> error :{e}")
 
-        plt.scatter((elem["gt"] for elem in points), (elem["max_wind"] for elem in points))
+        for cyc in points:
+            gts.append(cyc["gt"])
+            basins.append(cyc["basin"])
+            max_winds.append(cyc["max_wind"])
+            cats.append(cyc["cat"])
+
+        plt.hist(gts)
         plt.show()

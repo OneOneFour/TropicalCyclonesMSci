@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
-import scipy.optimize as  sp
+import scipy.optimize as sp
 
-MIN_CUTOFF = 210
+MIN_CUTOFF = 220
 MAX_CUTOFF = 273.15
 
 cubic = lambda x, a, b, c, d: a * x ** 3 + b * x ** 2 + c * x + d
@@ -71,7 +71,7 @@ class SubImage:
         return gt_ve, gt_err, (a, b, c, d)
 
     def curve_fit_modes(self, mode="median"):
-        x_i05 = np.arange(MIN_CUTOFF, MAX_CUTOFF, 1)
+        x_i05 = np.arange(MIN_CUTOFF, max(self.i05_flat), 1)
         if len(x_i05) < 1:
             return
         y_i04 = np.array([0] * len(x_i05))
@@ -93,11 +93,26 @@ class SubImage:
                 median_std = 1.253 * np.std(vals) / np.sqrt(len(vals))
                 point_errs[i] = median_std ** 2
             elif mode == "eyewall":
-                if x_i05 < 235:             # Takes minimum values lower than theoretical min gt and v.v.
-                    y_i04[i] = min(vals)
+                vals_5_min = []
+                vals_5_min_i05val = []
+                if len(vals) < 1:
+                    continue
+                if x > 235:  # Takes minimum values lower than theoretical min gt and v.v.
+                    for j in range(int(np.ceil(len(vals) / 20))):
+                        if len(vals) == 0:  # Not all values of i05 will have 5 i04 values
+                            break
+                        vals_5_min.append(min(vals))
                 else:
-                    y_i04[i] = max(vals)
-                point_errs[i] = 0.5 ** 2
+                    percent_range = int(np.ceil(len(vals) / 20))
+                    for j in range(percent_range):
+                        if len(vals) == 0:  # Not all values of i05 will have 5 i04 values
+                            break
+                        vals.sort()
+                        idx = int((235 - x) * 0.025 * len(vals) + j)
+                        vals_5_min.append(vals[idx])
+
+                y_i04[i] = np.median(vals_5_min)
+                point_errs[i] = 0.5 ** 2                    # TODO: Fix errors
 
             num_vals_bins.append(len(vals))  # list of number of I04 values that were in each I05 increment (for errors)
 
@@ -114,7 +129,7 @@ class SubImage:
         gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
         if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
             return
-        print("\n".join([f"{i}: Value: {param}, error:{perr[i]}" for i, param in enumerate(params)]))
+        # print("\n".join([f"{i}: Value: {param}, error:{perr[i]}" for i, param in enumerate(params)]))
         # satellite_data_error = ??
         curve_fit_err = np.sqrt(
             (d_gt_d_a(*params[:-1]) * perr[0]) ** 2 +
@@ -124,7 +139,78 @@ class SubImage:
         gt_err = curve_fit_err
         self.gt = [gt_ve, gt_err]
 
+        #plt.scatter(self.i04_flat, self.i05_flat, s=0.25)
+        #plt.scatter(y_i04, x_i05, s=10)
+        #plt.scatter(yvalues, xvalues, s=10)
+        #plt.gca().invert_yaxis()
+        #plt.gca().invert_xaxis()
+        #plt.ylabel("I05")
+        #plt.xlabel("I04")
+        #plt.show()
+
         return gt_ve, gt_err, params
+
+    def show_fitted_pixels(self, key):
+        x_i05 = np.arange(MIN_CUTOFF, max(self.i05_flat), 1)
+        if len(x_i05) < 1:
+            return
+        y_i04 = np.array([0] * len(x_i05))
+        num_vals_bins = []
+        fig, axs = plt.subplots(1,2)
+        im = axs[1].imshow(self.i05)
+        plt.colorbar(im)
+        axs[0].scatter(self.i04_flat, self.i05_flat, s=0.25)
+        for i, x in enumerate(x_i05):
+            vals = self.i04_flat[np.where(np.logical_and(self.i05_flat > (x - 0.5), self.i05_flat < (x + 0.5)))]
+            vals_5_min = []
+            vals_5_min_i05val = []
+            if len(vals) < 1:
+                continue
+            if x > 235:  # Takes minimum values lower than theoretical min gt and v.v.
+                for j in range(5):
+
+                    if len(vals) == 0:      # Not all values of i05 will have 5 i04 values
+                        break
+
+                    vals_5_min.append(min(vals))
+                    i05s_with_same_i04 = self.i05_flat[np.where(self.i04_flat == min(vals))]
+                    for i05 in i05s_with_same_i04:
+                        if x - 0.5 < i05 < x + 0.5:
+                            vals_5_min_i05val.append(i05)
+                            if len(vals_5_min_i05val) > j:
+                                break
+
+                    vals = np.delete(vals, np.where(vals == min(vals)))
+                y_i04[i] = np.median(vals_5_min)
+                axs[0].scatter(vals_5_min, vals_5_min_i05val, color="orange", s=5)
+                rect = self.rects[key]
+                print(np.where(np.logical_and(rect.i05 == vals_5_min_i05val, rect.i04 == vals_5_min)))
+                axs[1].scatter()
+            else:
+                y_i04[i] = np.median(vals)
+
+        zero_args = np.where(y_i04 == 0)
+        x_i05 = np.delete(x_i05, zero_args)
+        y_i04 = np.delete(y_i04, zero_args)
+
+        params, cov = sp.curve_fit(cubic, x_i05, y_i04, absolute_sigma=True)
+
+        xvalues = np.arange(min(x_i05), max(x_i05), 1)
+        yvalues = cubic(xvalues, *params)
+
+        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
+        if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
+            return
+        self.gt = [gt_ve]
+
+        axs[0].plot(yvalues, xvalues, color="r")
+        axs[0].invert_xaxis()
+        axs[0].invert_yaxis()
+        if 300 > gt_ve > 235:
+            axs[0].axhline(gt_ve, color="r")
+        plt.show()
+
+        return gt_ve
 
     def draw(self, band="I04"):
         if band == "I04":
@@ -134,3 +220,32 @@ class SubImage:
             plt.imshow(self.__i05)
             plt.show()
 
+    def select_eyewall(self, mode="eyewall"):
+        x_i05 = np.arange(MIN_CUTOFF, max(self.i05_flat), 1)
+        if len(x_i05) < 1:
+            return
+        y_i04 = np.array([0] * len(x_i05))
+        num_vals_bins = []
+        point_errs = np.array([0] * len(x_i05))
+        for i, x in enumerate(x_i05):
+            vals = self.i04_flat[np.where(np.logical_and(self.i05_flat > (x - 0.5), self.i05_flat < (x + 0.5)))]
+            if len(vals) < 1:
+                continue
+            if mode == "mean":
+                y_i04[i] = np.mean(vals)
+                mean_std = np.std(vals) / np.sqrt(len(vals))
+                point_errs[i] = mean_std
+            elif mode == "min":
+                y_i04[i] = min(vals)
+                point_errs[i] = 0.5 ** 2
+            elif mode == "median":
+                y_i04[i] = np.median(vals)
+                median_std = 1.253 * np.std(vals) / np.sqrt(len(vals))
+                point_errs[i] = median_std ** 2
+            elif mode == "eyewall":
+                if x > 235:  # Takes minimum values lower than theoretical min gt and v.v.
+                    y_i04[i] = min(vals)
+                else:
+                    y_i04[i] = min(vals)
+                point_errs[i] = 0.5 ** 2
+        return x_i05, y_i04
