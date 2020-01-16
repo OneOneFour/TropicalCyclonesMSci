@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import netCDF4 as nt
 import numpy as np
 from dask.diagnostics.progress import ProgressBar
+import os
 
 from CycloneImage import CycloneImage
 from fetch_file import get_data
@@ -183,23 +184,58 @@ def glob_pickle_files(directory):
     return glob(f"{directory}\*.pickle")
 
 
-def pickle_file():
-    fname = input("Enter file path of cyclone pickle")
-    with ProgressBar():
-        ci = CycloneImage.load_cyclone_image(fname)
-        ci.draw_eye("I05")
-        ci.plot_derivatives()
+def pickle_file(file):
+    fname = "proc/pic_dat_wind/%s" % file
+    ci = CycloneImage.load_cyclone_image(fname)
+    try:
+        gt, cat, basin, wind = ci.plot_derivatives(plot=False)
+    except ValueError:
+        gt = cat = basin = wind = 0
+
+    return gt, cat, basin, wind
 
 
-def histograms(data_dict, type):
-    data_for_hist = []
+def histograms(data_dict):
+    plt.figure()
+    bins = np.arange(200, 275, 5)
+    all_data = []
+    for basin in ["NA", "WP", "EP", "SP", "SI", "NI"]:
+    #for basin in [4, 5]:
+        basin_data = []
+        for cyclone in data_dict:
+            if (cyclone["Basin"]) == basin:
+                basin_data.append(cyclone["GT"])
+                all_data.append(cyclone["GT"])
+        plt.hist(basin_data, bins=bins, label=basin)
+        plt.ylabel("Frequency")
+        plt.xlabel("GT")
+    plt.hist(all_data, bins=bins, label="All", histtype="step")
+    plt.legend()
+    plt.show()
+
+
+def wind_vs_gt(data_dict):
+    gts = []
+    winds= []
     for cyclone in data_dict:
-        data_for_hist.append(cyclone[type])
-    plt.hist(data_for_hist)
-    plt.ylabel("Frequency")
-    plt.xlabel(type)
+        gts.append(cyclone["GT"])
+        winds.append(cyclone["Max wind speed"])
+
+    plt.scatter(winds, gts)
+    plt.xlabel("Max wind speed")
+    plt.ylabel("GT")
     plt.show()
 
 
 if __name__ == "__main__":
-    pickle_file()
+    cycs_data = []
+    try:
+        for fname in os.listdir("proc/pic_dat_wind"):
+            gt, cat, basin, wind = pickle_file(fname)
+            if 200 < gt < 273:
+                cycs_data.append({"GT": gt, "Category": cat, "Basin": basin, "Max wind speed": wind})
+    except:
+        pass
+
+    histograms(cycs_data)
+    # wind_vs_gt(cycs_data)
