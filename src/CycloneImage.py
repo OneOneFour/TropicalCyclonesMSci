@@ -428,8 +428,9 @@ class CycloneImage:
             vals_5_min_i05val = []
             if len(vals) < 1:
                 continue
+            percent_range = int(np.ceil(len(vals) * 0.075))
             if x > 235:  # Takes minimum values lower than theoretical min gt and v.v.
-                for j in range(int(np.ceil(len(vals)/20))):
+                for j in range(percent_range):
                     if len(vals) == 0:      # Not all values of i05 will have 5 i04 values
                         break
 
@@ -451,13 +452,13 @@ class CycloneImage:
                     points = np.argwhere(np.logical_and(rect.i05 == vals_5_min_i05val[xy], rect.i04 == vals_5_min[xy]))
                     axs[1].scatter([p[1] + offset_x for p in points], [p[0] + offset_y for p in points], s=5, c="red")
             else:
-                percent_range = int(np.ceil(len(vals)/20))
-                for j in range(percent_range):
+                increasing_range = int(np.ceil(len(vals) * (0.075 + (235-x)*0.025)))
+                for j in range(increasing_range):
                     if len(vals) == 0:      # Not all values of i05 will have 5 i04 values
                         break
                     vals.sort()
-                    idx = int((235-x)*0.025*len(vals) + j)
-                    vals_5_min.append(vals[idx])
+                    idx = int((235-x)*0.025*len(vals) + j)          # changes idx to shift 2.5% range every x value
+                    vals_5_min.append(vals[j])
                     i05s_with_same_i04 = i05_flat[np.where(i04_flat == vals[idx])]
                     for i05 in i05s_with_same_i04:
                         if x - 0.5 < i05 < x + 0.5:
@@ -472,7 +473,7 @@ class CycloneImage:
                 offset_y = (self.height - self.rects[key].height / self.pixel_y) / 2
                 for xy in range(len(vals_5_min)):
                     points = np.argwhere(np.logical_and(rect.i05 == vals_5_min_i05val[xy], rect.i04 == vals_5_min[xy]))
-                    axs[1].scatter([p[1] + offset_x for p in points], [p[0] + offset_y for p in points], s=5, c="pink")
+                    axs[1].scatter([p[1] + offset_x for p in points], [p[0] + offset_y for p in points], s=5, c="black")
 
         zero_args = np.where(y_i04 == 0)
         x_i05 = np.delete(x_i05, zero_args)
@@ -491,8 +492,8 @@ class CycloneImage:
         axs[0].plot(yvalues, xvalues, color="r")
         axs[0].invert_xaxis()
         axs[0].invert_yaxis()
-        if 300 > gt_ve > 235:
+        if 300 > gt_ve > 200:
             axs[0].axhline(gt_ve, color="r")
         plt.show()
-
+        print(gt_ve)
         return gt_ve

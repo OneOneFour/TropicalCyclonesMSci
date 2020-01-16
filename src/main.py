@@ -190,6 +190,16 @@ def pickle_file():
         ci.draw_eye("I05")
 
 
+def histograms(data_dict, type):
+    data_for_hist = []
+    for cyclone in data_dict:
+        data_for_hist.append(cyclone[type])
+    plt.hist(data_for_hist)
+    plt.ylabel("Frequency")
+    plt.xlabel(type)
+    plt.show()
+
+
 if __name__ == "__main__":
     if input("Do you want to quarter the eye image and plot? (y/n)").lower() == 'y':
         path = input("Enter directory containing pickle files")
@@ -208,26 +218,16 @@ if __name__ == "__main__":
         path = "proc/pic_dat_wind"
         pickle_paths = glob_pickle_files(path)
         points = []
-        gts = []
-        cats = []
-        basins = []
-        max_winds = []
         for path in pickle_paths:
             try:
                 ci = CycloneImage.load_cyclone_image(path)
                 subimg = ci.new_rect(f"whole", (0, 0), ci.rmw * 2, ci.rmw * 2)
-                # ci.show_fitted_pixels("whole")
-                gt, cat, basin, max_wind = ci.get_gt_and_intensity("whole", mode="eyewall")
-                if 200 < gt < 270:
-                    points.append({"gt": gt, "cat": cat, "basin": basin, "max_wind": max_wind})
+                ci.show_fitted_pixels("whole")
+
+                # gt, cat, basin, max_wind = ci.get_gt_and_intensity("whole", mode="eyewall")
+                # if 200 < gt < 270:
+                #     points.append({"gt": gt, "cat": cat, "basin": basin, "max_wind": max_wind})
             except Exception as e:
                 print(f"{path} --> error :{e}")
 
-        for cyc in points:
-            gts.append(cyc["gt"])
-            basins.append(cyc["basin"])
-            max_winds.append(cyc["max_wind"])
-            cats.append(cyc["cat"])
-
-        plt.hist(gts)
-        plt.show()
+        # histograms(points, "gt")
