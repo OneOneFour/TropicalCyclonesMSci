@@ -40,7 +40,7 @@ def nm_to_degrees(nm):
     return nm / 60
 
 
-def get_eye(start_point, end_point, **kwargs):
+def get_eye(start_point, end_point):
     lat_0, lat_1 = start_point["USA_LAT"], end_point["USA_LAT"]
     lon_0, lon_1 = start_point["USA_LON"], end_point["USA_LON"]
     vel_lon_0, vel_lon_1 = start_point["STORM_SPEED"] * np.sin(start_point["STORM_DIR"] * np.pi / 180) / 60, end_point[
@@ -92,7 +92,7 @@ def get_eye(start_point, end_point, **kwargs):
     new_scene = raw_scene.resample(recentered_area)
     return CycloneImage(new_scene, center=(centered_lat, centered_lon), urls=urls, rmw=avgrmw_nm * NM_TO_M,
                         margin=2 * avgrmw_deg,
-                        day_or_night=dayOrNight, max_wind=interpolated_w_max, **kwargs)
+                        max_wind=interpolated_w_max)
 
 
 def get_eye_legacy(start_point, end_point, **kwargs):
@@ -141,7 +141,6 @@ def get_eye_legacy(start_point, end_point, **kwargs):
 
 
 class CycloneImage:
-
     @staticmethod
     def load_cyclone_image(fpath):
         with open(fpath, "rb") as file:
@@ -323,6 +322,23 @@ class CycloneImage:
         end_intensity = 0  # self.__dict__["end_intensity"]
         basin = self.basin
         return gt, cat, basin, self.max_wind
+
+    def plot_derivatives(self):
+        derivatives = sum(np.gradient(self.I05)) ** 2
+
+        fig, ax = plt.subplots()
+        ax.imshow(derivatives, origin="upper", extent=[
+            -self.pixel_x * 0.5 * derivatives.shape[0],
+            self.pixel_x * 0.5 * derivatives.shape[0],
+            -self.pixel_y * 0.5 * derivatives.shape[1],
+            self.pixel_y * 0.5 * derivatives.shape[1]
+        ])
+        plt.show()
+        i04_reduced = self.I04[np.where(derivatives > 20)].flatten()
+        i05_reduced = self.I05[np.where(derivatives > 20)].flatten()
+        plt.scatter(i04_reduced,i05_reduced)
+        plt.show()
+
 
     def draw_rect(self, key, save=False, fit=False, **kwargs):
         rect = self.rects[key]

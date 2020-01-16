@@ -9,12 +9,10 @@ BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "data/best_fit_csv/ibtracs.las
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
 
-
 def all_cyclones_since(year, month, day, cat_min=4):
     cat_4_5_all_basins = best_track_df.loc[
         (best_track_df["USA_SSHS"] >= cat_min) & (
                     best_track_df["ISO_TIME"] > pd.Timestamp(year=year, month=month, day=day))]
-    cat_4_5_all_basins["LON"] = cat_4_5_all_basins["LON"].map(wrap)
     cat_4_5_all_basins_group = cat_4_5_all_basins.groupby(["SID"])
     for name, cyclone in cat_4_5_all_basins_group:
         dict_cy = cyclone.to_dict(orient="records")
@@ -54,6 +52,10 @@ def get_cyclone_name_images(NAME):
             if ci is not None:
                 ci.draw_eye()
                 # return ci
+
+
+
+
 
 
 if __name__ == "__main__":
