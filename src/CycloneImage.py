@@ -363,9 +363,9 @@ class CycloneImage:
             y_i04[i] = np.median(vals_5_min)
             if plot:
                 axs[0].scatter(vals_5_min, vals_5_min_i05val, color="orange", s=5)
-                for xy in range(len(vals_5_min)):
-                    points = np.argwhere(np.logical_and(self.I05 == vals_5_min_i05val[xy], self.I04 == vals_5_min[xy]))
-                    axs[1].scatter([p[1]for p in points], [p[0]for p in points], s=5, c="orange")
+                #for xy in range(len(vals_5_min)):
+                 #   points = np.argwhere(np.logical_and(self.I05 == vals_5_min_i05val[xy], self.I04 == vals_5_min[xy]))
+                  #  axs[1].scatter([p[1]for p in points], [p[0]for p in points], s=5, c="orange")
 
         zero_args = np.where(y_i04 == 0)
         x_i05 = np.delete(x_i05, zero_args)
@@ -476,7 +476,7 @@ class CycloneImage:
 
         return hot_point_ind, right_x, left_x, top_y, bot_y
 
-    def show_fitted_pixels(self, key):
+    def show_fitted_pixels(self):
         i05_flat = self.I05.flatten()
         i04_flat = self.I04.flatten()
         x_i05 = np.arange(MIN_CUTOFF, 273, 1)
@@ -511,20 +511,20 @@ class CycloneImage:
                     vals = np.delete(vals, np.where(vals == min(vals)))
                 y_i04[i] = np.median(vals_5_min)
                 axs[0].scatter(vals_5_min, vals_5_min_i05val, color="orange", s=5)
-                rect = self.rects[key]
-                offset_x = (self.width - self.rects[key].width/self.pixel_x)/2
-                offset_y = (self.height - self.rects[key].height/self.pixel_y)/2
+                #rect = self.rects[key]
+                #offset_x = (self.width - self.rects[key].width/self.pixel_x)/2
+                #offset_y = (self.height - self.rects[key].height/self.pixel_y)/2
                 for xy in range(len(vals_5_min)):
-                    points = np.argwhere(np.logical_and(rect.i05 == vals_5_min_i05val[xy], rect.i04 == vals_5_min[xy]))
-                    axs[1].scatter([p[1] + offset_x for p in points], [p[0] + offset_y for p in points], s=5, c="red")
+                    points = np.argwhere(np.logical_and(self.I05 == vals_5_min_i05val[xy], self.I04 == vals_5_min[xy]))
+                    axs[1].scatter([p[1] for p in points], [p[0] for p in points], s=5, c="red")
             else:
                 increasing_range = int(np.ceil(len(vals) * (0.075 + (235-x)*0.025)))
-                for j in range(increasing_range):
+                for j in range(percent_range):
                     if len(vals) == 0:      # Not all values of i05 will have 5 i04 values
                         break
                     vals.sort()
                     idx = int((235-x)*0.025*len(vals) + j)          # changes idx to shift 2.5% range every x value
-                    vals_5_min.append(vals[j])
+                    vals_5_min.append(vals[idx])
                     i05s_with_same_i04 = i05_flat[np.where(i04_flat == vals[idx])]
                     for i05 in i05s_with_same_i04:
                         if x - 0.5 < i05 < x + 0.5:
@@ -534,12 +534,12 @@ class CycloneImage:
 
                 y_i04[i] = np.median(vals_5_min)
                 axs[0].scatter(vals_5_min, vals_5_min_i05val, color="black", s=5)
-                rect = self.rects[key]
-                offset_x = (self.width - self.rects[key].width / self.pixel_x) / 2
-                offset_y = (self.height - self.rects[key].height / self.pixel_y) / 2
+                # rect = self.rects[key]
+                # offset_x = (self.width - self.rects[key].width / self.pixel_x) / 2
+                # offset_y = (self.height - self.rects[key].height / self.pixel_y) / 2
                 for xy in range(len(vals_5_min)):
-                    points = np.argwhere(np.logical_and(rect.i05 == vals_5_min_i05val[xy], rect.i04 == vals_5_min[xy]))
-                    axs[1].scatter([p[1] + offset_x for p in points], [p[0] + offset_y for p in points], s=5, c="black")
+                    points = np.argwhere(np.logical_and(self.I05 == vals_5_min_i05val[xy], self.I04 == vals_5_min[xy]))
+                    axs[1].scatter([p[1] for p in points], [p[0] for p in points], s=5, c="black")
 
         zero_args = np.where(y_i04 == 0)
         x_i05 = np.delete(x_i05, zero_args)
@@ -561,5 +561,28 @@ class CycloneImage:
         if 300 > gt_ve > 200:
             axs[0].axhline(gt_ve, color="r")
         plt.show()
-        print(gt_ve)
         return gt_ve
+
+    def half_eye(self):
+        I05_flat = self.I05.flatten()
+        I04_flat = self.I04.flatten()
+        rows = len(self.I05)
+        columns = len(self.I05[0])
+        half_mask = np.zeros(np.shape(self.I05))
+        for i in range(int(rows/2)):
+            for j in range(int(columns)):
+                half_mask[i][j] = 1
+        masked_I05 = np.ma.masked_outside(self.I05, 220, 270)
+        # masked_I05 = np.ma.masked_array(masked_I05, mask=half_mask)
+        masked_I04 = self.I04
+        masked_rows = len(masked_I05)
+        masked_columns = len(masked_I05[0])
+        print(masked_rows, masked_columns)
+        fig, axs = plt.subplots(1, 2)
+        axs[0].scatter(self.I04, self.I05, s=0.25)
+        axs[0].scatter(masked_I04, masked_I05, s=0.5, c="black")
+        axs[1].imshow(self.I05)
+        axs[1].imshow(masked_I05, cmap="Dark2")
+        axs[0].invert_xaxis()
+        axs[0].invert_yaxis()
+        plt.show()

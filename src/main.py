@@ -187,12 +187,8 @@ def glob_pickle_files(directory):
 def pickle_file(file):
     fname = "proc/pic_dat_wind/%s" % file
     ci = CycloneImage.load_cyclone_image(fname)
-    try:
-        gt, cat, basin, wind = ci.plot_derivatives(plot=False)
-    except ValueError:
-        gt = cat = basin = wind = 0
-
-    return gt, cat, basin, wind
+    ci.half_eye()
+    return
 
 
 def histograms(data_dict):
@@ -229,13 +225,8 @@ def wind_vs_gt(data_dict):
 
 if __name__ == "__main__":
     cycs_data = []
-    try:
-        for fname in os.listdir("proc/pic_dat_wind"):
-            gt, cat, basin, wind = pickle_file(fname)
-            if 200 < gt < 273:
-                cycs_data.append({"GT": gt, "Category": cat, "Basin": basin, "Max wind speed": wind})
-    except:
-        pass
+    for fname in os.listdir("proc/pic_dat_wind"):
+        pickle_file(fname)
 
-    histograms(cycs_data)
+    # histograms(cycs_data)
     # wind_vs_gt(cycs_data)
