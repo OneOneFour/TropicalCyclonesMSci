@@ -22,15 +22,8 @@ def all_cyclones_since(year, month, day, cat_min=4):
             if end_point["ISO_TIME"] - start_point["ISO_TIME"] > timedelta(hours=3):
                 continue
             with ProgressBar():
-                ci = get_eye(start_point, end_point, dayOrNight="D")
-                if ci is not None:
-                    # box is four times RMW
-                    if ci.is_complete:
-                        ci.draw_eye("I05")
-                        ci.save_object()
-                        # for y in range(-2,2):
-                        #     for x in range(-2,2):
-                        #         ci.draw_rect((ci.rmw/2 + ci.rmw*y, ci.rmw/2 + ci.rmw*x), ci.rmw, ci.rmw)
+                snapshot = get_eye(start_point, end_point)
+                snapshot.save("")
 
 
 def get_cyclone_name_images(NAME):
