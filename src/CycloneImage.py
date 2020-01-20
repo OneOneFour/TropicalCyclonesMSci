@@ -101,7 +101,7 @@ def get_eye(start_point, end_point):
 
     return CycloneSnapshot(new_scene["I04"].values, new_scene["I05"].values, recentered_area.pixel_size_x,
                            recentered_area.pixel_size_y, new_scene["i_satellite_azimuth_angle"].values.mean(),
-                           metadata=metadata)
+                           metadata)
 
 
 def get_entire_cyclone(start_point, end_point):
@@ -138,11 +138,13 @@ class CycloneImage:
     def __init__(self, scene, metadata):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(["I05", "I04", "i_lat", "i_lon"])
+        self.scene.load(["I05", "I04", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
+        self.rects = []
+        self.draw_eye()
 
-    def plot_globe(self, band="I04"):
+    def plot_globe(self, band="I04", show_rects=False):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         )
@@ -153,25 +155,43 @@ class CycloneImage:
         ax.coastlines()
         ax.gridlines()
         ax.set_global()
-        plt.imshow(corrected_scene[band], transform=crs,
-                   extent=(
-                       crs.bounds[0], crs.bounds[1], crs.bounds[2],
-                       crs.bounds[3]),
-                   origin="upper")
-        cb = plt.colorbar()
+        im = ax.imshow(corrected_scene[band], transform=crs,
+                       extent=(
+                           crs.bounds[0], crs.bounds[1], crs.bounds[2],
+                           crs.bounds[3]),
+                       origin="upper")
+        for a in self.rects:
+            import matplotlib.patches as patches
+            ax.add_patch(patches.Rectangle(
+                xy=[a.meta_data["RECT_BLON"], a.meta_data["RECT_BLAT"]],
+                width=a.meta_data["RECT_W"], height=a.meta_data["RECT_H"],
+                facecolor="red",
+                edgecolor="black", linewidth=2., transform=crs
+            ))
+        cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
         plt.show()
+
+    def draw_eye(self):
+        return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
+                                   4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
 
     def draw_rectangle(self, center, width, height):
         latitude_circle = (height / R_E) * (180 / np.pi)
         longitude_circle = (width / R_E) * (180 / np.pi)
-        area = create_area_def("rect",
+        area = create_area_def(f"({center[0]},{center[1]})",
                                {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
-                                "lon_0": center[1], "units": "degrees"}, units="degrees", resolution=RESOLUTION_DEF,
+                                "lon_0": center[1]}, units="degrees", resolution=RESOLUTION_DEF,
                                area_extent=[
                                    center[1] - longitude_circle / 2, center[0] - latitude_circle / 2,
                                    center[1] + longitude_circle / 2, center[0] + latitude_circle / 2
                                ])
         sub_scene = self.scene.resample(area)
-        return CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
-                               self.metadata)
+        cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
+                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata)
+        cs.meta_data["RECT_BLAT"] = center[0] - latitude_circle / 2
+        cs.meta_data["RECT_BLON"] = center[1] - longitude_circle / 2
+        cs.meta_data["RECT_W"] = longitude_circle
+        cs.meta_data["RECT_H"] = latitude_circle
+        self.rects.append(cs)
+        return cs

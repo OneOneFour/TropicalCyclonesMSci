@@ -20,20 +20,20 @@ class CycloneSnapshot:
             cs = pickle.load(file)
         return cs
 
-    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos, **kwargs):
+    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos:float, metadata:dict):
         self.I04 = I04
         self.I05 = I05
         assert self.I04.shape == self.I05.shape
         self.shape = self.I04.shape
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
-        self.meta_data = kwargs
+        self.meta_data = metadata
         self.satellite_azimuth = sat_pos
         self.sub_snaps = {}
 
     @property
     def is_eyewall_shaded(self):
-        return self.satellite_azimuth < 180
+        return self.satellite_azimuth > 180
 
     @property
     def is_complete(self):

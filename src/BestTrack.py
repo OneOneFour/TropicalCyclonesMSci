@@ -1,5 +1,6 @@
 import os
 from datetime import timedelta
+
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
@@ -67,11 +68,12 @@ def get_cyclone_eye_name_image(name, year):
 
 
 def get_cyclone_by_name(name, year, max_len=np.inf):
-    df_cyclone = best_track_df.loc[(best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year)]
+    df_cyclone = best_track_df.loc[
+        (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
     dict_cy = df_cyclone.to_dict(orient="records")
     snap_list = []
     for i, cyclone_point in enumerate(dict_cy[:-1]):
-        if len(snap_list) > max_len:
+        if len(snap_list) >= max_len:
             return snap_list
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
@@ -81,9 +83,13 @@ def get_cyclone_by_name(name, year, max_len=np.inf):
             # if ci is not None:
             #     ci.draw_eye()
             #     return ci
-            snap_list.append(get_entire_cyclone(start_point, end_point))
+            cy = get_entire_cyclone(start_point, end_point)
+            if cy:
+                snap_list.append(cy)
     return snap_list
 
 
 if __name__ == "__main__":
     cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
+    ci_1 = cis[0]
+    ci_1.plot_globe("I04")
