@@ -21,8 +21,9 @@ def pickle_file():
     with ProgressBar():
         ci = CycloneImage.load_cyclone_image(fname)
         ci.draw_eye("I05")
-        ci.plot_derivatives()
-
+        cutoff = float(input("enter the cutoff"))
+        ci.plot_derivatives(cutoff=cutoff)
+        return ci
 
 if __name__ == "__main__":
-    pickle_file()
+    ci = pickle_file()

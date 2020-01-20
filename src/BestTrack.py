@@ -1,6 +1,6 @@
 import os
 from datetime import timedelta
-
+import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 
@@ -49,7 +49,7 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
                     snapshot.save("test.snap")
 
 
-def get_cyclone_name_image(name, year):
+def get_cyclone_eye_name_image(name, year):
     df_cyclone = best_track_df.loc[(best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year)]
     dict_cy = df_cyclone.to_dict(orient="records")
     snap_list = []
@@ -66,6 +66,24 @@ def get_cyclone_name_image(name, year):
     return snap_list
 
 
-if __name__ == "__main__":
-   all_cyclones_since(2011, 10, 1)
+def get_cyclone_by_name(name, year, max_len=np.inf):
+    df_cyclone = best_track_df.loc[(best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year)]
+    dict_cy = df_cyclone.to_dict(orient="records")
+    snap_list = []
+    for i, cyclone_point in enumerate(dict_cy[:-1]):
+        if len(snap_list) > max_len:
+            return snap_list
+        start_point = cyclone_point
+        end_point = dict_cy[i + 1]
+        with ProgressBar():
+            # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
+            #                    cat=start_point["USA_SSHS"], dayOrNight="D")
+            # if ci is not None:
+            #     ci.draw_eye()
+            #     return ci
+            snap_list.append(get_entire_cyclone(start_point, end_point))
+    return snap_list
 
+
+if __name__ == "__main__":
+    cis = get_cyclone_by_name("IRMA", 2017, max_len=1)

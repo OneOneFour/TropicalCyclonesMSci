@@ -11,6 +11,7 @@ DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "../data")
 DEFAULT_MARGIN = 0.
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
+R_E = 6371000
 
 spline_c = lambda dx, dv, T, v0: (3 * (dx - T * v0) - dv * T) / (T * T)
 spline_d = lambda dx, dv, T, v0: (2 * (T * v0 - dx) + dv * T) / (T * T * T)
@@ -162,8 +163,15 @@ class CycloneImage:
         plt.show()
 
     def draw_rectangle(self, center, width, height):
+        latitude_circle = (height / R_E) * (180 / np.pi)
+        longitude_circle = (width / R_E) * (180 / np.pi)
         area = create_area_def("rect",
                                {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
-                                "lon_0": center[1]},units="degrees",area_extent=[
-
-            ])
+                                "lon_0": center[1], "units": "degrees"}, units="degrees", resolution=RESOLUTION_DEF,
+                               area_extent=[
+                                   center[1] - longitude_circle / 2, center[0] - latitude_circle / 2,
+                                   center[1] + longitude_circle / 2, center[0] + latitude_circle / 2
+                               ])
+        sub_scene = self.scene.resample(area)
+        return CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
+                               self.metadata)
