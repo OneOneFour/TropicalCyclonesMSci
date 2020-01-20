@@ -43,9 +43,9 @@ def interpolate(start, end, t):
     for k in start.keys():
         if k == "ISO_TIME":
             continue
-        if isna(start) and isna(end):
+        if isna(start[k]) and isna(end[k]):
             continue
-        if isna(start):
+        if isna(start[k]):
             int_dict[k] = end[k]
             continue
         else:
@@ -71,39 +71,99 @@ def get_eye(start_point, end_point):
     except FileNotFoundError:
         return None
     raw_scene = Scene(filenames=files, reader="viirs_l1b")
-    raw_scene.load(["I04", "I05", "i_lat", "i_lon"])
+    raw_scene.load(["I04", "I05", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
     t = raw_scene.start_time - start_point["ISO_TIME"].to_pydatetime()
 
     metadata = interpolate(start_point, end_point, t)
-    rmw = metadata["USA_RMW"]/60
-    centered_lon, centered_lat = area.get_lonlat(
-        *np.unravel_index(raw_scene["I05"].values.argmax(), raw_scene["I05"].shape))
+    eye_radius = metadata["USA_RMW"] / 60
+    # core_area = create_area_def("core_eye",{
+    #     "proj":"lcc","ellps":"WGS84","lat_0":metadata["USA_LAT"],"lon_1":metadata["USA_LON"]},units="degrees",
+    #
+    # })
+    first_pass = create_area_def("first_pass",
+                                 {"proj": "lcc", "ellps": "WGS84", "lat_0": metadata["USA_LAT"],
+                                  "lon_0": metadata["USA_LON"], "lat_1": metadata["USA_LAT"]
+                                  }, units="degrees", resolution=RESOLUTION_DEF, area_extent=[
+            metadata["USA_LON"] - 2 * eye_radius, metadata["USA_LAT"] - 2 * eye_radius,
+            metadata["USA_LON"] + 2 * eye_radius, metadata["USA_LAT"] + 2 * eye_radius
+        ])
+    cropped_scene = raw_scene.resample(first_pass)
+    centered_lon, centered_lat = first_pass.get_lonlat(
+        *np.unravel_index(cropped_scene["I05"].values.argmax(), cropped_scene["I05"].shape))
     recentered_area = create_area_def("better_eye_area",
                                       {"proj": "lcc", "ellps": "WGS84", "lat_0": centered_lat, "lon_0": centered_lon,
-                                        }, units="degrees", resolution=RESOLUTION_DEF, area_extent=[
-            centered_lon - 2 * rmw, centered_lat - 2 * rmw,
-            centered_lon + 2 * rmw, centered_lat + 2 * rmw
+                                       "lat_1": centered_lat}, units="degrees", resolution=RESOLUTION_DEF, area_extent=[
+            centered_lon - 2 * eye_radius, centered_lat - 2 * eye_radius,
+            centered_lon + 2 * eye_radius, centered_lat + 2 * eye_radius
         ])
     new_scene = raw_scene.resample(recentered_area)
-    return CycloneSnapshot(recentered_area["I04"].values(), recentered_area["I05"].values(),metadata=metadata)
+
+    return CycloneSnapshot(new_scene["I04"].values, new_scene["I05"].values, recentered_area.pixel_size_x,
+                           recentered_area.pixel_size_y, new_scene["i_satellite_azimuth_angle"].values.mean(),
+                           metadata=metadata)
 
 
 def get_entire_cyclone(start_point, end_point):
-    lat_0 = start_point["USA_LAT"] + end_point["USA_LAT"] /2
-    lon_0 = start_point["USA_LON"] +  end_point["USA_LON"] /2
+    lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
+    lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
+    north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
+    south_extent = (start_point["USA_R34_SE"] + start_point["USA_R34_SW"]) / 120
+    west_extent = (start_point["USA_R34_SW"] + start_point["USA_R34_NW"]) / 120
+    east_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
+
     try:
-        files,urls = get_data(DATA_DIRECTORY,start_point["ISO_TIME"].to_pydatetime(),
-                              end_point["ISO_TIME"].to_pydatetime(),
-                              north = lat_0 + storm_size,
-                              south = lat_0 - storm_size,
-                              west = lon_0 - storm_size,
-                              east = lon_0 + storm_size,
-                              dayOrNight="D")
+        files, urls = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(),
+                               end_point["ISO_TIME"].to_pydatetime(),
+                               north=lat_0 + north_extent,
+                               south=lat_0 - south_extent,
+                               west=lon_0 - west_extent,
+                               east=lon_0 + east_extent,
+                               dayOrNight="D")
+    except FileNotFoundError:
+        return None
+
+    scene = Scene(filenames=files, reader="viirs_l1b")
+    t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
+    metadata = interpolate(start_point, end_point, t)
+
+    return CycloneImage(scene, metadata)
+
+
+import matplotlib.pyplot as plt
 
 
 class CycloneImage:
-    def __init__(self, scene):
-        self.scene = scene
 
-    def plot_globe(self):
-        pass
+    def __init__(self, scene, metadata):
+        self.scene = scene
+        self.metadata = metadata
+        self.scene.load(["I05", "I04", "i_lat", "i_lon"])
+        self.lat = metadata["USA_LAT"]
+        self.lon = metadata["USA_LON"]
+
+    def plot_globe(self, band="I04"):
+        area = self.scene[band].attrs["area"].compute_optimal_bb_area(
+            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+        )
+        corrected_scene = self.scene.resample(area)  # resample image to projection
+        crs = corrected_scene[band].attrs["area"].to_cartopy_crs()
+        ax = plt.axes(projection=crs)
+        # Cartopy methods
+        ax.coastlines()
+        ax.gridlines()
+        ax.set_global()
+        plt.imshow(corrected_scene[band], transform=crs,
+                   extent=(
+                       crs.bounds[0], crs.bounds[1], crs.bounds[2],
+                       crs.bounds[3]),
+                   origin="upper")
+        cb = plt.colorbar()
+        cb.set_label("Kelvin (K)")
+        plt.show()
+
+    def draw_rectangle(self, center, width, height):
+        area = create_area_def("rect",
+                               {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
+                                "lon_0": center[1]},units="degrees",area_extent=[
+
+            ])

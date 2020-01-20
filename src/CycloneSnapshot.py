@@ -6,6 +6,8 @@ import numpy.ma as npma
 
 from GTFit import GTFit, cubic
 
+ABSOLUTE_ZERO = 273.15
+
 
 class CycloneSnapshot:
     """
@@ -18,7 +20,7 @@ class CycloneSnapshot:
             cs = pickle.load(file)
         return cs
 
-    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, **kwargs):
+    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos, **kwargs):
         self.I04 = I04
         self.I05 = I05
         assert self.I04.shape == self.I05.shape
@@ -26,7 +28,12 @@ class CycloneSnapshot:
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
         self.meta_data = kwargs
+        self.satellite_azimuth = sat_pos
         self.sub_snaps = {}
+
+    @property
+    def is_eyewall_shaded(self):
+        return self.satellite_azimuth < 180
 
     @property
     def is_complete(self):
@@ -35,6 +42,13 @@ class CycloneSnapshot:
         :return: Boolean, whether data contains NaN
         """
         return np.isnan(self.I04).any() or np.isnan(self.I05).any()
+
+    @property
+    def I05_celcius(self):
+        if hasattr("I05_mask"):
+            return self.I05_mask - ABSOLUTE_ZERO
+        else:
+            return self.I05 - ABSOLUTE_ZERO
 
     def add_sub_snap(self, left, right, top, bottom, discrete=True):
         if discrete:
