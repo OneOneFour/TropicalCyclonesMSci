@@ -20,7 +20,7 @@ class CycloneSnapshot:
             cs = pickle.load(file)
         return cs
 
-    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos:float, metadata:dict):
+    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: float, metadata: dict):
         self.I04 = I04
         self.I05 = I05
         assert self.I04.shape == self.I05.shape
@@ -45,7 +45,7 @@ class CycloneSnapshot:
 
     @property
     def I05_celcius(self):
-        if hasattr("I05_mask"):
+        if hasattr(self, "I05_mask"):
             return self.I05_mask - ABSOLUTE_ZERO
         else:
             return self.I05 - ABSOLUTE_ZERO
@@ -71,16 +71,16 @@ class CycloneSnapshot:
     def scatter_plot(self, fig, ax, gt=None, gt_params=None):
         if hasattr(self, "I04_mask"):
             x = np.linspace(min(self.I05_celcius.compressed()), max(self.I05_celcius.compressed()))
-            ax.scatter(self.I04_mask.compresssed(), self.I05_celcius.compressed(), s=0.25)
+            ax.scatter(self.I04_mask.compressed(), self.I05_celcius.compressed(), s=0.1)
         else:
             x = np.linspace(min(self.I05_celcius.flatten()), max(self.I05_celcius.flatten()))
-            ax.scatter(self.I04.flatten(), self.I05_celcius.flatten())
+            ax.scatter(self.I04.flatten(), self.I05_celcius.flatten(), s=0.1)
         # ax.plot([cubic(x_i, *gt_params) for x_i in x], 'g-', label="Curve fit")
-        # ax.hline(gt, xmin=min(x), xmax=max(x), colors="r")
+        ax.axhline(gt, xmin=min(x), xmax=max(x))
         ax.invert_yaxis()
         ax.invert_xaxis()
-        ax.ylabel("Cloud Top Temperature (K)")
-        ax.xlabel("I4 band reflectance (K)")
+        ax.set_ylabel("Cloud Top Temperature (K)")
+        ax.set_xlabel("I4 band reflectance (K)")
 
     def plot(self, band="I04"):
         fig, ax = plt.subplots()
@@ -88,8 +88,8 @@ class CycloneSnapshot:
         plt.show()
 
     def mask_array(self, HIGH=273, LOW=210):
-        self.I05_mask = npma.masked_outside(LOW, HIGH, self.I05)
-        self.I04_mask = npma.array(self.I04, self.I05_mask.mask)
+        self.I05_mask = npma.masked_outside(self.I05, LOW, HIGH)
+        self.I04_mask = npma.array(self.I04, mask=self.I05_mask.mask)
 
     def gt_fit(self):
         if hasattr(self, "I05_mask"):
@@ -97,7 +97,7 @@ class CycloneSnapshot:
         else:
             gt_fitter = GTFit(self.I04.flatten(), self.I05_celcius.flatten())
 
-        gt, gt_err, coeffs = gt_fitter.curve_fit_funcs()
+        gt, gt_err, coeffs = gt_fitter.curve_fit_modes("mean")
 
         fig, ax = plt.subplots(1, 2)
         self.img_plot(fig, ax[0])
