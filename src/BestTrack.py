@@ -1,5 +1,6 @@
 import os
 from datetime import timedelta
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -67,7 +68,7 @@ def get_cyclone_eye_name_image(name, year):
     return snap_list
 
 
-def get_cyclone_by_name(name, year, max_len=np.inf):
+def get_cyclone_by_name(name, year, max_len=np.inf) -> List[CycloneImage]:
     df_cyclone = best_track_df.loc[
         (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
     dict_cy = df_cyclone.to_dict(orient="records")
@@ -88,7 +89,9 @@ def get_cyclone_by_name(name, year, max_len=np.inf):
                 snap_list.append(cy)
     return snap_list
 
-
 if __name__ == "__main__":
     cis, = get_cyclone_by_name("IRMA", 2017, max_len=1)
+
     r = cis.draw_rectangle((18.072, -55.572), 100000, 100000)
+    r_2 = cis.draw_rectangle((15.8, -55.05), 200000, 200000)
+    cis.plot_globe()

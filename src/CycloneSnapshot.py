@@ -54,7 +54,8 @@ class CycloneSnapshot:
         if discrete:
             I04_tmp = self.I04[left:right, bottom:top]
             I05_tmp = self.I05[left:right, bottom:top]
-            self.sub_snaps[(left, right, top, bottom)] = CycloneSnapshot(I04_tmp, I05_tmp, self.pixel_x, self.pixel_y)
+            self.sub_snaps[(left, right, top, bottom)] = CycloneSnapshot(I04_tmp, I05_tmp, self.pixel_x, self.pixel_y,
+                                                                         self.satellite_azimuth, self.meta_data)
 
         return self.sub_snaps[(left, right, top, bottom)]
 
@@ -88,8 +89,8 @@ class CycloneSnapshot:
         plt.show()
 
     def mask_array(self, HIGH=273, LOW=210):
-        self.I05_mask = npma.masked_outside(self.I05, LOW, HIGH)
-        self.I04_mask = npma.array(self.I04, mask=self.I05_mask.mask)
+        self.I04_mask = npma.masked_outside(self.I04, LOW, HIGH)
+        self.I05_mask = npma.array(self.I05, mask=self.I04_mask.mask)
 
     def gt_fit(self):
         if hasattr(self, "I05_mask"):

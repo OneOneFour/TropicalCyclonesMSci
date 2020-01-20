@@ -178,7 +178,7 @@ class CycloneImage:
         return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
                                    4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
 
-    def draw_rectangle(self, center, width, height):
+    def draw_rectangle(self, center, width, height) -> CycloneSnapshot:
         latitude_circle = (height / R_E) * (180 / np.pi)
         longitude_circle = (width / R_E) * (180 / np.pi)
         area = create_area_def(f"({center[0]},{center[1]})",

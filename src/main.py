@@ -10,7 +10,6 @@ from CycloneImage import CycloneImage
 from fetch_file import get_data
 
 
-
 def glob_pickle_files(directory):
     from glob import glob
     return glob(f"{directory}\*.pickle")
@@ -24,6 +23,7 @@ def pickle_file():
         cutoff = float(input("enter the cutoff"))
         ci.plot_derivatives(cutoff=cutoff)
         return ci
+
 
 if __name__ == "__main__":
     ci = pickle_file()
