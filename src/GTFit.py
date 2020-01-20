@@ -3,8 +3,8 @@ from matplotlib.patches import Rectangle
 import numpy as np
 import scipy.optimize as  sp
 
-MIN_CUTOFF = 210
-MAX_CUTOFF = 273.15
+MIN_CUTOFF = -40
+MAX_CUTOFF = 5
 
 cubic = lambda x, a, b, c, d: a * x ** 3 + b * x ** 2 + c * x + d
 quadratic = lambda x, a, b, c: a * x ** 2 + b * x + c
@@ -14,47 +14,18 @@ d_gt_d_b = lambda a, b, c: (-1 + b / np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
 d_gt_d_c = lambda a, b, c: -1 / (2 * np.sqrt(b ** 2 - 3 * a * c))
 
 
-class SubImage:
-    def __init__(self, i04, i05, w, h, center):
-        self.__i04 = i04
-        self.__i05 = i05
-        self.__w = w
-        self.__h = h
-        self.__center = center
+class GTFit:
+    def __init__(self, i04_flat,i05_flat):
+        self.i04 = i04_flat
+        self.i05 = i05_flat
         self.gt = []
 
-    @property
-    def i04(self):
-        return self.__i04
 
-    @property
-    def i04_flat(self):
-        return self.__i04.flatten()
-
-    @property
-    def i05_flat(self):
-        return self.__i05.flatten()
-
-    @property
-    def i05(self):
-        return self.__i05
-
-    @property
-    def width(self):
-        return self.__w
-
-    @property
-    def height(self):
-        return self.__h
-
-    @property
-    def center(self):
-        return self.__center
 
     def curve_fit_funcs(self, fitting_function=cubic):
-        bbox = np.where(np.logical_and(self.i05_flat > MIN_CUTOFF, self.i05_flat < MAX_CUTOFF))
-        x_i05 = self.i05_flat[bbox]
-        y_i04 = self.i04_flat[bbox]
+        bbox = np.where(np.logical_and(self.i05 > MIN_CUTOFF, self.i05 < MAX_CUTOFF))
+        x_i05 = self.i05[bbox]
+        y_i04 = self.i04[bbox]
 
         (a, b, c, d), cov = sp.curve_fit(fitting_function, x_i05, y_i04, absolute_sigma=True)
         a_err, b_err, c_err, d_err = np.sqrt(np.diag(cov))
@@ -78,7 +49,7 @@ class SubImage:
         num_vals_bins = []
         point_errs = np.array([0] * len(x_i05))
         for i, x in enumerate(x_i05):
-            vals = self.i04_flat[np.where(np.logical_and(self.i05_flat > (x - 0.5), self.i05_flat < (x + 0.5)))]
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
             if len(vals) < 1:
                 continue
             if mode == "mean":
@@ -126,11 +97,4 @@ class SubImage:
 
         return gt_ve, gt_err, params
 
-    def draw(self, band="I04"):
-        if band == "I04":
-            plt.imshow(self.__i04)
-            plt.show()
-        else:
-            plt.imshow(self.__i05)
-            plt.show()
 
