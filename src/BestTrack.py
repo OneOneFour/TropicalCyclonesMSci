@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 
-from CycloneImage import get_eye, get_entire_cyclone
+from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
@@ -90,6 +90,5 @@ def get_cyclone_by_name(name, year, max_len=np.inf):
 
 
 if __name__ == "__main__":
-    cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
-    ci_1 = cis[0]
-    ci_1.plot_globe("I04")
+    cis, = get_cyclone_by_name("IRMA", 2017, max_len=1)
+    r = cis.draw_rectangle((18.072, -55.572), 100000, 100000)

@@ -3,8 +3,8 @@ from matplotlib.patches import Rectangle
 import numpy as np
 import scipy.optimize as  sp
 
-MIN_CUTOFF = 210
-MAX_CUTOFF = 273.15
+MIN_CUTOFF = -40
+MAX_CUTOFF = 5
 
 cubic = lambda x, a, b, c, d: a * x ** 3 + b * x ** 2 + c * x + d
 quadratic = lambda x, a, b, c: a * x ** 2 + b * x + c

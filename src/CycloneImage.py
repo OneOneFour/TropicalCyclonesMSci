@@ -3,9 +3,11 @@ import os
 import numpy as np
 from pyresample import create_area_def
 from satpy import Scene
+from shapely import geometry
 
 from CycloneSnapshot import CycloneSnapshot
 from fetch_file import get_data
+import matplotlib.patches as patches
 
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "../data")
 DEFAULT_MARGIN = 0.
@@ -144,12 +146,13 @@ class CycloneImage:
         self.rects = []
         self.draw_eye()
 
-    def plot_globe(self, band="I04", show_rects=False):
+    def plot_globe(self, band="I04"):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         )
         corrected_scene = self.scene.resample(area)  # resample image to projection
         crs = corrected_scene[band].attrs["area"].to_cartopy_crs()
+        from cartopy.crs import PlateCarree
         ax = plt.axes(projection=crs)
         # Cartopy methods
         ax.coastlines()
@@ -160,14 +163,13 @@ class CycloneImage:
                            crs.bounds[0], crs.bounds[1], crs.bounds[2],
                            crs.bounds[3]),
                        origin="upper")
+
         for a in self.rects:
-            import matplotlib.patches as patches
-            ax.add_patch(patches.Rectangle(
-                xy=[a.meta_data["RECT_BLON"], a.meta_data["RECT_BLAT"]],
-                width=a.meta_data["RECT_W"], height=a.meta_data["RECT_H"],
-                facecolor="red",
-                edgecolor="black", linewidth=2., transform=crs
-            ))
+            box = geometry.box(minx=a.meta_data["RECT_BLON"], miny=a.meta_data["RECT_BLAT"],
+                               maxx=a.meta_data["RECT_BLON"] + a.meta_data["RECT_W"],
+                               maxy=a.meta_data["RECT_BLAT"] + a.meta_data["RECT_H"])
+            ax.add_geometries([box], crs=PlateCarree(), edgecolor="k",facecolor="none")
+
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
         plt.show()

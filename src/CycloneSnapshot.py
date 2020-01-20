@@ -27,7 +27,7 @@ class CycloneSnapshot:
         self.shape = self.I04.shape
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
-        self.meta_data = metadata
+        self.meta_data = dict(metadata)
         self.satellite_azimuth = sat_pos
         self.sub_snaps = {}
 
@@ -70,13 +70,13 @@ class CycloneSnapshot:
 
     def scatter_plot(self, fig, ax, gt=None, gt_params=None):
         if hasattr(self, "I04_mask"):
-            x = np.linspace(min(self.I05_mask.compressed()), max(self.I05_mask.compressed()))
-            ax.scatter(self.I04_mask.compresssed(), self.I05_mask.compressed(), s=0.25)
+            x = np.linspace(min(self.I05_celcius.compressed()), max(self.I05_celcius.compressed()))
+            ax.scatter(self.I04_mask.compresssed(), self.I05_celcius.compressed(), s=0.25)
         else:
-            x = np.linspace(min(self.I05.flatten()), max(self.I05.flatten()))
-            ax.scatter(self.I04.flatten(), self.I05.flatten())
-        ax.plot([cubic(x_i, *gt_params) for x_i in x], 'g-', label="Curve fit")
-        ax.hline(gt, xmin=min(x), xmax=max(x), colors="r")
+            x = np.linspace(min(self.I05_celcius.flatten()), max(self.I05_celcius.flatten()))
+            ax.scatter(self.I04.flatten(), self.I05_celcius.flatten())
+        # ax.plot([cubic(x_i, *gt_params) for x_i in x], 'g-', label="Curve fit")
+        # ax.hline(gt, xmin=min(x), xmax=max(x), colors="r")
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.ylabel("Cloud Top Temperature (K)")
@@ -93,9 +93,9 @@ class CycloneSnapshot:
 
     def gt_fit(self):
         if hasattr(self, "I05_mask"):
-            gt_fitter = GTFit(self.I04_mask.compressed(), self.I05_mask.compressed())
+            gt_fitter = GTFit(self.I04_mask.compressed(), self.I05_celcius.compressed())
         else:
-            gt_fitter = GTFit(self.I04.flatten(), self.I05.flatten())
+            gt_fitter = GTFit(self.I04.flatten(), self.I05_celcius.flatten())
 
         gt, gt_err, coeffs = gt_fitter.curve_fit_funcs()
 

@@ -19,9 +19,23 @@ def download_files_from_server(root_dir, file_urls):
         # Begin downloading from the content server
         # Use wget for large files
         # headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-        download = requests.get(file_urls[i], headers={"Authorization": f"Bearer {os.environ['LAADS_API_KEY']}"})
+        download = requests.get(file_urls[i], headers={"Authorization": f"Bearer {os.environ['LAADS_API_KEY']}"},stream=True)
         if download.status_code == 200:
-            open(file, "wb").write(download.content)
+            import sys
+            with open(file,"wb") as f:
+                length = download.headers.get("content-length")
+                if length is None:
+                    f.write(download.content)
+                else:
+                    d_l = 0
+                    t_l = int(length)
+                    for data in download.iter_content(chunk_size=4096):
+                        d_l += len(data)
+                        f.write(data)
+                        done = int(50*d_l/t_l)
+                        sys.stdout.write("\r[%s%s] (%s %%)" % ('=' * done, ' ' * (50 - done),int(100*d_l/t_l)))
+                        sys.stdout.flush()
+            print("\n")
         else:
             raise ConnectionError()
         if not os.path.isfile(file):
