@@ -7,7 +7,6 @@ from shapely import geometry
 
 from CycloneSnapshot import CycloneSnapshot
 from fetch_file import get_data
-import matplotlib.patches as patches
 
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "../data")
 DEFAULT_MARGIN = 0.
@@ -137,7 +136,7 @@ import matplotlib.pyplot as plt
 
 class CycloneImage:
 
-    def __init__(self, scene, metadata):
+    def __init__(self, scene: Scene, metadata: dict):
         self.scene = scene
         self.metadata = metadata
         self.scene.load(["I05", "I04", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
@@ -168,7 +167,7 @@ class CycloneImage:
             box = geometry.box(minx=a.meta_data["RECT_BLON"], miny=a.meta_data["RECT_BLAT"],
                                maxx=a.meta_data["RECT_BLON"] + a.meta_data["RECT_W"],
                                maxy=a.meta_data["RECT_BLAT"] + a.meta_data["RECT_H"])
-            ax.add_geometries([box], crs=PlateCarree(), edgecolor="k",facecolor="none")
+            ax.add_geometries([box], crs=PlateCarree(), edgecolor="k", facecolor="none")
 
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
