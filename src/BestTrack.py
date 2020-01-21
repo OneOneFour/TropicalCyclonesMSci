@@ -89,9 +89,9 @@ def get_cyclone_by_name(name, year, max_len=np.inf) -> List[CycloneImage]:
                 snap_list.append(cy)
     return snap_list
 
+
 if __name__ == "__main__":
     cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
 
-    r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
-    r.mask_array(HIGH=290)
-    r.point_display()
+    #r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
+    r_2 = cis[0].draw_rectangle(((16.13, -61.9)), 100000, 250000)
