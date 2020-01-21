@@ -40,15 +40,15 @@ class CycloneSnapshot:
 
     @property
     def I04(self):
-        if hasattr(self, "__I04_mask"):
-            return self.__I04_mask
+        if hasattr(self, "I04_mask"):
+            return self.I04_mask
         else:
             return self.__I04
 
     @property
     def I05(self):
-        if hasattr(self, "__I05_mask"):
-            return self.__I05_mask
+        if hasattr(self, "I05_mask"):
+            return self.I05_mask
         else:
             return self.__I05
 
@@ -77,16 +77,26 @@ class CycloneSnapshot:
         da = self.I04 if band == "I04" else self.I05
         ax.imshow(da, origin="upper")
 
-    def img_plot(self, fig, ax, band="I04"):
-        da = self.I04 if band == "I04" else self.I05
+    def img_plot(self, fig, ax, band="I05"):
+        if band == "I04":
+            da = self.I04
+        elif band == "I05":
+            da = self.I05
+        elif band == "M09":
+            da = self.M09
+        else:
+            raise ValueError(f"Band: {band} is not available")
         im = ax.imshow(da, origin="upper",
-                       extent=[-self.pixel_x * 0.5 * self.shape[0],
-                               self.pixel_x * 0.5 * self.shape[0],
-                               -self.pixel_y * 0.5 * self.shape[1],
-                               self.pixel_y * 0.5 * self.shape[1]])
+                       extent=[-self.pixel_x * 0.5 * self.shape[1] / 1000,
+                               self.pixel_x * 0.5 * self.shape[1] / 1000,
+                               -self.pixel_y * 0.5 * self.shape[0] / 1000,
+                               self.pixel_y * 0.5 * self.shape[0] / 1000])
 
         cb = plt.colorbar(im)
-        cb.set_label("Kelvin (K)")
+        if band == "M09":
+            cb.set_label("Reflectance (%)")
+        else:
+            cb.set_label("Kelvin (K)")
 
     def scatter_plot(self, fig, ax, gt_fitter, fit=True):
         x = np.linspace(min(gt_fitter.i05), max(gt_fitter.i05))
@@ -109,10 +119,11 @@ class CycloneSnapshot:
         """
         if self.M09 is None:
             raise ValueError("No M9 data present")
-        if hasattr(self, "__I04_mask") or hasattr(self, "__I05_mask"):
-            self.unmask_array()
-        self.__I04_mask = npma.array(self.I04, mask=self.M09 >= reflectance_cutoff)
-        self.__I05_mask = npma.array(self.I05, mask=self.M09 >= reflectance_cutoff)
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            self.I04_mask = npma.mask_or(self.I04_mask, npma.array(self.I04, mask=self.M09 >= reflectance_cutoff))
+            self.I05_mask = npma.mask_or(self.I05_mask, npma.array(self.I05, mask=self.M09 >= reflectance_cutoff))
+        self.I04_mask = npma.array(self.I04, mask=self.M09 >= reflectance_cutoff)
+        self.I05_mask = npma.array(self.I05, mask=self.M09 >= reflectance_cutoff)
 
     def __flat(self, a):
         if isinstance(a, npma.MaskedArray):
@@ -153,11 +164,19 @@ class CycloneSnapshot:
         self.img_plot(fig, ax, band)
         plt.show()
 
-    def mask_array(self, HIGH=273, LOW=210):
-        if hasattr(self, "__I04_mask") or hasattr(self, "__I05_mask"):
-            self.unmask_array()
-        self.__I04_mask = npma.masked_outside(self.__I04, LOW, HIGH)
-        self.__I05_mask = npma.array(self.__I05, mask=self.__I04_mask.mask)
+    def mask_array_I04(self, HIGH=273, LOW=210):
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            self.I04_mask = npma.mask_or(self.I04_mask, npma.masked_outside(self.__I04, LOW, HIGH))
+        else:
+            self.I04_mask = npma.masked_outside(self.__I04, LOW, HIGH)
+        self.I05_mask = npma.array(self.__I05, mask=self.I04_mask.mask)
+
+    def mask_array_I05(self, HIGH=273, LOW=210):
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            self.I05_mask = npma.mask_or(self.I05_mask, npma.masked_outside(self.__I05, LOW, HIGH))
+        else:
+            self.I05_mask = npma.masked_outside(self.__I05, LOW, HIGH)
+        self.I04_mask = npma.array(self.__I04, mask=self.I04_mask.mask)
 
     def gt_fit(self):
         gt_fitter = GTFit(self.__flat(self.I04), self.__flat(self.I05))
@@ -168,8 +187,8 @@ class CycloneSnapshot:
         plt.show()
 
     def unmask_array(self):
-        del self.__I04_mask
-        del self.__I05_mask
+        del self.I04_mask
+        del self.I05_mask
 
     def save(self, fpath):
         with open(fpath, "wb") as file:

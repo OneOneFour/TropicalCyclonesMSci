@@ -19,10 +19,11 @@ def download_files_from_server(root_dir, file_urls):
         # Begin downloading from the content server
         # Use wget for large files
         # headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-        download = requests.get(file_urls[i], headers={"Authorization": f"Bearer {os.environ['LAADS_API_KEY']}"},stream=True)
+        download = requests.get(file_urls[i], headers={"Authorization": f"Bearer {os.environ['LAADS_API_KEY']}"},
+                                stream=True)
         if download.status_code == 200:
             import sys
-            with open(file,"wb") as f:
+            with open(file, "wb") as f:
                 length = download.headers.get("content-length")
                 if length is None:
                     f.write(download.content)
@@ -32,8 +33,8 @@ def download_files_from_server(root_dir, file_urls):
                     for data in download.iter_content(chunk_size=4096):
                         d_l += len(data)
                         f.write(data)
-                        done = int(50*d_l/t_l)
-                        sys.stdout.write("\r[%s%s] (%s %%)" % ('=' * done, ' ' * (50 - done),int(100*d_l/t_l)))
+                        done = int(50 * d_l / t_l)
+                        sys.stdout.write("\r[%s%s] (%s %%)" % ('=' * done, ' ' * (50 - done), int(100 * d_l / t_l)))
                         sys.stdout.flush()
             print("\n")
         else:
@@ -45,7 +46,7 @@ def download_files_from_server(root_dir, file_urls):
 
 
 def get_data(root_dir, start_time, end_time, north=90, south=-90, west=-180, east=180, collection="5110",
-             dayOrNight="DNB",get_mod=False):
+             dayOrNight="DNB", get_mod=False):
     '''
     Use SatPy to check if data exists already in root dir. If not contact the NASA LAADS DAC server to download the required data.
     '''
@@ -55,7 +56,7 @@ def get_data(root_dir, start_time, end_time, north=90, south=-90, west=-180, eas
     assert 'LAADS_API_KEY' in os.environ
     query_response = requests.get(WEBSERVER_QUERY_URL + SEARCH_FOR_FILES, params={
         "collection": collection,
-        "products": "VNP02IMG,VNP03IMG,VNP02MOD",
+        "products": "VNP02IMG,VNP03IMG,VNP02MOD,VNP03MOD",
         "startTime": start_time.strftime("%Y-%m-%d %H:%M:%S"),
         "endTime": end_time.strftime("%Y-%m-%d %H:%M:%S"),
         "north": north,
