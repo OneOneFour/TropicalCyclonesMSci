@@ -139,7 +139,8 @@ class CycloneImage:
     def __init__(self, scene: Scene, metadata: dict):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(["I05", "I04", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+        self.scene.load(["I05", "I04", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+        self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
         self.rects = []
@@ -189,7 +190,8 @@ class CycloneImage:
                                ])
         sub_scene = self.scene.resample(area)
         cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
-                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata)
+                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
+                             M09=sub_scene["M09"].values)
         cs.meta_data["RECT_BLAT"] = center[0] - latitude_circle / 2
         cs.meta_data["RECT_BLON"] = center[1] - longitude_circle / 2
         cs.meta_data["RECT_W"] = longitude_circle

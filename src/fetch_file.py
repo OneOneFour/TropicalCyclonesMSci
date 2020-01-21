@@ -45,7 +45,7 @@ def download_files_from_server(root_dir, file_urls):
 
 
 def get_data(root_dir, start_time, end_time, north=90, south=-90, west=-180, east=180, collection="5110",
-             dayOrNight="DNB"):
+             dayOrNight="DNB",get_mod=False):
     '''
     Use SatPy to check if data exists already in root dir. If not contact the NASA LAADS DAC server to download the required data.
     '''
@@ -55,7 +55,7 @@ def get_data(root_dir, start_time, end_time, north=90, south=-90, west=-180, eas
     assert 'LAADS_API_KEY' in os.environ
     query_response = requests.get(WEBSERVER_QUERY_URL + SEARCH_FOR_FILES, params={
         "collection": collection,
-        "products": "VNP02IMG,VNP03IMG",
+        "products": "VNP02IMG,VNP03IMG,VNP02MOD",
         "startTime": start_time.strftime("%Y-%m-%d %H:%M:%S"),
         "endTime": end_time.strftime("%Y-%m-%d %H:%M:%S"),
         "north": north,

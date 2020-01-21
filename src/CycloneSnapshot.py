@@ -21,9 +21,11 @@ class CycloneSnapshot:
             cs = pickle.load(file)
         return cs
 
-    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: float, metadata: dict):
+    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: float, metadata: dict,
+                 M09: np.ndarray = None):
         self.__I04 = I04
         self.__I05 = I05
+        self.M09 = M09
         assert self.I04.shape == self.I05.shape
         self.shape = self.I04.shape
         self.pixel_x = pixel_x
@@ -97,6 +99,20 @@ class CycloneSnapshot:
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
+
+    def mask_thin_cirrus(self, reflectance_cutoff=50):
+        """
+        Use M9 band (if present) as a mask for the I04,I05 band above a given threshold.
+        Ice present in high thin cirrus clouds will reflect light at a high altitude. In longer range bands I04,I05 this will make the pixel appear colder than the cloud top actually is
+        :param reflectance_cutoff: Mask all pixels with a thin cirrus reflectance above this
+        :return: None
+        """
+        if self.M09 is None:
+            raise ValueError("No M9 data present")
+        if hasattr(self, "__I04_mask") or hasattr(self, "__I05_mask"):
+            self.unmask_array()
+        self.__I04_mask = npma.array(self.I04, mask=self.M09 >= reflectance_cutoff)
+        self.__I05_mask = npma.array(self.I05, mask=self.M09 >= reflectance_cutoff)
 
     def __flat(self, a):
         if isinstance(a, npma.MaskedArray):
