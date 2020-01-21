@@ -73,7 +73,7 @@ class CycloneSnapshot:
 
     def __discrete_img(self, fig, ax, band="I04"):
         da = self.I04 if band == "I04" else self.I05
-        im = ax.imshow(da, origin="upper")
+        ax.imshow(da, origin="upper")
 
     def img_plot(self, fig, ax, band="I04"):
         da = self.I04 if band == "I04" else self.I05
