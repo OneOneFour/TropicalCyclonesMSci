@@ -31,34 +31,63 @@ class GTFit:
         self.gt = [gt_ve, gt_err]
         return gt_ve, gt_err, (a, b, c, d)
 
-    def curve_fit_percentile_bin(self, low=0, high=1):
+    def curve_fit_percentile(self, percentile=50):
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
+        self.y_i04 = [0] * len(self.x_i05)
+        if len(self.x_i05) < 1:
+            return
+        for i, x in enumerate(self.x_i05):
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
+            self.y_i04[i] = np.percentile(vals, percentile)
+        zero_args = np.where(self.y_i04 == 0)
+        self.x_i05 = np.delete(self.x_i05, zero_args)
+        self.y_i04 = np.delete(self.y_i04, zero_args)
+
+        params, cov = sp.curve_fit(cubic, self.x_i05, self.y_i04, absolute_sigma=True)
+        perr = np.sqrt(np.diag(cov))
+
+        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
+        if np.iscomplex(gt_ve) or min(self.x_i05) > gt_ve > max(self.x_i05):
+            return
+        # satellite_data_error = ??
+        curve_fit_err = np.sqrt(
+            (d_gt_d_a(*params[:-1]) * perr[0]) ** 2 +
+            (d_gt_d_b(*params[:-1]) * perr[1]) ** 2 +
+            (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
+        )
+        gt_err = curve_fit_err
+        self.gt = [gt_ve, gt_err]
+
+        return gt_ve, gt_err, params
+
+    def curve_fit_fraction_mean(self, low=0, high=1):
         """
 
         :param low: nth percentile to start from
         :param high: nth percentile to go to
         :return: Glaciation temperature associated error and fitting parameters
         """
-        x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        y_i04 = [0] * len(x_i05)
-        if len(x_i05) < 1:
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
+        self.y_i04 = [0] * len(self.x_i05)
+        if len(self.x_i05) < 1:
             return
         num_vals_bin = []
-        point_errs = np.array([0] * len(x_i05))
-        for i, x in enumerate(x_i05):
+        point_errs = np.array([0] * len(self.x_i05))
+        for i, x in enumerate(self.x_i05):
             vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
-            y_i04[i] = vals[int(low * len(vals)):int(high * len(vals))].mean()
+            self.y_i04[i] = vals[int(low * len(vals)):int(high * len(vals))].mean()
             point_errs[i] = vals[int(low * len(vals)):int(high * len(vals))].std()
 
-        zero_args = np.where(y_i04 == 0)
-        x_i05 = np.delete(x_i05, zero_args)
-        y_i04 = np.delete(y_i04, zero_args)
+        zero_args = np.where(self.y_i04 == 0)
+        self.x_i05 = np.delete(self.x_i05, zero_args)
+        self.y_i04 = np.delete(self.y_i04, zero_args)
         point_errs = np.delete(point_errs, zero_args)
 
-        params, cov = sp.curve_fit(cubic, x_i05, y_i04, absolute_sigma=True)
+        params, cov = sp.curve_fit(cubic, self.x_i05, self.y_i04, absolute_sigma=True)
         perr = np.sqrt(np.diag(cov))
 
         gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
-        if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
+        if np.iscomplex(gt_ve) or min(self.x_i05) > gt_ve > max(self.x_i05):
             return
         # satellite_data_error = ??
         curve_fit_err = np.sqrt(

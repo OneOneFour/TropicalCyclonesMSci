@@ -31,12 +31,13 @@ class CycloneSnapshot:
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
         self.meta_data = dict(metadata)
-        self.satellite_azimuth = sat_pos
+        from CycloneImage import wrap
+        self.satellite_azimuth = wrap(sat_pos)
         self.sub_snaps = {}
 
     @property
     def is_eyewall_shaded(self):
-        return self.satellite_azimuth > 180
+        return self.satellite_azimuth < 180
 
     @property
     def I04(self):
@@ -91,8 +92,10 @@ class CycloneSnapshot:
                                self.pixel_x * 0.5 * self.shape[1] / 1000,
                                -self.pixel_y * 0.5 * self.shape[0] / 1000,
                                self.pixel_y * 0.5 * self.shape[0] / 1000])
-
+        ax.set_xlabel("km")
+        ax.set_ylabel("km")
         cb = plt.colorbar(im)
+
         if band == "M09":
             cb.set_label("Reflectance (%)")
         else:

@@ -174,6 +174,10 @@ class CycloneImage:
         cb.set_label("Kelvin (K)")
         plt.show()
 
+    @property
+    def eye(self):
+        return self.rects[0]
+
     def draw_eye(self):
         return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
                                    4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
