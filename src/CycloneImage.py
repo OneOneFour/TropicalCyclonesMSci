@@ -7,7 +7,6 @@ from shapely import geometry
 
 from CycloneSnapshot import CycloneSnapshot
 from fetch_file import get_data
-import matplotlib.patches as patches
 
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "../data")
 DEFAULT_MARGIN = 0.
@@ -137,10 +136,11 @@ import matplotlib.pyplot as plt
 
 class CycloneImage:
 
-    def __init__(self, scene, metadata):
+    def __init__(self, scene: Scene, metadata: dict):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(["I05", "I04", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+        self.scene.load(["I05", "I04", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+        self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
         self.rects = []
@@ -168,7 +168,7 @@ class CycloneImage:
             box = geometry.box(minx=a.meta_data["RECT_BLON"], miny=a.meta_data["RECT_BLAT"],
                                maxx=a.meta_data["RECT_BLON"] + a.meta_data["RECT_W"],
                                maxy=a.meta_data["RECT_BLAT"] + a.meta_data["RECT_H"])
-            ax.add_geometries([box], crs=PlateCarree(), edgecolor="k",facecolor="none")
+            ax.add_geometries([box], crs=PlateCarree(), edgecolor="k", facecolor="none")
 
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
@@ -178,7 +178,7 @@ class CycloneImage:
         return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
                                    4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
 
-    def draw_rectangle(self, center, width, height):
+    def draw_rectangle(self, center, width, height) -> CycloneSnapshot:
         latitude_circle = (height / R_E) * (180 / np.pi)
         longitude_circle = (width / R_E) * (180 / np.pi)
         area = create_area_def(f"({center[0]},{center[1]})",
@@ -190,7 +190,8 @@ class CycloneImage:
                                ])
         sub_scene = self.scene.resample(area)
         cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
-                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata)
+                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
+                             M09=sub_scene["M09"].values)
         cs.meta_data["RECT_BLAT"] = center[0] - latitude_circle / 2
         cs.meta_data["RECT_BLON"] = center[1] - longitude_circle / 2
         cs.meta_data["RECT_W"] = longitude_circle

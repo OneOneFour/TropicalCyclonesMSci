@@ -143,7 +143,6 @@ trollsift=0.3.3=py_0
 urllib3=1.25.6=py37_0
 vc=14.1=h0510ff6_4
 vs2015_runtime=14.16.27012=hf0eaf9b_0
-wget=3.2=pypi_0
 wheel=0.33.6=py37_0
 win_inet_pton=1.1.0=py37_0
 wincertstore=0.2=py37_1003
