@@ -178,6 +178,44 @@ class CycloneImage:
     def eye(self):
         return self.rects[0]
 
+    def quads_np(self, width, height, n_rows, n_cols):
+        """
+        Will this tank all the RAM in the world??? WHO KNOWS
+        :param quad_width:
+        :param quad_height:
+        :return:
+        """
+        if width > 0 and height > 0:
+            uni_area = create_area_def("quad_a",
+                                       {"proj": "lcc", "lat_0": self.lat, "lat_1": self.lat, "lon_0": self.lon},
+                                       area_extent=[
+                                           self.lon - width / 2, self.lat - height / 2,
+                                           self.lon + width / 2, self.lat + height / 2
+                                       ], units="degrees")
+        else:
+            uni_area = self.scene["I04"].attrs["area"].compute_optimal_bb_area(
+                {"proj": "lcc", "lat_0": self.lat, "lat_1": self.lat, "lon_0": self.lon}
+            )
+        self.uniform_scene = self.scene.resample(uni_area)
+        I4 = self.uniform_scene["I04"].values()
+        I5 = self.uniform_scene["I05"].values()
+        M9 = self.uniform_scene["M09"].values()
+        AZ = self.uniform_scene["i_satellite_azimuth_angle"].values()
+        x, y = I4.shape[0] // n_rows, I4.shape[1] // n_cols
+
+        self.grid = list(np.zeros((n_cols, n_rows)))
+        for j in range(n_rows):
+            for k in range(n_cols):
+                cs = CycloneSnapshot(
+                    I4[j * x:min((j + 1) * x, I4.shape[0]), k * y:min(y * (k + 1), I4.shape[1])],
+                    I5[j * x:min((j + 1) * x, I5.shape[0]), k * y:min(y * (k + 1), I5.shape[1])],
+                    uni_area.pixel_size_x, uni_area.pixel_size_y,
+                    AZ[j * x:min((j + 1) * x, AZ.shape[0]), k * y:min(y * (k + 1), AZ.shape[1])].mean(),
+                    self.metadata, M09=
+                    M9[j * x:min((j + 1) * x, M9.shape[0]), k * y:min(y * (k + 1), M9.shape[1])])
+                self.grid[j][k] = cs
+                self.rects.append(cs)
+
     def draw_eye(self):
         return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
                                    4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
