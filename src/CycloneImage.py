@@ -185,17 +185,12 @@ class CycloneImage:
         :param quad_height:
         :return:
         """
-        if width > 0 and height > 0:
-            uni_area = create_area_def("quad_a",
-                                       {"proj": "lcc", "lat_0": self.lat, "lat_1": self.lat, "lon_0": self.lon},
-                                       area_extent=[
-                                           self.lon - width / 2, self.lat - height / 2,
-                                           self.lon + width / 2, self.lat + height / 2
-                                       ], units="degrees")
-        else:
-            uni_area = self.scene["I04"].attrs["area"].compute_optimal_bb_area(
-                {"proj": "lcc", "lat_0": self.lat, "lat_1": self.lat, "lon_0": self.lon}
-            )
+        uni_area = create_area_def("quad_a",
+                                   {"proj": "lcc", "lat_0": self.lat, "lat_1": self.lat, "lon_0": self.lon},
+                                   area_extent=[
+                                       self.lon - width / 2, self.lat - height / 2,
+                                       self.lon + width / 2, self.lat + height / 2
+                                   ], units="degrees")
         self.uniform_scene = self.scene.resample(uni_area)
         I4 = self.uniform_scene["I04"].values()
         I5 = self.uniform_scene["I05"].values()
