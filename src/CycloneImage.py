@@ -8,7 +8,7 @@ from shapely import geometry
 from CycloneSnapshot import CycloneSnapshot
 from fetch_file import get_data
 
-DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "../data")
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud/Data")
 DEFAULT_MARGIN = 0.
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852

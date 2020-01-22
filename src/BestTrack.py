@@ -5,10 +5,12 @@ from typing import List
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
+import matplotlib.pyplot as plt
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
+from CycloneSnapshot import CycloneSnapshot
 
-BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "data/best_fit_csv/ibtracs.last3years.list.v04r00.csv")
+BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.last3years.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
 
@@ -51,11 +53,13 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
                     snapshot.save("test.snap")
 
 
-def get_cyclone_eye_name_image(name, year):
+def get_cyclone_eye_name_image(name, year, max_len=np.inf):
     df_cyclone = best_track_df.loc[(best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year)]
     dict_cy = df_cyclone.to_dict(orient="records")
     snap_list = []
     for i, cyclone_point in enumerate(dict_cy[:-1]):
+        if len(snap_list) >= max_len:
+            return snap_list
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
         with ProgressBar():
@@ -64,7 +68,10 @@ def get_cyclone_eye_name_image(name, year):
             # if ci is not None:
             #     ci.draw_eye()
             #     return ci
-            snap_list.append(get_eye(start_point, end_point))
+            eye = get_eye(start_point, end_point)
+            if eye:
+                eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
+                snap_list.append(get_eye(start_point, end_point))
     return snap_list
 
 
@@ -86,12 +93,24 @@ def get_cyclone_by_name(name, year, max_len=np.inf) -> List[CycloneImage]:
             #     return ci
             cy = get_entire_cyclone(start_point, end_point)
             if cy:
+                eye = cy.draw_eye()
+                eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
                 snap_list.append(cy)
     return snap_list
 
 
 if __name__ == "__main__":
-    cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
+    # cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
 
-    #r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
-    r_2 = cis[0].draw_rectangle(((16.13, -61.9)), 100000, 250000)
+    c = CycloneSnapshot.load("proc/pickle_data/IRMA0")
+
+    c.mask_thin_cirrus()
+    c.mask_array_I05()
+    c.mask_half("left")
+    c.mask_half("bottom")
+    c.gt_fit()
+
+    plt.show()
+
+    # r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
+    # r_2 = cis[0].draw_rectangle(((16.13, -61.9)), 100000, 250000)

@@ -139,13 +139,4 @@ class GTFit:
         gt_err = curve_fit_err
         self.gt = [gt_ve, gt_err]
 
-        #plt.scatter(self.i04_flat, self.i05_flat, s=0.25)
-        #plt.scatter(y_i04, x_i05, s=10)
-        #plt.scatter(yvalues, xvalues, s=10)
-        #plt.gca().invert_yaxis()
-        #plt.gca().invert_xaxis()
-        #plt.ylabel("I05")
-        #plt.xlabel("I04")
-        #plt.show()
-
         return gt_ve, gt_err, params
