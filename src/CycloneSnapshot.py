@@ -17,7 +17,7 @@ class CycloneSnapshot:
 
     @staticmethod
     def load(fpath):
-        with open(fpath) as file:
+        with open(fpath,"rb") as file:
             cs = pickle.load(file)
         return cs
 
@@ -92,6 +92,7 @@ class CycloneSnapshot:
                                self.pixel_x * 0.5 * self.shape[1] / 1000,
                                -self.pixel_y * 0.5 * self.shape[0] / 1000,
                                self.pixel_y * 0.5 * self.shape[0] / 1000])
+        ax.set_title("%s %s" % (self.meta_data["NAME"], self.meta_data["ISO_TIME"]))
         ax.set_xlabel("km")
         ax.set_ylabel("km")
         cb = plt.colorbar(im)
@@ -123,10 +124,13 @@ class CycloneSnapshot:
         if self.M09 is None:
             raise ValueError("No M9 data present")
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            self.I04_mask = npma.mask_or(self.I04_mask, npma.array(self.I04, mask=self.M09 >= reflectance_cutoff))
-            self.I05_mask = npma.mask_or(self.I05_mask, npma.array(self.I05, mask=self.M09 >= reflectance_cutoff))
-        self.I04_mask = npma.array(self.I04, mask=self.M09 >= reflectance_cutoff)
-        self.I05_mask = npma.array(self.I05, mask=self.M09 >= reflectance_cutoff)
+            new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.array(self.I04, mask=self.M09 >= reflectance_cutoff).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.array(self.I05, mask=self.M09 >= reflectance_cutoff).mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=self.M09 >= reflectance_cutoff)
+            self.I05_mask = npma.array(self.I05, mask=self.M09 >= reflectance_cutoff)
 
     def __flat(self, a):
         if isinstance(a, npma.MaskedArray):
@@ -167,19 +171,49 @@ class CycloneSnapshot:
         self.img_plot(fig, ax, band)
         plt.show()
 
-    def mask_array_I04(self, HIGH=273, LOW=210):
+    def mask_array_I04(self, HIGH=273, LOW=220):
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            self.I04_mask = npma.mask_or(self.I04_mask, npma.masked_outside(self.__I04, LOW, HIGH))
+            new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.masked_outside(self.__I04, LOW, HIGH).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.masked_outside(self.__I04, LOW, HIGH).mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
         else:
             self.I04_mask = npma.masked_outside(self.__I04, LOW, HIGH)
-        self.I05_mask = npma.array(self.__I05, mask=self.I04_mask.mask)
+            self.I05_mask = npma.array(self.__I05, mask=self.I04_mask.mask)
 
-    def mask_array_I05(self, HIGH=273, LOW=210):
+    def mask_array_I05(self, HIGH=273, LOW=220):
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            self.I05_mask = npma.mask_or(self.I05_mask, npma.masked_outside(self.__I05, LOW, HIGH))
+            new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.masked_outside(self.__I05, LOW, HIGH).mask)
+            new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.masked_outside(self.__I05, LOW, HIGH).mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
         else:
             self.I05_mask = npma.masked_outside(self.__I05, LOW, HIGH)
-        self.I04_mask = npma.array(self.__I04, mask=self.I04_mask.mask)
+            self.I04_mask = npma.array(self.__I04, mask=self.I05_mask.mask)
+
+    def mask_half(self, half="right"):
+        blank_mask = np.zeros_like(self.__I05)
+        if half == "top":
+            idx = np.arange(0, int(len(self.__I05)/2))
+            blank_mask[idx, :] = 1
+        if half == "left":
+            idx = np.arange(0, int(len(self.__I05) / 2))
+            blank_mask[:, idx] = 1
+        if half == "bottom":
+            idx = np.arange(int(len(self.__I05) / 2), len(self.__I05))
+            blank_mask[idx, :] = 1
+        if half == "right":
+            idx = np.arange(int(len(self.__I05) / 2), len(self.__I05))
+            blank_mask[:, idx] = 1
+        blank_mask = blank_mask.astype("bool")
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I05_mask = npma.mask_or(self.I05_mask.mask, blank_mask)
+            new_I04_mask = npma.mask_or(self.I04_mask.mask, blank_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+        else:
+            self.I05_mask = npma.array(self.__I05, mask=blank_mask)
+            self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
     def gt_fit(self):
         gt_fitter = GTFit(self.__flat(self.I04), self.__flat(self.I05))
@@ -187,7 +221,7 @@ class CycloneSnapshot:
         fig, ax = plt.subplots(1, 2)
         self.img_plot(fig, ax[1])
         self.scatter_plot(fig, ax[0], gt_fitter)
-        plt.show()
+        #plt.show()
 
     def unmask_array(self):
         del self.I04_mask
@@ -196,3 +230,6 @@ class CycloneSnapshot:
     def save(self, fpath):
         with open(fpath, "wb") as file:
             pickle.dump(self, file)
+
+
+

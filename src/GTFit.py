@@ -1,5 +1,5 @@
 import numpy as np
-import scipy.optimize as  sp
+import scipy.optimize as sp
 
 cubic = lambda x, a, b, c, d: a * x ** 3 + b * x ** 2 + c * x + d
 quadratic = lambda x, a, b, c: a * x ** 2 + b * x + c
@@ -122,12 +122,27 @@ class GTFit:
                 y_i04[i] = np.median(vals)
                 median_std = 1.253 * np.std(vals) / np.sqrt(len(vals))
                 point_errs[i] = median_std ** 2
-            # elif mode == "eyewall":
-            #     if x_i05 < 235:             # Takes minimum values lower than theoretical min gt and v.v.
-            #         y_i04[i] = min(vals)
-            #     else:
-            #         y_i04[i] = max(vals)
-            #     point_errs[i] = 0.5 ** 2
+            elif mode == "eyewall":
+                vals_5_min = []
+                vals_5_min_i05val = []
+                if len(vals) < 1:
+                    continue
+                if x > 235:  # Takes minimum values lower than theoretical min gt and v.v.
+                    for j in range(int(np.ceil(len(vals) / 20))):
+                        if len(vals) == 0:  # Not all values of i05 will have 5 i04 values
+                            break
+                        vals_5_min.append(min(vals))
+                else:
+                    percent_range = int(np.ceil(len(vals) / 20))
+                    for j in range(percent_range):
+                        if len(vals) == 0:  # Not all values of i05 will have 5 i04 values
+                            break
+                        vals.sort()
+                        idx = int((235 - x) * 0.025 * len(vals) + j)
+                        vals_5_min.append(vals[idx])
+
+                y_i04[i] = np.median(vals_5_min)
+                point_errs[i] = 0.5 ** 2                    # TODO: Fix errors
 
             num_vals_bins.append(len(vals))  # list of number of I04 values that were in each I05 increment (for errors)
 
@@ -139,6 +154,8 @@ class GTFit:
         params, cov = sp.curve_fit(cubic, x_i05, y_i04, absolute_sigma=True)
         perr = np.sqrt(np.diag(cov))
 
+        xvalues = np.arange(min(x_i05), max(x_i05), 1)
+        yvalues = cubic(xvalues, *params)
         gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
         if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
             return

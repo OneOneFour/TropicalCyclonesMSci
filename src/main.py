@@ -1,13 +1,4 @@
-import csv
-import datetime
-
-import matplotlib.pyplot as plt
-import netCDF4 as nt
-import numpy as np
-from dask.diagnostics.progress import ProgressBar
-
-from CycloneImage import CycloneImage
-from fetch_file import get_data
+from CycloneSnapshot import CycloneSnapshot
 
 
 def glob_pickle_files(directory):
@@ -17,12 +8,8 @@ def glob_pickle_files(directory):
 
 def pickle_file():
     fname = input("Enter file path of cyclone pickle")
-    with ProgressBar():
-        ci = CycloneImage.load_cyclone_image(fname)
-        ci.draw_eye("I05")
-        cutoff = float(input("enter the cutoff"))
-        ci.plot_derivatives(cutoff=cutoff)
-        return ci
+    ci = CycloneSnapshot.load(fname)
+    ci.draw_eye("I05")
 
 
 if __name__ == "__main__":
