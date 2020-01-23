@@ -62,9 +62,8 @@ class CycloneSnapshot:
         """
         return np.isnan(self.I04).any() or np.isnan(self.I05).any()
 
-    @property
-    def I05_celcius(self):
-        return self.I05 - ABSOLUTE_ZERO
+    def celcius(self, a):
+        return a - ABSOLUTE_ZERO
 
     def add_sub_snap(self, left, right, top, bottom, discrete=True):
         if discrete:
@@ -86,6 +85,8 @@ class CycloneSnapshot:
             da = self.I05
         elif band == "M09":
             da = self.M09
+        elif band == "I01":
+            da = self.I01
         else:
             raise ValueError(f"Band: {band} is not available")
         im = ax.imshow(da, origin="upper",
@@ -98,23 +99,10 @@ class CycloneSnapshot:
         ax.set_ylabel("km")
         cb = plt.colorbar(im)
 
-        if band == "M09":
+        if band == "M09" or band == "I01":
             cb.set_label("Reflectance (%)")
         else:
             cb.set_label("Kelvin (K)")
-
-    def scatter_plot(self, fig, ax, gt_fitter, fit=True):
-        x = np.linspace(min(gt_fitter.i05), max(gt_fitter.i05))
-        ax.scatter(gt_fitter.i04, gt_fitter.i05, s=0.1)
-        ax.hline(-38, xmin=min(x), xmax=max(x))  # homogenous ice freezing temperature
-        if fit:
-            gt, gt_err, params = gt_fitter.curve_fit_funcs()
-            ax.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
-            ax.axhline(gt, xmin=min(x), xmax=max(x))
-        ax.invert_yaxis()
-        ax.invert_xaxis()
-        ax.set_ylabel("Cloud Top Temperature (C)")
-        ax.set_xlabel("I4 band reflectance (K)")
 
     def mask_using_I01(self, reflectance_cutoff=80):
         """
@@ -153,7 +141,7 @@ class CycloneSnapshot:
             self.I04_mask = npma.array(self.I04, mask=self.M09 >= reflectance_cutoff)
             self.I05_mask = npma.array(self.I05, mask=self.M09 >= reflectance_cutoff)
 
-    def __flat(self, a):
+    def flat(self, a):
         if isinstance(a, npma.MaskedArray):
             return a.compressed()
         elif isinstance(a, np.ndarray):
@@ -237,12 +225,12 @@ class CycloneSnapshot:
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
     def gt_fit(self):
-        gt_fitter = GTFit(self.__flat(self.I04), self.__flat(self.I05))
+        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
 
         fig, ax = plt.subplots(1, 2)
         self.img_plot(fig, ax[1])
-        self.scatter_plot(fig, ax[0], gt_fitter)
-        # plt.show()
+        gt_fitter.curve_fit_modes(20, fig=fig, ax=ax[0])
+        plt.show()
 
     def unmask_array(self):
         del self.I04_mask

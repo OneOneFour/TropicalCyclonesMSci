@@ -33,7 +33,7 @@ class GTFit:
     #     self.gt = [gt_ve, gt_err]
     #     return gt_ve, gt_err, (a, b, c, d)
 
-    def curve_fit_percentile(self, percentile=50):
+    def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         self.y_i04 = [0] * len(self.x_i05)
         if len(self.x_i05) < 1:
@@ -58,11 +58,31 @@ class GTFit:
             (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
         )
         gt_err = curve_fit_err
-        self.gt = [gt_ve, gt_err]
-
+        self.gt = gt_ve
+        self.plot(fig, ax, func=cubic, params=params)
         return gt_ve, gt_err, params
 
-    def curve_fit_fraction_mean(self, low=0, high=1):
+    def plot(self, fig, ax, func=None, params=None):
+        if fig is None or ax is None:
+            return
+        if self.x_i05 is None:
+            x = np.linspace(min(self.i05), max(self.i05))
+            ax.scatter(self.i04, self.i05, s=0.1)
+
+        else:
+            x = np.linspace(min(self.x_i05), max(self.x_i05))
+            ax.scatter(self.y_i04, self.x_i05, s=0.1)
+
+        if func:
+            ax.plot([func(x_i, *params) for x_i in x], x, label="Curve fit")
+        ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
+        ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
+        ax.invert_yaxis()
+        ax.invert_xaxis()
+        ax.set_ylabel("Cloud Top Temperature (C)")
+        ax.set_xlabel("I4 band reflectance (K)")
+
+    def curve_fit_fraction_mean(self, low=0, high=1, fig=None, ax=None):
         """
 
         :param low: nth percentile to start from
@@ -76,7 +96,7 @@ class GTFit:
         num_vals_bin = []
         point_errs = np.array([0] * len(self.x_i05))
         for i, x in enumerate(self.x_i05):
-            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))].flatten()
             self.y_i04[i] = vals[int(low * len(vals)):int(high * len(vals))].mean()
             point_errs[i] = vals[int(low * len(vals)):int(high * len(vals))].std()
 
@@ -98,11 +118,11 @@ class GTFit:
             (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
         )
         gt_err = curve_fit_err
-        self.gt = [gt_ve, gt_err]
-
+        self.gt = gt_ve
+        self.plot(fig, ax, func=cubic, params=params)
         return gt_ve, gt_err, params
 
-    def curve_fit_modes(self, mode="median"):
+    def curve_fit_modes(self, mode="median",fig=None,ax=None):
         x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         if len(x_i05) < 1:
             return
@@ -168,16 +188,17 @@ class GTFit:
             (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
         )
         gt_err = curve_fit_err
-        self.gt = [gt_ve, gt_err]
-
+        self.gt = gt_ve
+        self.plot(fig,ax,func=cubic,params=params)
         return gt_ve, gt_err, params
 
-    def gt_via_minimum(self):
+    def gt_via_minimum(self, fig=None, ax=None):
         min_arg = np.argmin(self.i04)
         self.gt = self.i05[min_arg]
+        self.plot(fig, ax)
         return self.gt
 
-    def gt_via_minimum_percentile(self, percentile):
+    def gt_via_minimum_percentile(self, percentile, fig=None, ax=None):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         self.y_i04 = [0] * len(self.x_i05)
         if len(self.x_i05) < 1:
@@ -187,4 +208,5 @@ class GTFit:
             self.y_i04[i] = np.percentile(vals, percentile)
         min_arg = np.argmin(self.y_i04)
         self.gt = self.x_i05[min_arg]
+        self.plot(fig, ax)
         return self.gt
