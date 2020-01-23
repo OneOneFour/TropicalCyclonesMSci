@@ -36,7 +36,7 @@ class CycloneSnapshot:
         self.sub_snaps = {}
 
     @property
-    def is_eyewall_shaded(self):
+    def is_shaded(self):
         return self.satellite_azimuth < 180
 
     @property
