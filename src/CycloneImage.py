@@ -10,7 +10,7 @@ from fetch_file import get_data
 
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud/Data")
 DEFAULT_MARGIN = 0.
-RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
+RESOLUTION_DEF = (3.75 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 R_E = 6371000
 
@@ -139,26 +139,13 @@ class CycloneImage:
     def __init__(self, scene: Scene, metadata: dict):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(["I05", "I04", "M03", "M04", "M05", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+        self.scene.load(["I05", "I04", "I01", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
         self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
         self.rects = []
         self.draw_eye()
 
-    def plot_true_colour(self):
-        from satpy.composites import GenericCompositor
-        from satpy.writers import to_image
-        compositor = GenericCompositor("overview")
-
-        composite = compositor([self.scene["M03"], self.scene["M04"], self.scene["M05"]])
-        img = to_image(composite)
-
-        img.stretch("linear")
-        img.gamma(1.7)
-        pil = img.pil_image()
-        plt.imshow(pil, origin="lower")
-        plt.show()
 
     def plot_globe(self, band="I04"):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(

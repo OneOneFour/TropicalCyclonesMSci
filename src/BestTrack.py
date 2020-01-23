@@ -1,5 +1,5 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import List
 
 import numpy as np
@@ -74,7 +74,22 @@ def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
     return snap_list
 
 
-def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False) -> List[CycloneImage]:
+def get_cyclone_by_name_date(name, date: datetime):
+    df_cyclone = best_track_df.loc[
+        (best_track_df["NAME"] == name) & (best_track_df["USA_SSHS"])
+        & (best_track_df["ISO_TIME"].dt.year == date.year) & (best_track_df["ISO_TIME"].dt.month == date.month)
+        & (best_track_df["ISO_TIME"].dt.day == date.day)
+        ]
+    dict_cy = df_cyclone.to_dict(orient="records")
+    for i, cyclone_point in enumerate(dict_cy[:-1]):
+        start_point = cyclone_point
+        end_point = dict_cy[i + 1]
+        cy = get_entire_cyclone(start_point, end_point)
+        if cy:
+            return cy
+
+
+def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) -> List[CycloneImage]:
     df_cyclone = best_track_df.loc[
         (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
     dict_cy = df_cyclone.to_dict(orient="records")
@@ -91,17 +106,20 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False) -> List[Cyclon
             #     ci.draw_eye()
             #     return ci
             cy = get_entire_cyclone(start_point, end_point)
-            if cy and not cy.is_eyewall_shaded:
-                if pickle:
-                    eye = cy.draw_eye()
-                    eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
-                snap_list.append(cy)
+            if cy:
+                if cy.is_eyewall_shaded or not shading:
+                    if pickle:
+                        eye = cy.draw_eye()
+                        eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
+                    snap_list.append(cy)
     return snap_list
 
 
 if __name__ == "__main__":
     ## NA
-    irma = get_cyclone_by_name("IRMA", 2017,max_len=1)
+    irma, = get_cyclone_by_name("IRMA", 2017, max_len=1, shading=False)
+    r = irma.draw_rectangle((16.5, -55.283), 36000, 36000)
+
     # michael = get_cyclone_by_name("MICHAEL", 2018,max_len=1)
     # dorian = get_cyclone_by_name("DORIAN", 2019,max_len=1)
     # # EP

@@ -14,22 +14,24 @@ class GTFit:
         self.i04 = i04_flat
         self.i05 = i05_flat
         self.gt = []
+        self.x_i05 = None
+        self.y_i04 = None
 
-    def curve_fit_funcs(self, fitting_function=cubic):
-        (a, b, c, d), cov = sp.curve_fit(fitting_function, self.i05, self.i04, absolute_sigma=True)
-
-        a_err, b_err, c_err, d_err = np.sqrt(np.diag(cov))
-
-        gt_ve = (-b + np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
-        # gt = -params[1] / (2 * params[0])
-        # gt_err = np.sqrt((perr[1] / (2 * params[0])) ** 2 + (perr[0] * params[1] / (2 * params[0] ** 2)) ** 2)
-        if np.iscomplex(gt_ve) or (min(self.i05) > gt_ve > max(self.i05)):
-            return
-
-        curve_fit_err = np.sqrt(((b_err * c) / (2 * b * b)) ** 2 + (c_err / 2 * b) ** 2)
-        gt_err = curve_fit_err
-        self.gt = [gt_ve, gt_err]
-        return gt_ve, gt_err, (a, b, c, d)
+    # def curve_fit_funcs(self, fitting_function=cubic):
+    #     (a, b, c, d), cov = sp.curve_fit(fitting_function, self.i05, self.i04, absolute_sigma=True)
+    #
+    #     a_err, b_err, c_err, d_err = np.sqrt(np.diag(cov))
+    #
+    #     gt_ve = (-b + np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
+    #     # gt = -params[1] / (2 * params[0])
+    #     # gt_err = np.sqrt((perr[1] / (2 * params[0])) ** 2 + (perr[0] * params[1] / (2 * params[0] ** 2)) ** 2)
+    #     if np.iscomplex(gt_ve) or (min(self.i05) > gt_ve > max(self.i05)):
+    #         return
+    #
+    #     curve_fit_err = np.sqrt(((b_err * c) / (2 * b * b)) ** 2 + (c_err / 2 * b) ** 2)
+    #     gt_err = curve_fit_err
+    #     self.gt = [gt_ve, gt_err]
+    #     return gt_ve, gt_err, (a, b, c, d)
 
     def curve_fit_percentile(self, percentile=50):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
@@ -142,7 +144,7 @@ class GTFit:
                         vals_5_min.append(vals[idx])
 
                 y_i04[i] = np.median(vals_5_min)
-                point_errs[i] = 0.5 ** 2                    # TODO: Fix errors
+                point_errs[i] = 0.5 ** 2  # TODO: Fix errors
 
             num_vals_bins.append(len(vals))  # list of number of I04 values that were in each I05 increment (for errors)
 
@@ -169,3 +171,20 @@ class GTFit:
         self.gt = [gt_ve, gt_err]
 
         return gt_ve, gt_err, params
+
+    def gt_via_minimum(self):
+        min_arg = np.argmin(self.i04)
+        self.gt = self.i05[min_arg]
+        return self.gt
+
+    def gt_via_minimum_percentile(self, percentile):
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
+        self.y_i04 = [0] * len(self.x_i05)
+        if len(self.x_i05) < 1:
+            return
+        for i, x in enumerate(self.x_i05):
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
+            self.y_i04[i] = np.percentile(vals, percentile)
+        min_arg = np.argmin(self.y_i04)
+        self.gt = self.x_i05[min_arg]
+        return self.gt

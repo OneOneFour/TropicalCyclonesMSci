@@ -17,15 +17,16 @@ class CycloneSnapshot:
 
     @staticmethod
     def load(fpath):
-        with open(fpath,"rb") as file:
+        with open(fpath, "rb") as file:
             cs = pickle.load(file)
         return cs
 
     def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: float, metadata: dict,
-                 M09: np.ndarray = None):
+                 M09: np.ndarray = None, I01: np.ndarray = None):
         self.__I04 = I04
         self.__I05 = I05
         self.M09 = M09
+        self.I01 = I01
         assert self.I04.shape == self.I05.shape
         self.shape = self.I04.shape
         self.pixel_x = pixel_x
@@ -105,6 +106,7 @@ class CycloneSnapshot:
     def scatter_plot(self, fig, ax, gt_fitter, fit=True):
         x = np.linspace(min(gt_fitter.i05), max(gt_fitter.i05))
         ax.scatter(gt_fitter.i04, gt_fitter.i05, s=0.1)
+        ax.hline(-38, xmin=min(x), xmax=max(x))  # homogenous ice freezing temperature
         if fit:
             gt, gt_err, params = gt_fitter.curve_fit_funcs()
             ax.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
@@ -113,6 +115,23 @@ class CycloneSnapshot:
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
+
+    def mask_using_I01(self, reflectance_cutoff=80):
+        """
+        Use I01 band (if present) to mask dimmer pixels below a certain reflectance
+        """
+        if self.I01 is None:
+            raise ValueError("No I1 data present")
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=self.I01 <= reflectance_cutoff).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=self.I01 <= reflectance_cutoff).mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=self.I01 <= reflectance_cutoff)
+            self.I05_mask = npma.array(self.I05, mask=self.I01 <= reflectance_cutoff)
 
     def mask_thin_cirrus(self, reflectance_cutoff=50):
         """
@@ -124,8 +143,10 @@ class CycloneSnapshot:
         if self.M09 is None:
             raise ValueError("No M9 data present")
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.array(self.I04, mask=self.M09 >= reflectance_cutoff).mask)
-            new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.array(self.I05, mask=self.M09 >= reflectance_cutoff).mask)
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=self.M09 >= reflectance_cutoff).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=self.M09 >= reflectance_cutoff).mask)
             self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
             self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
         else:
@@ -194,7 +215,7 @@ class CycloneSnapshot:
     def mask_half(self, half="right"):
         blank_mask = np.zeros_like(self.__I05)
         if half == "top":
-            idx = np.arange(0, int(len(self.__I05)/2))
+            idx = np.arange(0, int(len(self.__I05) / 2))
             blank_mask[idx, :] = 1
         if half == "left":
             idx = np.arange(0, int(len(self.__I05) / 2))
@@ -221,7 +242,7 @@ class CycloneSnapshot:
         fig, ax = plt.subplots(1, 2)
         self.img_plot(fig, ax[1])
         self.scatter_plot(fig, ax[0], gt_fitter)
-        #plt.show()
+        # plt.show()
 
     def unmask_array(self):
         del self.I04_mask
@@ -230,6 +251,3 @@ class CycloneSnapshot:
     def save(self, fpath):
         with open(fpath, "wb") as file:
             pickle.dump(self, file)
-
-
-
