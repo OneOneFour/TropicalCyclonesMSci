@@ -220,6 +220,13 @@ class CycloneImage:
         return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
                                    4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
 
+    def draw_rectangle_rosenfeld(self, center, p_width=96, p_height=96):
+        area = create_area_def(f"({center[0]},{center[1]})",
+                               {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
+                                "lon_0": center[1]}, width=p_width, height=p_height,
+                               resolution=self.scene["I05"].attrs["resolution"], units="m")
+        print(area)
+
     def draw_rectangle(self, center, width, height) -> CycloneSnapshot:
         latitude_circle = (height / R_E) * (180 / np.pi)
         longitude_circle = (width / R_E) * (180 / np.pi)
