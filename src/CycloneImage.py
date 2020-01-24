@@ -8,9 +8,9 @@ from shapely import geometry
 from CycloneSnapshot import CycloneSnapshot
 from fetch_file import get_data
 
-DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud")
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud/Data")
 DEFAULT_MARGIN = 0.
-RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
+RESOLUTION_DEF = (3.75 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 R_E = 6371000
 
@@ -175,9 +175,75 @@ class CycloneImage:
         cb.set_label("Kelvin (K)")
         plt.show()
 
+    @property
+    def is_eyewall_shaded(self):
+        return self.eye.is_shaded
+
+    @property
+    def eye(self) -> CycloneSnapshot:
+        return self.rects[0]
+
+    def quads_np(self, width, height, n_rows=0, n_cols=0, p_width=0, p_height=0):
+        """
+        :param quad_width:
+        :param quad_height:
+        :return:
+        """
+        uni_area = create_area_def("quad_a",
+                                   {"proj": "lcc", "lat_0": self.lat, "lat_1": self.lat, "lon_0": self.lon},
+                                   area_extent=[
+                                       self.lon - width / 2, self.lat - height / 2,
+                                       self.lon + width / 2, self.lat + height / 2
+                                   ], units="degrees")
+        self.uniform_scene = self.scene.resample(uni_area)
+
+        I4 = self.uniform_scene["I04"].values()
+        I5 = self.uniform_scene["I05"].values()
+        M9 = self.uniform_scene["M09"].values()
+        I1 = self.uniform_scene["I01"].values()
+        AZ = self.uniform_scene["i_satellite_azimuth_angle"].values()
+        if p_width == 0 and p_height == 0:
+            p_width, p_height = I4.shape[0] // n_rows, I4.shape[1] // n_cols
+
+        self.grid = list(np.zeros((n_cols, n_rows)))
+        for j in range(n_rows):
+            for k in range(n_cols):
+                cs = CycloneSnapshot(
+                    I4[j * p_width:min((j + 1) * p_width, I4.shape[0]),
+                    k * p_height:min(p_height * (k + 1), I4.shape[1])],
+                    I5[j * p_width:min((j + 1) * p_width, I5.shape[0]),
+                    k * p_height:min(p_height * (k + 1), I5.shape[1])],
+                    uni_area.pixel_size_x, uni_area.pixel_size_y,
+                    AZ[j * p_width:min((j + 1) * p_width, AZ.shape[0]),
+                    k * p_height:min(p_height * (k + 1), AZ.shape[1])].mean(),
+                    self.metadata, M09=
+                    M9[j * p_width:min((j + 1) * p_width, M9.shape[0]),
+                    k * p_height:min(p_height * (k + 1), M9.shape[1])],
+                    I01=I1[j * p_width:min((j + 1) * p_width, M9.shape[0]),
+                        k * p_height:min(p_height * (k + 1), M9.shape[1])].mean())
+
+                self.grid[j][k] = cs
+                self.rects.append(cs)
+
     def draw_eye(self):
         return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
                                    4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
+
+    def draw_rectangle_rosenfeld(self, center, p_width=96, p_height=96) -> CycloneSnapshot:
+        area = create_area_def(f"({center[0]},{center[1]})",
+                               {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
+                                "lon_0": center[1]}, width=p_width, height=p_height,
+                               resolution=self.scene["I05"].attrs["resolution"], center=center)
+        sub_scene = self.scene.resample(area)
+        cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
+                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
+                             M09=sub_scene["M09"].values, I01=sub_scene["I01"].values)
+        cs.meta_data["RECT_W"] = p_width * self.scene["I05"].attrs["resolution"] / (NM_TO_M * 60)
+        cs.meta_data["RECT_H"] = p_height * self.scene["I05"].attrs["resolution"] / (NM_TO_M * 60)
+        cs.meta_data["RECT_BLAT"] = center[0] - cs.meta_data["RECT_H"] / 2
+        cs.meta_data["RECT_BLON"] = center[1] - cs.meta_data["RECT_W"] / 2
+        self.rects.append(cs)
+        return cs
 
     def draw_rectangle(self, center, width, height) -> CycloneSnapshot:
         latitude_circle = (height / R_E) * (180 / np.pi)

@@ -35,13 +35,15 @@ class CycloneSnapshot:
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
         self.meta_data = dict(metadata)
+        from CycloneImage import wrap
+        self.satellite_azimuth = wrap(sat_pos)
         self.satellite_azimuth = sat_pos
         self.solar_zenith = solar
         self.sub_snaps = {}
 
     @property
-    def is_eyewall_shaded(self):
-        return self.satellite_azimuth.mean() > 180
+    def is_shaded(self):
+        return self.satellite_azimuth < 180
 
     @property
     def I04(self):
@@ -65,9 +67,8 @@ class CycloneSnapshot:
         """
         return np.isnan(self.I04).any() or np.isnan(self.I05).any()
 
-    @property
-    def I05_celcius(self):
-        return self.I05 - ABSOLUTE_ZERO
+    def celcius(self, a):
+        return a - ABSOLUTE_ZERO
 
     def add_sub_snap(self, left, right, top, bottom, discrete=True):
         if discrete:
@@ -103,8 +104,11 @@ class CycloneSnapshot:
                                -self.pixel_y * 0.5 * self.shape[0] / 1000,
                                self.pixel_y * 0.5 * self.shape[0] / 1000])
         ax.set_title("%s %s" % (self.meta_data["NAME"], self.meta_data["ISO_TIME"]))
+        ax.set_xlabel("km")
+        ax.set_ylabel("km")
         cb = plt.colorbar(im)
-        if band == "M09":
+
+        if band == "M09" or band == "I01":
             cb.set_label("Reflectance (%)")
         else:
             cb.set_label("Kelvin (K)")
@@ -151,7 +155,7 @@ class CycloneSnapshot:
             self.I04_mask = npma.array(self.I04, mask=self.M09 >= reflectance_cutoff)
             self.I05_mask = npma.array(self.I05, mask=self.M09 >= reflectance_cutoff)
 
-    def __flat(self, a):
+    def flat(self, a):
         if isinstance(a, npma.MaskedArray):
             return a.compressed()
         elif isinstance(a, np.ndarray):
@@ -213,7 +217,7 @@ class CycloneSnapshot:
     def mask_half(self, half="right"):
         blank_mask = np.zeros_like(self.__I05)
         if half == "top":
-            idx = np.arange(0, int(len(self.__I05)/2))
+            idx = np.arange(0, int(len(self.__I05) / 2))
             blank_mask[idx, :] = 1
         if half == "left":
             idx = np.arange(0, int(len(self.__I05) / 2))
@@ -269,12 +273,12 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.I05, mask=self.solar_zenith >= sol_threshold)
 
     def gt_fit(self):
-        gt_fitter = GTFit(self.__flat(self.I04), self.__flat(self.I05))
+        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
 
         fig, ax = plt.subplots(1, 2)
         self.img_plot(fig, ax[1])
-        self.scatter_plot(fig, ax[0], gt_fitter)
-        #plt.show()
+        gt_fitter.curve_fit_modes(20, fig=fig, ax=ax[0])
+        plt.show()
 
     def unmask_array(self):
         del self.I04_mask

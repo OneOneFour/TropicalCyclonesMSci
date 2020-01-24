@@ -1,5 +1,5 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import List
 
 import numpy as np
@@ -53,7 +53,7 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
                     snapshot.save("test.snap")
 
 
-def get_cyclone_eye_name_image(name, year, max_len=np.inf):
+def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
     df_cyclone = best_track_df.loc[(best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year)]
     dict_cy = df_cyclone.to_dict(orient="records")
     snap_list = []
@@ -70,12 +70,28 @@ def get_cyclone_eye_name_image(name, year, max_len=np.inf):
             #     return ci
             eye = get_eye(start_point, end_point)
             if eye:
-                eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
+                if pickle:
+                    eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
                 snap_list.append(get_eye(start_point, end_point))
     return snap_list
 
 
-def get_cyclone_by_name(name, year, max_len=np.inf) -> List[CycloneImage]:
+def get_cyclone_by_name_date(name, date: datetime):
+    df_cyclone = best_track_df.loc[
+        (best_track_df["NAME"] == name) & (best_track_df["USA_SSHS"])
+        & (best_track_df["ISO_TIME"].dt.year == date.year) & (best_track_df["ISO_TIME"].dt.month == date.month)
+        & (best_track_df["ISO_TIME"].dt.day == date.day)
+        ]
+    dict_cy = df_cyclone.to_dict(orient="records")
+    for i, cyclone_point in enumerate(dict_cy[:-1]):
+        start_point = cyclone_point
+        end_point = dict_cy[i + 1]
+        cy = get_entire_cyclone(start_point, end_point)
+        if cy:
+            return cy
+
+
+def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) -> List[CycloneImage]:
     df_cyclone = best_track_df.loc[
         (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
     dict_cy = df_cyclone.to_dict(orient="records")
@@ -91,36 +107,26 @@ def get_cyclone_by_name(name, year, max_len=np.inf) -> List[CycloneImage]:
                 eye = cy.draw_eye()
                 eye.save("proc/pickle_data/")
                 snap_list.append(cy)
+                if cy.is_eyewall_shaded or not shading:
+                    if pickle:
+                        eye = cy.draw_eye()
+                        eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
+                    snap_list.append(cy)
     return snap_list
 
 
 if __name__ == "__main__":
-    #cis = get_cyclone_by_name("IRMA", 2017)
-    #c = CycloneSnapshot.load("proc/pickle_data/IRMA09-07-2017_1806Extra")
-    #c.plot_solar()
-    #c.mask_solar(26.4)
-    #c.mask_visible(LOW=80, HIGH=200)
-    #c.gt_fit()
-    #plt.show()
+    # cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
 
+    c = CycloneSnapshot.load("proc/pickle_data/IRMA0")
 
-    for f in os.listdir("proc/eyes"):
-        c = CycloneSnapshot.load("proc/eyes/" + f)
+    c.mask_thin_cirrus()
+    c.mask_array_I05()
+    c.mask_half("left")
+    c.mask_half("bottom")
+    c.gt_fit()
 
-        import matplotlib.pyplot as plt
-        a = plt.imshow(np.abs(c.solar_zenith - c.satellite_azimuth))
-        plt.colorbar(a)
-
-        #c.plot_solar()
-        #c.plot("I01")
-        #c.mask_solar(c.solar_zenith.mean())
-        #c.mask_visible(LOW=50, HIGH=200)
-        c.mask_diff_sat_sun_zenith(62)
-
-        #c.mask_thin_cirrus()
-        #c.mask_array_I05(LOW=220, HIGH=270)
-        c.gt_fit()
-        plt.show()
+    plt.show()
 
     # r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
     # r_2 = cis[0].draw_rectangle(((16.13, -61.9)), 100000, 250000)

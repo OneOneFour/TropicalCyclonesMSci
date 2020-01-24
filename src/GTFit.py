@@ -14,51 +14,42 @@ class GTFit:
         self.i04 = i04_flat
         self.i05 = i05_flat
         self.gt = []
+        self.x_i05 = None
+        self.y_i04 = None
 
-    def curve_fit_funcs(self, fitting_function=cubic):
-        (a, b, c, d), cov = sp.curve_fit(fitting_function, self.i05, self.i04, absolute_sigma=True)
+    # def curve_fit_funcs(self, fitting_function=cubic):
+    #     (a, b, c, d), cov = sp.curve_fit(fitting_function, self.i05, self.i04, absolute_sigma=True)
+    #
+    #     a_err, b_err, c_err, d_err = np.sqrt(np.diag(cov))
+    #
+    #     gt_ve = (-b + np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
+    #     # gt = -params[1] / (2 * params[0])
+    #     # gt_err = np.sqrt((perr[1] / (2 * params[0])) ** 2 + (perr[0] * params[1] / (2 * params[0] ** 2)) ** 2)
+    #     if np.iscomplex(gt_ve) or (min(self.i05) > gt_ve > max(self.i05)):
+    #         return
+    #
+    #     curve_fit_err = np.sqrt(((b_err * c) / (2 * b * b)) ** 2 + (c_err / 2 * b) ** 2)
+    #     gt_err = curve_fit_err
+    #     self.gt = [gt_ve, gt_err]
+    #     return gt_ve, gt_err, (a, b, c, d)
 
-        a_err, b_err, c_err, d_err = np.sqrt(np.diag(cov))
-
-        gt_ve = (-b + np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
-        # gt = -params[1] / (2 * params[0])
-        # gt_err = np.sqrt((perr[1] / (2 * params[0])) ** 2 + (perr[0] * params[1] / (2 * params[0] ** 2)) ** 2)
-        if np.iscomplex(gt_ve) or (min(self.i05) > gt_ve > max(self.i05)):
+    def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
+        self.y_i04 = [0] * len(self.x_i05)
+        if len(self.x_i05) < 1:
             return
-
-        curve_fit_err = np.sqrt(((b_err * c) / (2 * b * b)) ** 2 + (c_err / 2 * b) ** 2)
-        gt_err = curve_fit_err
-        self.gt = [gt_ve, gt_err]
-        return gt_ve, gt_err, (a, b, c, d)
-
-    def curve_fit_percentile_bin(self, low=0, high=1):
-        """
-
-        :param low: nth percentile to start from
-        :param high: nth percentile to go to
-        :return: Glaciation temperature associated error and fitting parameters
-        """
-        x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        y_i04 = [0] * len(x_i05)
-        if len(x_i05) < 1:
-            return
-        num_vals_bin = []
-        point_errs = np.array([0] * len(x_i05))
-        for i, x in enumerate(x_i05):
+        for i, x in enumerate(self.x_i05):
             vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
-            y_i04[i] = vals[int(low * len(vals)):int(high * len(vals))].mean()
-            point_errs[i] = vals[int(low * len(vals)):int(high * len(vals))].std()
+            self.y_i04[i] = np.percentile(vals, percentile)
+        zero_args = np.where(self.y_i04 == 0)
+        self.x_i05 = np.delete(self.x_i05, zero_args)
+        self.y_i04 = np.delete(self.y_i04, zero_args)
 
-        zero_args = np.where(y_i04 == 0)
-        x_i05 = np.delete(x_i05, zero_args)
-        y_i04 = np.delete(y_i04, zero_args)
-        point_errs = np.delete(point_errs, zero_args)
-
-        params, cov = sp.curve_fit(cubic, x_i05, y_i04, absolute_sigma=True)
+        params, cov = sp.curve_fit(cubic, self.x_i05, self.y_i04, absolute_sigma=True)
         perr = np.sqrt(np.diag(cov))
 
         gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
-        if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
+        if np.iscomplex(gt_ve) or min(self.x_i05) > gt_ve > max(self.x_i05):
             return
         # satellite_data_error = ??
         curve_fit_err = np.sqrt(
@@ -67,11 +58,71 @@ class GTFit:
             (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
         )
         gt_err = curve_fit_err
-        self.gt = [gt_ve, gt_err]
-
+        self.gt = gt_ve
+        self.plot(fig, ax, func=cubic, params=params)
         return gt_ve, gt_err, params
 
-    def curve_fit_modes(self, mode="median"):
+    def plot(self, fig, ax, func=None, params=None):
+        if fig is None or ax is None:
+            return
+        if self.x_i05 is None:
+            x = np.linspace(min(self.i05), max(self.i05))
+            ax.scatter(self.i04, self.i05, s=0.1)
+
+        else:
+            x = np.linspace(min(self.x_i05), max(self.x_i05))
+            ax.scatter(self.y_i04, self.x_i05, s=0.1)
+
+        if func:
+            ax.plot([func(x_i, *params) for x_i in x], x, label="Curve fit")
+        ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
+        ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
+        ax.invert_yaxis()
+        ax.invert_xaxis()
+        ax.set_ylabel("Cloud Top Temperature (C)")
+        ax.set_xlabel("I4 band reflectance (K)")
+
+    def curve_fit_fraction_mean(self, low=0, high=1, fig=None, ax=None):
+        """
+
+        :param low: nth percentile to start from
+        :param high: nth percentile to go to
+        :return: Glaciation temperature associated error and fitting parameters
+        """
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
+        self.y_i04 = [0] * len(self.x_i05)
+        if len(self.x_i05) < 1:
+            return
+        num_vals_bin = []
+        point_errs = np.array([0] * len(self.x_i05))
+        for i, x in enumerate(self.x_i05):
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))].flatten()
+            self.y_i04[i] = vals[int(low * len(vals)):int(high * len(vals))].mean()
+            point_errs[i] = vals[int(low * len(vals)):int(high * len(vals))].std()
+
+        zero_args = np.where(self.y_i04 == 0)
+        self.x_i05 = np.delete(self.x_i05, zero_args)
+        self.y_i04 = np.delete(self.y_i04, zero_args)
+        point_errs = np.delete(point_errs, zero_args)
+
+        params, cov = sp.curve_fit(cubic, self.x_i05, self.y_i04, absolute_sigma=True)
+        perr = np.sqrt(np.diag(cov))
+
+        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
+        if np.iscomplex(gt_ve) or min(self.x_i05) > gt_ve > max(self.x_i05):
+            return
+        # satellite_data_error = ??
+        curve_fit_err = np.sqrt(
+            (d_gt_d_a(*params[:-1]) * perr[0]) ** 2 +
+            (d_gt_d_b(*params[:-1]) * perr[1]) ** 2 +
+            (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
+        )
+        gt_err = curve_fit_err
+        self.gt = gt_ve
+        self.plot(fig, ax, func=cubic, params=params)
+        return gt_ve, gt_err, params
+
+    def curve_fit_modes(self, mode="median",fig=None,ax=None):
         x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         if len(x_i05) < 1:
             return
@@ -113,7 +164,7 @@ class GTFit:
                         vals_5_min.append(vals[idx])
 
                 y_i04[i] = np.median(vals_5_min)
-                point_errs[i] = 0.5 ** 2                    # TODO: Fix errors
+                point_errs[i] = 0.5 ** 2  # TODO: Fix errors
 
             num_vals_bins.append(len(vals))  # list of number of I04 values that were in each I05 increment (for errors)
 
@@ -137,6 +188,25 @@ class GTFit:
             (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
         )
         gt_err = curve_fit_err
-        self.gt = [gt_ve, gt_err]
-
+        self.gt = gt_ve
+        self.plot(fig,ax,func=cubic,params=params)
         return gt_ve, gt_err, params
+
+    def gt_via_minimum(self, fig=None, ax=None):
+        min_arg = np.argmin(self.i04)
+        self.gt = self.i05[min_arg]
+        self.plot(fig, ax)
+        return self.gt
+
+    def gt_via_minimum_percentile(self, percentile, fig=None, ax=None):
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
+        self.y_i04 = [0] * len(self.x_i05)
+        if len(self.x_i05) < 1:
+            return
+        for i, x in enumerate(self.x_i05):
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
+            self.y_i04[i] = np.percentile(vals, percentile)
+        min_arg = np.argmin(self.y_i04)
+        self.gt = self.x_i05[min_arg]
+        self.plot(fig, ax)
+        return self.gt
