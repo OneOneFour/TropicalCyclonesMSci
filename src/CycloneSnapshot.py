@@ -21,10 +21,14 @@ class CycloneSnapshot:
             cs = pickle.load(file)
         return cs
 
-    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: float, metadata: dict,
-                 M09: np.ndarray = None):
+    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: np.ndarray, metadata: dict,
+                 M09: np.ndarray = None, I01: np.ndarray = None, I02: np.ndarray = None, I03: np.ndarray = None,
+                 solar: np.ndarray = None):
         self.__I04 = I04
         self.__I05 = I05
+        self.I01 = I01
+        self.I02 = I02
+        self.I03 = I03
         self.M09 = M09
         assert self.I04.shape == self.I05.shape
         self.shape = self.I04.shape
@@ -32,11 +36,12 @@ class CycloneSnapshot:
         self.pixel_y = pixel_y
         self.meta_data = dict(metadata)
         self.satellite_azimuth = sat_pos
+        self.solar_zenith = solar
         self.sub_snaps = {}
 
     @property
     def is_eyewall_shaded(self):
-        return self.satellite_azimuth > 180
+        return self.satellite_azimuth.mean() > 180
 
     @property
     def I04(self):
@@ -84,6 +89,12 @@ class CycloneSnapshot:
             da = self.I05
         elif band == "M09":
             da = self.M09
+        elif band == "I01":
+            da = self.I01
+        elif band == "I02":
+            da = self.I02
+        elif band == "I03":
+            da = self.I03
         else:
             raise ValueError(f"Band: {band} is not available")
         im = ax.imshow(da, origin="upper",
@@ -102,13 +113,25 @@ class CycloneSnapshot:
         x = np.linspace(min(gt_fitter.i05), max(gt_fitter.i05))
         ax.scatter(gt_fitter.i04, gt_fitter.i05, s=0.1)
         if fit:
-            gt, gt_err, params = gt_fitter.curve_fit_funcs()
-            ax.plot([cubic(x_i, *params) for x_i in x], x, 'g-', label="Curve fit")
-            ax.axhline(gt, xmin=min(x), xmax=max(x))
+            gt, gt_err, params = gt_fitter.curve_fit_modes("min")
+            ax.plot([cubic(x_i, *params) for x_i in x], x, 'g-')
+            ax.axhline(gt, label=gt)
+            ax.legend()
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
+
+    def plot_visible(self):
+        da = self.I01 + self.I02 + self.I03
+        fig, ax = plt.subplots()
+        im = ax.imshow(da, origin="upper",
+                       extent=[-self.pixel_x * 0.5 * self.shape[1] / 1000,
+                               self.pixel_x * 0.5 * self.shape[1] / 1000,
+                               -self.pixel_y * 0.5 * self.shape[0] / 1000,
+                               self.pixel_y * 0.5 * self.shape[0] / 1000])
+        ax.set_title("%s %s" % (self.meta_data["NAME"], self.meta_data["ISO_TIME"]))
+        cb = plt.colorbar(im)
 
     def mask_thin_cirrus(self, reflectance_cutoff=50):
         """
@@ -211,6 +234,40 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.__I05, mask=blank_mask)
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
+    def mask_sat_azimuth(self, threshold=74):
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=self.satellite_azimuth >= threshold).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=self.satellite_azimuth >= threshold).mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=self.satellite_azimuth >= threshold)
+            self.I05_mask = npma.array(self.I05, mask=self.satellite_azimuth >= threshold)
+
+    def mask_visible(self, LOW=0, HIGH=100):
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.masked_outside(self.I01, LOW, HIGH).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.masked_outside(self.I01, LOW, HIGH).mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=npma.masked_outside(self.I01, LOW, HIGH).mask)
+            self.I05_mask = npma.array(self.I05, mask=npma.masked_outside(self.I01, LOW, HIGH).mask)
+
+    def mask_solar(self, sol_threshold=20):
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=self.solar_zenith >= sol_threshold).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=self.solar_zenith >= sol_threshold).mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=self.solar_zenith >= sol_threshold)
+            self.I05_mask = npma.array(self.I05, mask=self.solar_zenith >= sol_threshold)
+
     def gt_fit(self):
         gt_fitter = GTFit(self.__flat(self.I04), self.__flat(self.I05))
 
@@ -224,8 +281,29 @@ class CycloneSnapshot:
         del self.I05_mask
 
     def save(self, fpath):
-        with open(fpath, "wb") as file:
+        date = self.meta_data["ISO_TIME"].strftime("%m-%d-%Y_%H%M")
+        total_fpath = fpath + self.meta_data["NAME"] + date + "Extra"
+        with open(total_fpath, "wb") as file:
             pickle.dump(self, file)
 
+    def plot_solar(self):
+        solar_im = plt.imshow(self.solar_zenith)
+        plt.colorbar(solar_im)
 
+    def plot_sat(self):
+        sat_im = plt.imshow(self.satellite_azimuth)
+        plt.colorbar(sat_im)
+
+    def mask_diff_sat_sun_zenith(self, threshold=61):
+        data = np.abs(self.solar_zenith-self.satellite_azimuth)
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=data >= threshold).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=data >= threshold).mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=data >= threshold)
+            self.I05_mask = npma.array(self.I05, mask=data >= threshold)
 

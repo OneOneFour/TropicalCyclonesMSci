@@ -86,31 +86,41 @@ def get_cyclone_by_name(name, year, max_len=np.inf) -> List[CycloneImage]:
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
         with ProgressBar():
-            # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
-            #                    cat=start_point["USA_SSHS"], dayOrNight="D")
-            # if ci is not None:
-            #     ci.draw_eye()
-            #     return ci
             cy = get_entire_cyclone(start_point, end_point)
             if cy:
                 eye = cy.draw_eye()
-                eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
+                eye.save("proc/pickle_data/")
                 snap_list.append(cy)
     return snap_list
 
 
 if __name__ == "__main__":
-    # cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
+    #cis = get_cyclone_by_name("IRMA", 2017)
+    #c = CycloneSnapshot.load("proc/pickle_data/IRMA09-07-2017_1806Extra")
+    #c.plot_solar()
+    #c.mask_solar(26.4)
+    #c.mask_visible(LOW=80, HIGH=200)
+    #c.gt_fit()
+    #plt.show()
 
-    c = CycloneSnapshot.load("proc/pickle_data/IRMA0")
 
-    c.mask_thin_cirrus()
-    c.mask_array_I05()
-    c.mask_half("left")
-    c.mask_half("bottom")
-    c.gt_fit()
+    for f in os.listdir("proc/eyes"):
+        c = CycloneSnapshot.load("proc/eyes/" + f)
 
-    plt.show()
+        import matplotlib.pyplot as plt
+        a = plt.imshow(np.abs(c.solar_zenith - c.satellite_azimuth))
+        plt.colorbar(a)
+
+        #c.plot_solar()
+        #c.plot("I01")
+        #c.mask_solar(c.solar_zenith.mean())
+        #c.mask_visible(LOW=50, HIGH=200)
+        c.mask_diff_sat_sun_zenith(62)
+
+        #c.mask_thin_cirrus()
+        #c.mask_array_I05(LOW=220, HIGH=270)
+        c.gt_fit()
+        plt.show()
 
     # r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
     # r_2 = cis[0].draw_rectangle(((16.13, -61.9)), 100000, 250000)

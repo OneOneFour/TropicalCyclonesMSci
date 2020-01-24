@@ -8,7 +8,7 @@ from shapely import geometry
 from CycloneSnapshot import CycloneSnapshot
 from fetch_file import get_data
 
-DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud/Data")
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud")
 DEFAULT_MARGIN = 0.
 RESOLUTION_DEF = (3.71 / 6371) * 2 * np.pi
 NM_TO_M = 1852
@@ -101,7 +101,7 @@ def get_eye(start_point, end_point):
     new_scene = raw_scene.resample(recentered_area)
 
     return CycloneSnapshot(new_scene["I04"].values, new_scene["I05"].values, recentered_area.pixel_size_x,
-                           recentered_area.pixel_size_y, new_scene["i_satellite_azimuth_angle"].values.mean(),
+                           recentered_area.pixel_size_y, new_scene["i_satellite_azimuth_angle"].values,
                            metadata)
 
 
@@ -139,7 +139,8 @@ class CycloneImage:
     def __init__(self, scene: Scene, metadata: dict):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(["I05", "I04", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+        self.scene.load(["I05", "I04", "M09", "I01", "I02", "I03",
+                         "i_lat", "i_lon", "i_satellite_azimuth_angle", "i_solar_zenith_angle"])
         self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
@@ -190,8 +191,9 @@ class CycloneImage:
                                ])
         sub_scene = self.scene.resample(area)
         cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
-                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
-                             M09=sub_scene["M09"].values)
+                             sub_scene["i_satellite_azimuth_angle"].values, self.metadata,
+                             M09=sub_scene["M09"].values, I01=sub_scene["I01"].values, I02=sub_scene["I02"].values,
+                             I03=sub_scene["I03"].values, solar=sub_scene["i_solar_zenith_angle"].values)
         cs.meta_data["RECT_BLAT"] = center[0] - latitude_circle / 2
         cs.meta_data["RECT_BLON"] = center[1] - longitude_circle / 2
         cs.meta_data["RECT_W"] = longitude_circle
