@@ -1,13 +1,16 @@
 import pickle
+from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.ma as npma
+from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
 
-from GTFit import GTFit, cubic
+from GTFit import GTFit
 
 ABSOLUTE_ZERO = 273.15
+NM_TO_M = 1852
 
 
 class CycloneSnapshot:
@@ -21,29 +24,42 @@ class CycloneSnapshot:
             cs = pickle.load(file)
         return cs
 
-    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: np.ndarray, metadata: dict,
-                 M09: np.ndarray = None, I01: np.ndarray = None, I02: np.ndarray = None, I03: np.ndarray = None,
+    def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: np.ndarray,
+                 metadata: dict,
+                 b_lon, b_lat,
+                 M09: np.ndarray = None, I01: np.ndarray = None,
                  solar: np.ndarray = None):
         self.__I04 = I04
         self.__I05 = I05
-        self.I01 = I01
-        self.I02 = I02
-        self.I03 = I03
+        if np.isnan(I04).any():
+            self.I04_mask = npma.masked_invalid(I04)
+        if np.isnan(I05).any():
+            self.I05_mask = npma.masked_invalid(I05)
         self.M09 = M09
+        self.I01 = I01
         assert self.I04.shape == self.I05.shape
         self.shape = self.I04.shape
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
+        self.b_lon = b_lon
+        self.b_lat = b_lat
+        self.width = self.pixel_x * self.shape[1] / (NM_TO_M * 60)
+        self.height = self.pixel_y * self.shape[0] / (NM_TO_M * 60)
+
         self.meta_data = dict(metadata)
-        from CycloneImage import wrap
-        self.satellite_azimuth = wrap(sat_pos)
-        self.satellite_azimuth = sat_pos
         self.solar_zenith = solar
-        self.sub_snaps = {}
+        self.satellite_azimuth = sat_pos
+
+        self.grid = []
 
     @property
     def is_shaded(self):
-        return self.satellite_azimuth < 180
+        return self.image_mean_azimuth < 180
+
+    @property
+    def image_mean_azimuth(self):
+        from CycloneImage import wrap
+        return wrap(self.satellite_azimuth.mean())
 
     @property
     def I04(self):
@@ -70,14 +86,30 @@ class CycloneSnapshot:
     def celcius(self, a):
         return a - ABSOLUTE_ZERO
 
-    def add_sub_snap(self, left, right, top, bottom, discrete=True):
-        if discrete:
-            I04_tmp = self.I04[left:right, bottom:top]
-            I05_tmp = self.I05[left:right, bottom:top]
-            self.sub_snaps[(left, right, top, bottom)] = CycloneSnapshot(I04_tmp, I05_tmp, self.pixel_x, self.pixel_y,
-                                                                         self.satellite_azimuth, self.meta_data)
+    def show_sub_snaps(self):
+        fig, ax = plt.subplots()
+        self.img_plot(fig, ax, "I05")
+        for pos, cs in self.grid:
+            ax.add_patch(
+                Rectangle(xy=(pos[0], pos[2]), width=pos[1], height=pos[3], facecolor="none", lw=1)
+            )
+        plt.show()
 
-        return self.sub_snaps[(left, right, top, bottom)]
+    def add_sub_snap_edge(self, left, right, bottom, top, b_lon, b_lat):
+        I04_tmp = self.I04[bottom:top, left:right]
+        I05_tmp = self.I05[bottom:top, left:right]
+        cs = CycloneSnapshot(I04_tmp, I05_tmp, self.pixel_x, self.pixel_y,
+                             self.satellite_azimuth[bottom:top, left:right], self.meta_data,
+                             b_lon,
+                             b_lat,
+                             M09=self.M09[bottom:top, left:right], I01=self.I01[bottom:top, left:right])
+        self.grid.append([(left, right, bottom, top), cs])
+
+        return cs
+
+    def add_sub_snap_origin(self, x_i, y_i, width, height, lon, lat):
+        return self.add_sub_snap_edge(int(x_i - width / 2), int(x_i + width / 2), int(y_i - height / 2),
+                                      int(y_i + height / 2), lon, lat)
 
     def __discrete_img(self, fig, ax, band="I04"):
         da = self.I04 if band == "I04" else self.I05
@@ -92,10 +124,6 @@ class CycloneSnapshot:
             da = self.M09
         elif band == "I01":
             da = self.I01
-        elif band == "I02":
-            da = self.I02
-        elif band == "I03":
-            da = self.I03
         else:
             raise ValueError(f"Band: {band} is not available")
         im = ax.imshow(da, origin="upper",
@@ -113,29 +141,29 @@ class CycloneSnapshot:
         else:
             cb.set_label("Kelvin (K)")
 
-    def scatter_plot(self, fig, ax, gt_fitter, fit=True):
-        x = np.linspace(min(gt_fitter.i05), max(gt_fitter.i05))
-        ax.scatter(gt_fitter.i04, gt_fitter.i05, s=0.1)
-        if fit:
-            gt, gt_err, params = gt_fitter.curve_fit_modes("min")
-            ax.plot([cubic(x_i, *params) for x_i in x], x, 'g-')
-            ax.axhline(gt, label=gt)
-            ax.legend()
-        ax.invert_yaxis()
+    def scatter(self, fig, ax):
+        ax.scatter(self.flat(self.I04), self.celcius(self.flat(self.I05)), s=0.1)
         ax.invert_xaxis()
+        ax.invert_yaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
 
-    def plot_visible(self):
-        da = self.I01 + self.I02 + self.I03
-        fig, ax = plt.subplots()
-        im = ax.imshow(da, origin="upper",
-                       extent=[-self.pixel_x * 0.5 * self.shape[1] / 1000,
-                               self.pixel_x * 0.5 * self.shape[1] / 1000,
-                               -self.pixel_y * 0.5 * self.shape[0] / 1000,
-                               self.pixel_y * 0.5 * self.shape[0] / 1000])
-        ax.set_title("%s %s" % (self.meta_data["NAME"], self.meta_data["ISO_TIME"]))
-        cb = plt.colorbar(im)
+    def mask_using_I01(self, reflectance_cutoff=80):
+        """
+        Use I01 band (if present) to mask dimmer pixels below a certain reflectance
+        """
+        if self.I01 is None:
+            raise ValueError("No I1 data present")
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=self.I01 <= reflectance_cutoff).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=self.I01 <= reflectance_cutoff).mask)
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=self.I01 <= reflectance_cutoff)
+            self.I05_mask = npma.array(self.I05, mask=self.I01 <= reflectance_cutoff)
 
     def mask_thin_cirrus(self, reflectance_cutoff=50):
         """
@@ -147,8 +175,10 @@ class CycloneSnapshot:
         if self.M09 is None:
             raise ValueError("No M9 data present")
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.array(self.I04, mask=self.M09 >= reflectance_cutoff).mask)
-            new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.array(self.I05, mask=self.M09 >= reflectance_cutoff).mask)
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=self.M09 >= reflectance_cutoff).mask)
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=self.M09 >= reflectance_cutoff).mask)
             self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
             self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
         else:
@@ -164,8 +194,8 @@ class CycloneSnapshot:
 
     def point_display(self):
         fig, ax = plt.subplots(1, 2)
-        gt_fitter = GTFit(self.__flat(self.I04), self.__flat(self.I05))
-        self.scatter_plot(fig, ax[0], gt_fitter, fit=False)
+        gt_fitter = GTFit(self.flat(self.I04), self.flat(self.I05))
+        self.scatter(fig, ax)
         self.__discrete_img(fig, ax[1])
 
         def __select_callback(eclick, erelease):
@@ -189,12 +219,12 @@ class CycloneSnapshot:
         plt.connect("draw_event", draw_cb)
         plt.show()
 
-    def plot(self, band="I04"):
+    def plot(self, band="I05"):
         fig, ax = plt.subplots()
         self.img_plot(fig, ax, band)
         plt.show()
 
-    def mask_array_I04(self, HIGH=273, LOW=220):
+    def mask_array_I04(self, HIGH=273, LOW=230):
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
             new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.masked_outside(self.__I04, LOW, HIGH).mask)
             new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.masked_outside(self.__I04, LOW, HIGH).mask)
@@ -204,7 +234,7 @@ class CycloneSnapshot:
             self.I04_mask = npma.masked_outside(self.__I04, LOW, HIGH)
             self.I05_mask = npma.array(self.__I05, mask=self.I04_mask.mask)
 
-    def mask_array_I05(self, HIGH=273, LOW=220):
+    def mask_array_I05(self, HIGH=273, LOW=230):
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
             new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.masked_outside(self.__I05, LOW, HIGH).mask)
             new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.masked_outside(self.__I05, LOW, HIGH).mask)
@@ -238,51 +268,27 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.__I05, mask=blank_mask)
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
-    def mask_sat_azimuth(self, threshold=74):
-        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            new_I04_mask = npma.mask_or(self.I04_mask.mask,
-                                        npma.array(self.I04, mask=self.satellite_azimuth >= threshold).mask)
-            new_I05_mask = npma.mask_or(self.I05_mask.mask,
-                                        npma.array(self.I05, mask=self.satellite_azimuth >= threshold).mask)
-            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
-            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
-        else:
-            self.I04_mask = npma.array(self.I04, mask=self.satellite_azimuth >= threshold)
-            self.I05_mask = npma.array(self.I05, mask=self.satellite_azimuth >= threshold)
-
-    def mask_visible(self, LOW=0, HIGH=100):
-        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.masked_outside(self.I01, LOW, HIGH).mask)
-            new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.masked_outside(self.I01, LOW, HIGH).mask)
-            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
-            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
-        else:
-            self.I04_mask = npma.array(self.I04, mask=npma.masked_outside(self.I01, LOW, HIGH).mask)
-            self.I05_mask = npma.array(self.I05, mask=npma.masked_outside(self.I01, LOW, HIGH).mask)
-
-    def mask_solar(self, sol_threshold=20):
-        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            new_I04_mask = npma.mask_or(self.I04_mask.mask,
-                                        npma.array(self.I04, mask=self.solar_zenith >= sol_threshold).mask)
-            new_I05_mask = npma.mask_or(self.I05_mask.mask,
-                                        npma.array(self.I05, mask=self.solar_zenith >= sol_threshold).mask)
-            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
-            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
-        else:
-            self.I04_mask = npma.array(self.I04, mask=self.solar_zenith >= sol_threshold)
-            self.I05_mask = npma.array(self.I05, mask=self.solar_zenith >= sol_threshold)
-
-    def gt_fit(self):
+    def gt_piece_percentile(self, percentile=5, plot=True):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
+        if plot:
+            fig, ax = plt.subplots(1, 2)
+            self.img_plot(fig, ax[1])
+            gt, r2 = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
+            plt.show()
+        else:
+            gt, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
 
-        fig, ax = plt.subplots(1, 2)
-        self.img_plot(fig, ax[1])
-        gt_fitter.curve_fit_modes(20, fig=fig, ax=ax[0])
-        plt.show()
+        if 0 < gt or gt < -45:  # Sanity check
+            return np.nan, np.nan
+        return gt, r2
 
     def unmask_array(self):
         del self.I04_mask
         del self.I05_mask
+        if np.isnan(self.__I04).any():
+            self.I04_mask = npma.masked_invalid(self.__I04)
+        if np.isnan(self.__I05).any():
+            self.I05_mask = npma.masked_invalid(self.__I05)
 
     def save(self, fpath):
         date = self.meta_data["ISO_TIME"].strftime("%m-%d-%Y_%H%M")
@@ -299,7 +305,7 @@ class CycloneSnapshot:
         plt.colorbar(sat_im)
 
     def mask_diff_sat_sun_zenith(self, threshold=61):
-        data = np.abs(self.solar_zenith-self.satellite_azimuth)
+        data = np.abs(self.solar_zenith - self.satellite_azimuth)
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
             new_I04_mask = npma.mask_or(self.I04_mask.mask,
                                         npma.array(self.I04, mask=data >= threshold).mask)
@@ -311,3 +317,31 @@ class CycloneSnapshot:
             self.I04_mask = npma.array(self.I04, mask=data >= threshold)
             self.I05_mask = npma.array(self.I05, mask=data >= threshold)
 
+
+class SnapshotGrid:
+    def __init__(self, gd: List[List[CycloneSnapshot]]):
+        self.grid = gd
+        self.height = len(gd)
+        self.width = len(gd[0])
+
+    def plot_all(self, band):
+        fig, axs = plt.subplots(self.width, self.height)
+        i = 0
+        for row in self.grid:
+            for snap in row:
+                i += 1
+                snap.img_plot(fig, axs[i], band)
+        plt.show()
+
+    def mask_all_I05(self, LOW=220, HIGH=290):
+        for row in self.grid:
+            for snap in row:
+                snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
+
+    def piecewise_glaciation_temperature(self):
+        self.gt_grid = [[snap.gt_piece_percentile(plot=False)[0] for snap in row] for row in self.grid]
+        fig, ax = plt.subplots()
+        im = ax.imshow(self.gt_grid, origin="upper")
+        cb = plt.colorbar(im)
+        cb.set_label("Glaciation Temperature (C)")
+        plt.show()

@@ -5,10 +5,8 @@ from typing import List
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
-import matplotlib.pyplot as plt
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
-from CycloneSnapshot import CycloneSnapshot
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.last3years.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
@@ -76,11 +74,10 @@ def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
     return snap_list
 
 
-def get_cyclone_by_name_date(name, date: datetime):
+def get_cyclone_by_name_date(name, start, end):
     df_cyclone = best_track_df.loc[
-        (best_track_df["NAME"] == name) & (best_track_df["USA_SSHS"])
-        & (best_track_df["ISO_TIME"].dt.year == date.year) & (best_track_df["ISO_TIME"].dt.month == date.month)
-        & (best_track_df["ISO_TIME"].dt.day == date.day)
+        (best_track_df["NAME"] == name) & (best_track_df["USA_SSHS"] > 3)
+        & (best_track_df["ISO_TIME"] <= end) & (best_track_df["ISO_TIME"] >= start)
         ]
     dict_cy = df_cyclone.to_dict(orient="records")
     for i, cyclone_point in enumerate(dict_cy[:-1]):
@@ -102,11 +99,13 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) 
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
         with ProgressBar():
+            # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
+            #                    cat=start_point["USA_SSHS"], dayOrNight="D")
+            # if ci is not None:
+            #     ci.draw_eye()
+            #     return ci
             cy = get_entire_cyclone(start_point, end_point)
             if cy:
-                eye = cy.draw_eye()
-                eye.save("proc/pickle_data/")
-                snap_list.append(cy)
                 if cy.is_eyewall_shaded or not shading:
                     if pickle:
                         eye = cy.draw_eye()
@@ -116,17 +115,22 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) 
 
 
 if __name__ == "__main__":
-    # cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
-
-    c = CycloneSnapshot.load("proc/pickle_data/IRMA0")
-
-    c.mask_thin_cirrus()
-    c.mask_array_I05()
-    c.mask_half("left")
-    c.mask_half("bottom")
-    c.gt_fit()
-
-    plt.show()
-
+    ## NA
+    irma = get_cyclone_by_name("IRMA", 2017, max_len=1)
+    irma = irma[0]
+    gd = irma.grid_data(irma.lat, irma.lon,96*4,96*4, 15,8)
+    irma.plot_globe()
+    [[g.gt_piece_percentile(plot=False) for g in l] for l in gd]
+    # walaka = get_cyclone_by_name_date("WALAKA", datetime(year=2018, month=10, day=2, hour=0, minute=0),
+    #                                    datetime(year=2018, month=10, day=2, hour=6, minute=0))
+    # walaka.grid_data(7,7,2*96,2*96)
+    # michael = get_cyclone_by_name("MICHAEL", 2018,max_len=1)
+    # dorian = get_cyclone_by_name("DORIAN", 2019,max_len=1)
+    # # EP
+    # patricia = get_cyclone_by_name("PATRICIA", 2015,max_len=1)
+    # # WP
+    # yutu = get_cyclone_by_name("YUTU", 2018,max_len=1)
+    # vongfong = get_cyclone_by_name("VONGFONG", 2014,max_len=1)
+    # haiyan = get_cyclone_by_name("HAIYAN", 2013,max_len=1)
     # r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
     # r_2 = cis[0].draw_rectangle(((16.13, -61.9)), 100000, 250000)
