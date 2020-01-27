@@ -12,6 +12,14 @@ from GTFit import GTFit
 ABSOLUTE_ZERO = 273.15
 NM_TO_M = 1852
 
+def wrap_360(x):
+    if x < 0:
+        return x + 360
+    elif x > 360:
+        return x - 360
+    else:
+        return x
+
 
 class CycloneSnapshot:
     """
@@ -150,16 +158,15 @@ class CycloneSnapshot:
 
     @property
     def quadrant(self):
-        from CycloneImage import wrap
-        eye_azimuth = wrap(np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.meta_data["USA_LON"],
+        eye_azimuth = wrap_360(np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.meta_data["USA_LON"],
                                             self.b_lat + self.height / 2 - self.meta_data["USA_LAT"])))
-        if 0 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 90:
+        if 0 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 90:
             return "RF"
-        elif 90 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 180:
+        elif 90 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 180:
             return "RB"
-        elif 180 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 270:
+        elif 180 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 270:
             return "LB"
-        elif 270 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 360:
+        elif 270 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 360:
             return "LF"
         else:
             raise ValueError(
@@ -385,7 +392,7 @@ class SnapshotGrid:
             self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_gt()
 
-    def gt_quadrant_distribution(self, ey_gt=None):
+    def gt_quadrant_distribution(self, ey_gt=0):
         """
         Plot distribution of the glaciation temperature in the four quadrants of the cyclone.
         If eye_gt is passed then will compare this against the glaciation temperature of the eye for visualisation
@@ -395,7 +402,7 @@ class SnapshotGrid:
         distr = {"LF": [], "RF": [], "RB": [], "LB": []}
         for i, row in enumerate(self.grid):
             for j, snap in enumerate(row):
-                if self.gt_grid[i][j] == np.nan:
+                if np.isnan(self.gt_grid[i][j]):
                     continue
                 distr[snap.quadrant].append(self.gt_grid[i][j])
         vals = {k: np.array(v).mean() for k, v in distr.items()}
@@ -404,5 +411,5 @@ class SnapshotGrid:
         fig, ax = plt.subplots()
 
         ax.bar(range(len(vals)), list(vals.values()), align="center")
-        ax.xticks(range(len(vals)), list(vals.keys()))
+        ax.set_xticks(range(len(vals)), list(vals.keys()))
         plt.show()

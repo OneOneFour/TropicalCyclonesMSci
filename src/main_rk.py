@@ -8,8 +8,8 @@ if __name__ == "__main__":
     irma.plot_globe()
     gd.piecewise_glaciation_temperature()
     gd.piecewise_r2()
-    irma.eye.gt_piece_percentile()
-    gd.gt_quadrant_distribution()
+    gt,r2 =irma.eye.gt_piece_percentile()
+    gd.gt_quadrant_distribution(gt)
     # walaka = get_cyclone_by_name_date("WALAKA", datetime(year=2018, month=10, day=2, hour=0, minute=0),
     #                                    datetime(year=2018, month=10, day=2, hour=6, minute=0))
     # walaka.grid_data(7,7,2*96,2*96)
