@@ -148,6 +148,23 @@ class CycloneSnapshot:
         ax.set_ylabel("Cloud Top Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
 
+    @property
+    def quadrant(self):
+        from CycloneImage import wrap
+        eye_azimuth = np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.meta_data["USA_LON"],
+                                            self.b_lat + self.height / 2 - self.meta_data["USA_LAT"]))
+        if 0 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 90:
+            return "RF"
+        elif 90 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 180:
+            return "RB"
+        elif 180 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 270:
+            return "LB"
+        elif 270 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 360:
+            return "LF"
+        else:
+            raise ValueError(
+                f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, recieved {wrap(eye_azimuth - self.meta_data['STORM_DIR'])}")
+
     def mask_using_I01(self, reflectance_cutoff=80):
         """
         Use I01 band (if present) to mask dimmer pixels below a certain reflectance
@@ -326,11 +343,9 @@ class SnapshotGrid:
 
     def plot_all(self, band):
         fig, axs = plt.subplots(self.width, self.height)
-        i = 0
-        for row in self.grid:
-            for snap in row:
-                i += 1
-                snap.img_plot(fig, axs[i], band)
+        for i, row in enumerate(self.grid):
+            for j, snap in enumerate(row):
+                snap.img_plot(fig, axs[i][j], band)
         plt.show()
 
     def mask_all_I05(self, LOW=220, HIGH=290):
@@ -338,10 +353,34 @@ class SnapshotGrid:
             for snap in row:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
 
-    def piecewise_glaciation_temperature(self):
+    def piecewise_glaciation_temperature(self, plot=True):
         self.gt_grid = [[snap.gt_piece_percentile(plot=False)[0] for snap in row] for row in self.grid]
-        fig, ax = plt.subplots()
-        im = ax.imshow(self.gt_grid, origin="upper")
-        cb = plt.colorbar(im)
-        cb.set_label("Glaciation Temperature (C)")
-        plt.show()
+        if plot:
+            fig, ax = plt.subplots()
+            im = ax.imshow(self.gt_grid, origin="upper")
+            cb = plt.colorbar(im)
+            cb.set_label("Glaciation Temperature (C)")
+            plt.show()
+
+    def piecewise_r2(self, plot=True):
+        self.r2 = [[snap.gt_piece_percentile(plot=False)[1] for snap in row] for row in self.grid]
+        if plot:
+            fig, ax = plt.subplots()
+            im = ax.imshow(self.r2, origin="upper")
+            cb = plt.colorbar(im)
+            cb.set_label("R^2 goodness of fit coefficient")
+            plt.show()
+
+    def get_mean_r2(self):
+        try:
+            return np.nanmean(self.r2)
+        except AttributeError:
+            self.piecewise_r2(plot=False)
+            self.get_mean_r2()
+
+    def get_mean_gt(self):
+        try:
+            return np.nanmean(self.gt_grid)
+        except AttributeError:
+            self.piecewise_glaciation_temperature(plot=False)
+            self.get_mean_gt()

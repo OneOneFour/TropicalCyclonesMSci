@@ -4,10 +4,11 @@ if __name__ == "__main__":
     ## NA
     irma = get_cyclone_by_name("IRMA", 2017, max_len=1)
     irma = irma[0]
-    gd = irma.grid_data(irma.lat, irma.lon,96*4,96*4, 15,8)
+    gd = irma.grid_data(irma.lat-3, irma.lon+4,96*2,96*2, 27,18)
     irma.plot_globe()
-    [[g.gt_piece_percentile(plot=False) for g in l] for l in gd]
-
+    gd.piecewise_glaciation_temperature()
+    gd.piecewise_r2()
+    irma.eye.gt_piece_percentile()
 
     # walaka = get_cyclone_by_name_date("WALAKA", datetime(year=2018, month=10, day=2, hour=0, minute=0),
     #                                    datetime(year=2018, month=10, day=2, hour=6, minute=0))
