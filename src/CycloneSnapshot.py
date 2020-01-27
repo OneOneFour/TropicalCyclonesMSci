@@ -151,8 +151,8 @@ class CycloneSnapshot:
     @property
     def quadrant(self):
         from CycloneImage import wrap
-        eye_azimuth = np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.meta_data["USA_LON"],
-                                            self.b_lat + self.height / 2 - self.meta_data["USA_LAT"]))
+        eye_azimuth = wrap(np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.meta_data["USA_LON"],
+                                            self.b_lat + self.height / 2 - self.meta_data["USA_LAT"])))
         if 0 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 90:
             return "RF"
         elif 90 <= wrap(eye_azimuth - self.meta_data["STORM_DIR"]) < 180:
@@ -163,7 +163,7 @@ class CycloneSnapshot:
             return "LF"
         else:
             raise ValueError(
-                f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, recieved {wrap(eye_azimuth - self.meta_data['STORM_DIR'])}")
+                f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, received {wrap(eye_azimuth - self.meta_data['STORM_DIR'])}")
 
     def mask_using_I01(self, reflectance_cutoff=80):
         """
@@ -363,7 +363,7 @@ class SnapshotGrid:
             plt.show()
 
     def piecewise_r2(self, plot=True):
-        self.r2 = [[snap.gt_piece_percentile(plot=False)[1] for snap in row] for row in self.grid]
+        self.r2 = np.array([[snap.gt_piece_percentile(plot=False)[1] for snap in row] for row in self.grid])
         if plot:
             fig, ax = plt.subplots()
             im = ax.imshow(self.r2, origin="upper")
@@ -384,3 +384,25 @@ class SnapshotGrid:
         except AttributeError:
             self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_gt()
+
+    def gt_quadrant_distribution(self, ey_gt=None):
+        """
+        Plot distribution of the glaciation temperature in the four quadrants of the cyclone.
+        If eye_gt is passed then will compare this against the glaciation temperature of the eye for visualisation
+        :param ey_gt: Glaciation temperature of the eye in celsius
+        :return: None
+        """
+        distr = {"LF": [], "RF": [], "RB": [], "LB": []}
+        for i, row in enumerate(self.grid):
+            for j, snap in enumerate(row):
+                if self.gt_grid[i][j] == np.nan:
+                    continue
+                distr[snap.quadrant].append(self.gt_grid[i][j])
+        vals = {k: np.array(v).mean() for k, v in distr.items()}
+        vals["EYE"] = ey_gt
+
+        fig, ax = plt.subplots()
+
+        ax.bar(range(len(vals)), list(vals.values()), align="center")
+        ax.xticks(range(len(vals)), list(vals.keys()))
+        plt.show()
