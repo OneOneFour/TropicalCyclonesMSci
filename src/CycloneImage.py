@@ -5,11 +5,11 @@ from pyresample import create_area_def
 from satpy import Scene
 from shapely import geometry
 
-from CycloneSnapshot import CycloneSnapshot
+from CycloneSnapshot import CycloneSnapshot, SnapshotGrid
 from fetch_file import get_data
 
-DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud")
-DEFAULT_MARGIN = 0.
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud/Data")
+DEFAULT_MARGIN = 0.2
 RESOLUTION_DEF = (3.75 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 R_E = 6371000
@@ -139,15 +139,31 @@ class CycloneImage:
     def __init__(self, scene: Scene, metadata: dict):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(["I05", "I04", "M09", "I01", "I02", "I03",
-                         "i_lat", "i_lon", "i_satellite_azimuth_angle", "i_solar_zenith_angle"])
+        self.scene.load(["I05", "I04", "I01", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
         self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
         self.rects = []
+        self.bounding_snapshot()
         self.draw_eye()
 
-    def plot_globe(self, band="I04"):
+    def bounding_snapshot(self):
+        area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
+            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+        )
+        corrected_scene = self.scene.resample(area)
+        self.bb = CycloneSnapshot(
+            corrected_scene["I04"].values,
+            corrected_scene["I05"].values,
+            area.pixel_size_x, area.pixel_size_y,
+            corrected_scene["i_satellite_azimuth_angle"].values, self.metadata,
+            area.get_lonlat(area.shape[0] - 1, 0)[0],
+            area.get_lonlat(area.shape[0] - 1, 0)[1],
+            corrected_scene["M09"].values, corrected_scene["I01"].values
+        )
+        self.rects.append(self.bb)
+
+    def plot_globe(self, band="I05", show=-1):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         )
@@ -165,11 +181,14 @@ class CycloneImage:
                            crs.bounds[3]),
                        origin="upper")
 
-        for a in self.rects:
-            box = geometry.box(minx=a.meta_data["RECT_BLON"], miny=a.meta_data["RECT_BLAT"],
-                               maxx=a.meta_data["RECT_BLON"] + a.meta_data["RECT_W"],
-                               maxy=a.meta_data["RECT_BLAT"] + a.meta_data["RECT_H"])
-            ax.add_geometries([box], crs=PlateCarree(), edgecolor="k", facecolor="none")
+        for i, a in enumerate(self.rects):
+            box = geometry.box(minx=a.b_lon, miny=a.b_lat,
+                               maxx=a.b_lon + a.width,
+                               maxy=a.b_lat + a.height)
+            if show == i:
+                ax.add_geometries([box], crs=PlateCarree(), edgecolor="r", facecolor="red", alpha=0.3)
+            else:
+                ax.add_geometries([box], crs=PlateCarree(), edgecolor="k", facecolor="none")
 
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
@@ -181,67 +200,58 @@ class CycloneImage:
 
     @property
     def eye(self) -> CycloneSnapshot:
-        return self.rects[0]
+        return self.rects[1]
 
-    def quads_np(self, width, height, n_rows=0, n_cols=0, p_width=0, p_height=0):
-        """
-        :param quad_width:
-        :param quad_height:
-        :return:
-        """
-        uni_area = create_area_def("quad_a",
-                                   {"proj": "lcc", "lat_0": self.lat, "lat_1": self.lat, "lon_0": self.lon},
-                                   area_extent=[
-                                       self.lon - width / 2, self.lat - height / 2,
-                                       self.lon + width / 2, self.lat + height / 2
-                                   ], units="degrees")
-        self.uniform_scene = self.scene.resample(uni_area)
+    def grid_data(self, lat, lon, p_width, p_height, width, height):
+        area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
+            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+        )
+        upper_left_x, upper_left_y = (area.get_xy_from_lonlat(lon - width / 2, lat + height / 2))
+        lower_right_x, lower_right_y = area.get_xy_from_lonlat(lon + width / 2,
+                                                               lat - height / 2)
+        w_i = lower_right_x - upper_left_x
+        h_i = lower_right_y - upper_left_y
+        n_cols = w_i // p_width
+        n_rows = h_i // p_height
 
-        I4 = self.uniform_scene["I04"].values()
-        I5 = self.uniform_scene["I05"].values()
-        M9 = self.uniform_scene["M09"].values()
-        I1 = self.uniform_scene["I01"].values()
-        AZ = self.uniform_scene["i_satellite_azimuth_angle"].values()
-        if p_width == 0 and p_height == 0:
-            p_width, p_height = I4.shape[0] // n_rows, I4.shape[1] // n_cols
+        grid = [[0 for c in range(n_cols)] for r in range(n_rows)]
 
-        self.grid = list(np.zeros((n_cols, n_rows)))
-        for j in range(n_rows):
-            for k in range(n_cols):
-                cs = CycloneSnapshot(
-                    I4[j * p_width:min((j + 1) * p_width, I4.shape[0]),
-                    k * p_height:min(p_height * (k + 1), I4.shape[1])],
-                    I5[j * p_width:min((j + 1) * p_width, I5.shape[0]),
-                    k * p_height:min(p_height * (k + 1), I5.shape[1])],
-                    uni_area.pixel_size_x, uni_area.pixel_size_y,
-                    AZ[j * p_width:min((j + 1) * p_width, AZ.shape[0]),
-                    k * p_height:min(p_height * (k + 1), AZ.shape[1])].mean(),
-                    self.metadata, M09=
-                    M9[j * p_width:min((j + 1) * p_width, M9.shape[0]),
-                    k * p_height:min(p_height * (k + 1), M9.shape[1])],
-                    I01=I1[j * p_width:min((j + 1) * p_width, M9.shape[0]),
-                        k * p_height:min(p_height * (k + 1), M9.shape[1])].mean())
-
-                self.grid[j][k] = cs
+        for r in range(n_rows):
+            for c in range(n_cols):
+                x_i = upper_left_x + c * p_width
+                y_i = upper_left_y + r * p_height
+                lon, lat = area.get_lonlat(int(y_i + p_height / 2), int(x_i - p_width / 2))
+                cs = self.bb.add_sub_snap_origin(x_i, y_i, p_width, p_height, lon, lat)
+                cs.mask_array_I05(HIGH=290, LOW=220)
                 self.rects.append(cs)
+                grid[r][c] = cs
+        return SnapshotGrid(grid)
 
     def draw_eye(self):
-        return self.draw_rectangle((self.metadata["USA_LAT"], self.metadata["USA_LON"]),
-                                   4 * self.metadata["USA_RMW"] * NM_TO_M, self.metadata["USA_RMW"] * 4 * NM_TO_M)
+        return self.get_rect(self.metadata["USA_LAT"], self.metadata["USA_LON"],
+                             4 * self.metadata["USA_RMW"] / 60, self.metadata["USA_RMW"] * 4 / 60)
 
     def draw_rectangle_rosenfeld(self, center, p_width=96, p_height=96) -> CycloneSnapshot:
         area = create_area_def(f"({center[0]},{center[1]})",
                                {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
                                 "lon_0": center[1]}, width=p_width, height=p_height,
-                               resolution=self.scene["I05"].attrs["resolution"], center=center)
+                               resolution=self.scene["I05"].attrs["resolution"], center=(center[1], center[0]))
         sub_scene = self.scene.resample(area)
         cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
                              sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
+                             area.get_lonlat(p_height - 1, 0)[0], area.get_lonlat(p_height - 1, 0)[1],
                              M09=sub_scene["M09"].values, I01=sub_scene["I01"].values)
-        cs.meta_data["RECT_W"] = p_width * self.scene["I05"].attrs["resolution"] / (NM_TO_M * 60)
-        cs.meta_data["RECT_H"] = p_height * self.scene["I05"].attrs["resolution"] / (NM_TO_M * 60)
-        cs.meta_data["RECT_BLAT"] = center[0] - cs.meta_data["RECT_H"] / 2
-        cs.meta_data["RECT_BLON"] = center[1] - cs.meta_data["RECT_W"] / 2
+        self.rects.append(cs)
+        return cs
+
+    def get_rect(self, lat, lon, width, height):
+        area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
+            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+        )
+        bottom_left = area.get_xy_from_lonlat(lon - width / 2, lat - height / 2)
+        top_right = area.get_xy_from_lonlat(lon + width / 2, lat + height / 2)
+        cs = self.bb.add_sub_snap_edge(bottom_left[0], top_right[0], top_right[1], bottom_left[1]
+                                       , b_lat=lat - height / 2, b_lon=lon - width / 2)
         self.rects.append(cs)
         return cs
 
@@ -257,12 +267,8 @@ class CycloneImage:
                                ])
         sub_scene = self.scene.resample(area)
         cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
-                             sub_scene["i_satellite_azimuth_angle"].values, self.metadata,
-                             M09=sub_scene["M09"].values, I01=sub_scene["I01"].values, I02=sub_scene["I02"].values,
-                             I03=sub_scene["I03"].values, solar=sub_scene["i_solar_zenith_angle"].values)
-        cs.meta_data["RECT_BLAT"] = center[0] - latitude_circle / 2
-        cs.meta_data["RECT_BLON"] = center[1] - longitude_circle / 2
-        cs.meta_data["RECT_W"] = longitude_circle
-        cs.meta_data["RECT_H"] = latitude_circle
+                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
+                             center[1] - longitude_circle / 2, center[0] - latitude_circle / 2,
+                             M09=sub_scene["M09"].values, I01=sub_scene["I01"].values)
         self.rects.append(cs)
         return cs

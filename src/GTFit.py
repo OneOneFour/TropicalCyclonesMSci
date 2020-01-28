@@ -8,6 +8,23 @@ d_gt_d_a = lambda a, b, c: (-3 * a * c + 2 * b * (-b + np.sqrt(b ** 2 - 3 * a * 
 d_gt_d_b = lambda a, b, c: (-1 + b / np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
 d_gt_d_c = lambda a, b, c: -1 / (2 * np.sqrt(b ** 2 - 3 * a * c))
 
+HOMOGENEOUS_FREEZING_TEMP = -38
+
+
+def piecewise_step(t, t_g, t_m, t_b, r_e_0, a, r_e_g):
+    return np.piecewise(t, [t > t_b and t > t_m and t > t_g,
+                            t_g < t and t_m < t and t < t_b,
+                            t_m > t and t > t_g and t < t_b,
+                            t < t_g and t < t_b and t < t_m],
+                        [lambda t: a * t + r_e_0 - a * t_b, lambda t: r_e_0,
+                         lambda t: (r_e_g - r_e_0) / (t_g - t_m) * t + r_e_0 - (r_e_g - r_e_0) / (t_g - t_m) * t_m,
+                         lambda t: r_e_g])
+
+
+def simple_piecewise(t, t_g, r_e, a, b):
+    return np.piecewise(t, [t < t_g], [lambda t: np.abs(a) * (t_g - t) + r_e,
+                                       lambda t: np.abs(b) * (t - t_g) + r_e])
+
 
 class GTFit:
     def __init__(self, i04_flat, i05_flat):
@@ -33,6 +50,49 @@ class GTFit:
     #     self.gt = [gt_ve, gt_err]
     #     return gt_ve, gt_err, (a, b, c, d)
 
+    def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
+        self.x_i05 = self.i05
+        self.y_i04 = self.i04
+        params, cov = sp.curve_fit(func, self.x_i05, self.y_i04, p0=(HOMOGENEOUS_FREEZING_TEMP, 220, 1, 1))
+
+        r2 = 1 - (np.sum((self.y_i04 - func(self.x_i05, *params)) ** 2)) / np.sum((self.y_i04 - self.y_i04.mean()) ** 2)
+
+        self.gt = params[0]
+        if fig and ax:
+            self.plot(fig, ax, func=func, params=params)
+        return self.gt, r2
+
+    def piecewise_percentile(self, percentile=50, fig=None, ax=None):
+        if len(self.i05) < 1:
+            return np.nan, np.nan
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
+        self.y_i04 = [0] * len(self.x_i05)
+        if len(self.x_i05) < 1:
+            return np.nan, np.nan
+        for i, x in enumerate(self.x_i05):
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
+            if len(vals) == 0:
+                continue
+            self.y_i04[i] = np.percentile(vals, percentile)
+        zero_args = np.where(self.y_i04 == 0)
+        self.x_i05 = np.delete(self.x_i05, zero_args)
+        self.y_i04 = np.delete(self.y_i04, zero_args)
+        if len(self.x_i05) < 4:
+            print("Underconstrained")
+            return np.nan, np.nan
+
+        try:
+            params, cov = sp.curve_fit(simple_piecewise, self.x_i05, self.y_i04, absolute_sigma=True,
+                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
+        except RuntimeError:
+            return np.nan, np.nan
+        self.gt = params[0]
+        r2 = 1 - (np.sum((self.y_i04 - simple_piecewise(self.x_i05, *params)) ** 2)) / np.sum(
+            (self.y_i04 - self.y_i04.mean()) ** 2)
+        if fig and ax:
+            self.plot(fig, ax, func=simple_piecewise, params=params)
+        return self.gt, r2
+
     def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         self.y_i04 = [0] * len(self.x_i05)
@@ -40,6 +100,8 @@ class GTFit:
             return
         for i, x in enumerate(self.x_i05):
             vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
+            if len(vals) == 0:
+                continue
             self.y_i04[i] = np.percentile(vals, percentile)
         zero_args = np.where(self.y_i04 == 0)
         self.x_i05 = np.delete(self.x_i05, zero_args)
@@ -59,7 +121,9 @@ class GTFit:
         )
         gt_err = curve_fit_err
         self.gt = gt_ve
-        self.plot(fig, ax, func=cubic, params=params)
+
+        if fig and ax:
+            self.plot(fig, ax, func=cubic, params=params)
         return gt_ve, gt_err, params
 
     def plot(self, fig, ax, func=None, params=None):
@@ -74,7 +138,7 @@ class GTFit:
             ax.scatter(self.y_i04, self.x_i05, s=0.1)
 
         if func:
-            ax.plot([func(x_i, *params) for x_i in x], x, label="Curve fit", color="orange")
+            ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Curve fit")
         ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
         ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
         ax.invert_yaxis()
@@ -122,7 +186,7 @@ class GTFit:
         self.plot(fig, ax, func=cubic, params=params)
         return gt_ve, gt_err, params
 
-    def curve_fit_modes(self, mode="median",fig=None,ax=None):
+    def curve_fit_modes(self, mode="median", fig=None, ax=None):
         x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         if len(x_i05) < 1:
             return
@@ -189,12 +253,14 @@ class GTFit:
         )
         gt_err = curve_fit_err
         self.gt = gt_ve
-        self.plot(fig,ax,func=cubic,params=params)
+        self.plot(fig, ax, func=cubic, params=params)
         return gt_ve, gt_err, params
 
     def gt_via_minimum(self, fig=None, ax=None):
         min_arg = np.argmin(self.i04)
         self.gt = self.i05[min_arg]
+        self.x_i05 = self.i05
+        self.y_i04 = self.i04
         self.plot(fig, ax)
         return self.gt
 

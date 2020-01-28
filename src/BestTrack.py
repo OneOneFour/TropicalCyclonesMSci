@@ -5,7 +5,6 @@ from typing import List
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
-import matplotlib.pyplot as plt
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 from CycloneSnapshot import CycloneSnapshot
@@ -38,7 +37,6 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
     cat_4_5_all_basins = best_track_df.loc[
         (best_track_df["USA_SSHS"] >= cat_min) & (
                 best_track_df["ISO_TIME"] > pd.Timestamp(year=year, month=month, day=day))]
-    print(cat_4_5_all_basins)
     cat_4_5_all_basins_group = cat_4_5_all_basins.groupby(["SID"])
     for name, cyclone in cat_4_5_all_basins_group:
         dict_cy = cyclone.to_dict(orient="records")
@@ -48,13 +46,10 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
             if end_point["ISO_TIME"] - start_point["ISO_TIME"] > timedelta(hours=3):
                 continue
             with ProgressBar():
-                try:
-                    snapshot = get_eye(start_point, end_point)
-                    if snapshot:
-                        snapshot.plot()
-                        snapshot.save("proc/eyes_since_2012/")
-                except:
-                    print("Cyclone Didnt Load")
+                snapshot = get_eye(start_point, end_point)
+                if snapshot:
+                    snapshot.plot()
+                    snapshot.save("test.snap")
 
 
 def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
@@ -80,11 +75,10 @@ def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
     return snap_list
 
 
-def get_cyclone_by_name_date(name, date: datetime):
+def get_cyclone_by_name_date(name, start, end):
     df_cyclone = best_track_df.loc[
-        (best_track_df["NAME"] == name) & (best_track_df["USA_SSHS"])
-        & (best_track_df["ISO_TIME"].dt.year == date.year) & (best_track_df["ISO_TIME"].dt.month == date.month)
-        & (best_track_df["ISO_TIME"].dt.day == date.day)
+        (best_track_df["NAME"] == name) & (best_track_df["USA_SSHS"] > 3)
+        & (best_track_df["ISO_TIME"] <= end) & (best_track_df["ISO_TIME"] >= start)
         ]
     dict_cy = df_cyclone.to_dict(orient="records")
     for i, cyclone_point in enumerate(dict_cy[:-1]):
