@@ -120,19 +120,14 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) 
 
 
 if __name__ == "__main__":
-    try:
-        cys = all_cyclone_eyes_since(2016, 12, 24, cat_min=4)
-    except:
-        print("Cyclone Didnt Load")
+    # cys = all_cyclone_eyes_since(2016, 12, 24, cat_min=4)
 
-    #cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
-
-    #c = CycloneSnapshot.load("proc/pickle_data/DORIAN08-31-2019_1712")
+    c = CycloneSnapshot.load("proc/eyes_since_2012/ALETTA06-08-2018_2048test")
     #c.mask_thin_cirrus()
     #c.mask_visible(70)
     #c.mask_array_I05(LOW=220, HIGH=270)
     #c.mask_half("left")
     #c.mask_solar(20)
     #c.mask_half("bottom")
-    #c.gt_fit()
-    #plt.show()
+    c.gt_fit()
+    plt.show()
