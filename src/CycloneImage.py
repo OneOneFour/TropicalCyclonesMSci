@@ -163,6 +163,25 @@ class CycloneImage:
         )
         self.rects.append(self.bb)
 
+    def manual_gt_cycle(self):
+        self.plot_globe()
+        while True:
+            try:
+                lat_offset = float(input("Enter latitude offset (in degrees): "))
+                lon_offset = float(input("Enter longitude offset (in degrees): "))
+                width = float(input("Enter width of grid (in degrees): "))
+                height = float(input("Enter height of grid (in degrees): "))
+                gd = self.grid_data(self.lat + lat_offset, self.lon + lon_offset, 96, 96, width, height)
+                break
+            except ValueError as e:
+                print("Point outside of range, please enter different set of coords")
+            finally:
+                self.plot_globe()
+        gd.piecewise_glaciation_temperature()
+        gt, r2 = self.eye.gt_piece_percentile()
+        gd.piecewise_r2()
+        gd.gt_quadrant_distribution(gt)
+
     def plot_globe(self, band="I05", show=-1):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
@@ -189,7 +208,8 @@ class CycloneImage:
                 ax.add_geometries([box], crs=PlateCarree(), edgecolor="r", facecolor="red", alpha=0.3)
             else:
                 ax.add_geometries([box], crs=PlateCarree(), edgecolor="k", facecolor="none")
-
+        ax.set_title(
+            f"{self.metadata['NAME']} on {self.metadata['ISO_TIME']}\nCategory {self.metadata['USA_SSHS']}, Wind Speed: {self.metadata['STORM_SPEED']}@{self.metadata['STORM_DIR']}\n Eye @ {self.lat} \u00b0N , {self.lon}\u00b0E")
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
         plt.show()

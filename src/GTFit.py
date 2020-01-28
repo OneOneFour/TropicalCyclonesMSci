@@ -78,7 +78,6 @@ class GTFit:
         self.x_i05 = np.delete(self.x_i05, zero_args)
         self.y_i04 = np.delete(self.y_i04, zero_args)
         if len(self.x_i05) < 4:
-            print("Underconstrained")
             return np.nan, np.nan
 
         try:

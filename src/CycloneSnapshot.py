@@ -12,6 +12,7 @@ from GTFit import GTFit
 ABSOLUTE_ZERO = 273.15
 NM_TO_M = 1852
 
+
 def wrap_360(x):
     if x < 0:
         return x + 360
@@ -159,7 +160,7 @@ class CycloneSnapshot:
     @property
     def quadrant(self):
         eye_azimuth = wrap_360(np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.meta_data["USA_LON"],
-                                            self.b_lat + self.height / 2 - self.meta_data["USA_LAT"])))
+                                                     self.b_lat + self.height / 2 - self.meta_data["USA_LAT"])))
         if 0 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 90:
             return "RF"
         elif 90 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 180:
@@ -410,6 +411,20 @@ class SnapshotGrid:
 
         fig, ax = plt.subplots()
 
-        ax.bar(range(len(vals)), list(vals.values()), align="center")
-        ax.set_xticks(range(len(vals)), list(vals.keys()))
+        rects = ax.bar(range(len(vals)), list(vals.values()), align="center")
+        ax.set_xticks(range(len(vals)))
+        ax.set_xticklabels(list(vals.keys()))
+        ax.set_ylabel("Glaciation Temperature (C)")
+
+        ax.set_title("Plot of Glaciation Temperature by Quadrant")
+
+        print(
+            f"Number of grid cells per quadrant\nLF:{len(distr['LF'])}\nRF:{len(distr['RF'])}\nRB:{len(distr['RB'])}\nLB:{len(distr['LB'])}")
+
+        for rect in rects:
+            ax.annotate(f"{round(rect.get_height(), 2)}",
+                        xy=(rect.get_x() + rect.get_width() / 2, rect.get_height()),
+                        xytext=(0, -5), textcoords="offset points",
+                        ha="center", va="bottom")
+
         plt.show()

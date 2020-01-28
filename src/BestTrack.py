@@ -1,5 +1,5 @@
 import os
-from datetime import timedelta, datetime
+from datetime import timedelta
 from typing import List
 
 import numpy as np
@@ -88,7 +88,7 @@ def get_cyclone_by_name_date(name, start, end):
             return cy
 
 
-def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) -> List[CycloneImage]:
+def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=False) -> List[CycloneImage]:
     df_cyclone = best_track_df.loc[
         (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
     dict_cy = df_cyclone.to_dict(orient="records")
@@ -106,9 +106,7 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) 
             #     return ci
             cy = get_entire_cyclone(start_point, end_point)
             if cy:
-                if cy.is_eyewall_shaded or not shading:
-                    if pickle:
-                        eye = cy.draw_eye()
-                        eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
+                if shading ^ cy.is_eyewall_shaded:
+                    per_cyclone(cy)
                     snap_list.append(cy)
     return snap_list
