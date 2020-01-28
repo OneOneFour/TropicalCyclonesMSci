@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 from CycloneSnapshot import CycloneSnapshot
 
-BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.last3years.list.v04r00.csv")
+BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.since1980.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
 
@@ -38,6 +38,7 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
     cat_4_5_all_basins = best_track_df.loc[
         (best_track_df["USA_SSHS"] >= cat_min) & (
                 best_track_df["ISO_TIME"] > pd.Timestamp(year=year, month=month, day=day))]
+    print(cat_4_5_all_basins)
     cat_4_5_all_basins_group = cat_4_5_all_basins.groupby(["SID"])
     for name, cyclone in cat_4_5_all_basins_group:
         dict_cy = cyclone.to_dict(orient="records")
@@ -47,10 +48,13 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
             if end_point["ISO_TIME"] - start_point["ISO_TIME"] > timedelta(hours=3):
                 continue
             with ProgressBar():
-                snapshot = get_eye(start_point, end_point)
-                if snapshot:
-                    snapshot.plot()
-                    snapshot.save("test.snap")
+                try:
+                    snapshot = get_eye(start_point, end_point)
+                    if snapshot:
+                        snapshot.plot()
+                        snapshot.save("proc/eyes_since_2012/")
+                except:
+                    print("Cyclone Didnt Load")
 
 
 def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
@@ -116,17 +120,19 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) 
 
 
 if __name__ == "__main__":
-    # cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
+    try:
+        cys = all_cyclone_eyes_since(2016, 12, 24, cat_min=4)
+    except:
+        print("Cyclone Didnt Load")
 
-    c = CycloneSnapshot.load("proc/pickle_data/IRMA0")
+    #cis = get_cyclone_by_name("IRMA", 2017, max_len=1)
 
-    c.mask_thin_cirrus()
-    c.mask_array_I05()
-    c.mask_half("left")
-    c.mask_half("bottom")
-    c.gt_fit()
-
-    plt.show()
-
-    # r = cis[0].draw_rectangle((16.5, -55.283), 250000, 250000)
-    # r_2 = cis[0].draw_rectangle(((16.13, -61.9)), 100000, 250000)
+    #c = CycloneSnapshot.load("proc/pickle_data/DORIAN08-31-2019_1712")
+    #c.mask_thin_cirrus()
+    #c.mask_visible(70)
+    #c.mask_array_I05(LOW=220, HIGH=270)
+    #c.mask_half("left")
+    #c.mask_solar(20)
+    #c.mask_half("bottom")
+    #c.gt_fit()
+    #plt.show()

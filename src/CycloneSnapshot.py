@@ -35,8 +35,8 @@ class CycloneSnapshot:
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
         self.meta_data = dict(metadata)
-        from CycloneImage import wrap
-        self.satellite_azimuth = wrap(sat_pos)
+        #from CycloneImage import wrap
+        #self.satellite_azimuth = wrap(sat_pos)
         self.satellite_azimuth = sat_pos
         self.solar_zenith = solar
         self.sub_snaps = {}
@@ -189,7 +189,7 @@ class CycloneSnapshot:
         plt.connect("draw_event", draw_cb)
         plt.show()
 
-    def plot(self, band="I04"):
+    def plot(self, band="I05"):
         fig, ax = plt.subplots()
         self.img_plot(fig, ax, band)
         plt.show()
@@ -277,7 +277,8 @@ class CycloneSnapshot:
 
         fig, ax = plt.subplots(1, 2)
         self.img_plot(fig, ax[1])
-        gt_fitter.curve_fit_modes(20, fig=fig, ax=ax[0])
+        ax[0].scatter(self.I04, self.celcius(self.I05), s=0.25)
+        gt_fitter.curve_fit_percentile(10, fig=fig, ax=ax[0])
         plt.show()
 
     def unmask_array(self):
@@ -286,7 +287,7 @@ class CycloneSnapshot:
 
     def save(self, fpath):
         date = self.meta_data["ISO_TIME"].strftime("%m-%d-%Y_%H%M")
-        total_fpath = fpath + self.meta_data["NAME"] + date + "Extra"
+        total_fpath = fpath + self.meta_data["NAME"] + date + "test"
         with open(total_fpath, "wb") as file:
             pickle.dump(self, file)
 

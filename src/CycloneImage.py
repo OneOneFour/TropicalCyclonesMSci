@@ -8,7 +8,7 @@ from shapely import geometry
 from CycloneSnapshot import CycloneSnapshot
 from fetch_file import get_data
 
-DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud/Data")
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud")
 DEFAULT_MARGIN = 0.
 RESOLUTION_DEF = (3.75 / 6371) * 2 * np.pi
 NM_TO_M = 1852
@@ -73,7 +73,7 @@ def get_eye(start_point, end_point):
     except FileNotFoundError:
         return None
     raw_scene = Scene(filenames=files, reader="viirs_l1b")
-    raw_scene.load(["I04", "I05", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+    raw_scene.load(["I01", "I04", "I05", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
     t = raw_scene.start_time - start_point["ISO_TIME"].to_pydatetime()
 
     metadata = interpolate(start_point, end_point, t)
@@ -102,7 +102,7 @@ def get_eye(start_point, end_point):
 
     return CycloneSnapshot(new_scene["I04"].values, new_scene["I05"].values, recentered_area.pixel_size_x,
                            recentered_area.pixel_size_y, new_scene["i_satellite_azimuth_angle"].values,
-                           metadata)
+                           metadata, M09=new_scene["M09"].values, I01=new_scene["I01"].values)
 
 
 def get_entire_cyclone(start_point, end_point):

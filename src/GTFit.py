@@ -74,7 +74,7 @@ class GTFit:
             ax.scatter(self.y_i04, self.x_i05, s=0.1)
 
         if func:
-            ax.plot([func(x_i, *params) for x_i in x], x, label="Curve fit")
+            ax.plot([func(x_i, *params) for x_i in x], x, label="Curve fit", color="orange")
         ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
         ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
         ax.invert_yaxis()
