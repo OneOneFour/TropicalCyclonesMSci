@@ -155,7 +155,7 @@ class CycloneImage:
 
         :return: Directory path assigned to this class instance
         """
-        dir = os.path.join(os.environ.get("BASE_DIR", "./out"), self.metadata["NAME"],
+        dir = os.path.join(os.environ.get("OUTPUT_DIRECTORY", "./out"), self.metadata["NAME"],
                            self.metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
         try:
             Path(dir).mkdir(parents=True)
@@ -205,6 +205,9 @@ class CycloneImage:
         gt, r2 = self.eye.gt_piece_percentile()
         gd.piecewise_r2()
         gd.gt_quadrant_distribution(gt)
+
+    def auto_gt_cycle(self,w,h,p_w=96,p_h = 96):
+        pass
 
     def plot_globe(self, band="I05", show=-1):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(

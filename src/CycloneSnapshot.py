@@ -62,7 +62,6 @@ class CycloneSnapshot:
 
         self.grid = []
 
-
     @property
     def is_shaded(self):
         return self.image_mean_azimuth < 180
@@ -295,19 +294,31 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.__I05, mask=blank_mask)
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
-    def gt_piece_percentile(self, percentile=5, plot=True):
+    def gt_piece_all(self,plot=True,raise_up = 0,raise_lower =-38):
+        gt_fitter = GTFit(self.flat(self.I04),self.celcius(self.flat(self.I05)))
+        if plot:
+            fig,ax = plt.subplots(1,2)
+            self.img_plot(fig,ax[1])
+            (gt,gt_err),(r2,params) = gt_fitter.piecewise_fit(fig,ax[0])
+            plt.show()
+        else:
+            (gt,gt_err),(r2,params) = gt_fitter.piecewise_fit()
+        if raise_up < gt or gt < raise_lower:
+            raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
+        return gt,gt_err,r2
+
+    def gt_piece_percentile(self, percentile=5, plot=True,raise_up = 0, raise_lower = -45):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
         if plot:
             fig, ax = plt.subplots(1, 2)
             self.img_plot(fig, ax[1])
-            gt, r2 = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
+            (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
             plt.show()
         else:
-            gt, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
-
-        if 0 < gt or gt < -45:  # Sanity check
-            return np.nan, np.nan
-        return gt, r2
+            (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile)
+        if raise_up < gt or gt < raise_lower:  # Sanity check
+            raise ValueError("Outside of range")
+        return gt,gt_err, r2
 
     def unmask_array(self):
         del self.I04_mask
@@ -346,7 +357,7 @@ class CycloneSnapshot:
 
 
 class SnapshotGrid:
-    def __init__(self, gd: List[List[CycloneSnapshot]],imageInstance=None):
+    def __init__(self, gd: List[List[CycloneSnapshot]], imageInstance=None):
         self.grid = gd
         self.height = len(gd)
         self.width = len(gd[0])
@@ -364,7 +375,7 @@ class SnapshotGrid:
             for snap in row:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
 
-    def piecewise_glaciation_temperature(self, plot=True,show=True,save=False):
+    def piecewise_glaciation_temperature(self, plot=True, show=True, save=False):
         self.gt_grid = [[snap.gt_piece_percentile(plot=False)[0] for snap in row] for row in self.grid]
         if plot:
             fig, ax = plt.subplots()
@@ -377,7 +388,7 @@ class SnapshotGrid:
             if show:
                 plt.show()
 
-    def piecewise_r2(self, plot=True,save=False,show=True):
+    def piecewise_r2(self, plot=True, save=False, show=True):
         self.r2 = np.array([[snap.gt_piece_percentile(plot=False)[1] for snap in row] for row in self.grid])
         if plot:
             fig, ax = plt.subplots()
@@ -403,7 +414,7 @@ class SnapshotGrid:
             self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_gt()
 
-    def gt_quadrant_distribution(self, ey_gt=0,save=False,show=True):
+    def gt_quadrant_distribution(self, ey_gt=0, save=False, show=True):
         """
         Plot distribution of the glaciation temperature in the four quadrants of the cyclone.
         If eye_gt is passed then will compare this against the glaciation temperature of the eye for visualisation
@@ -426,7 +437,8 @@ class SnapshotGrid:
         ax.set_xticklabels(list(vals.keys()))
         ax.set_ylabel("Glaciation Temperature (C)")
 
-        ax.set_title("Plot of Glaciation Temperature by Quadrant")
+        ax.set_title(
+            f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature Distribution by Quadrant")
 
         print(
             f"Number of grid cells per quadrant\nLF:{len(distr['LF'])}\nRF:{len(distr['RF'])}\nRB:{len(distr['RB'])}\nLB:{len(distr['LB'])}")

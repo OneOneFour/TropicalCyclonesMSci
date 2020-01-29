@@ -53,22 +53,24 @@ class GTFit:
     def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
         self.x_i05 = self.i05
         self.y_i04 = self.i04
+        if len(self.i05) or len(self.i04) < 4:
+            raise ValueError("Problem underconstrained.")
         params, cov = sp.curve_fit(func, self.x_i05, self.y_i04, p0=(HOMOGENEOUS_FREEZING_TEMP, 220, 1, 1))
-
+        gt_err = np.sqrt(np.diag(cov))[0]
         r2 = 1 - (np.sum((self.y_i04 - func(self.x_i05, *params)) ** 2)) / np.sum((self.y_i04 - self.y_i04.mean()) ** 2)
 
         self.gt = params[0]
         if fig and ax:
             self.plot(fig, ax, func=func, params=params)
-        return self.gt, r2
+        return (self.gt, gt_err), (r2, params)
 
     def piecewise_percentile(self, percentile=50, fig=None, ax=None):
         if len(self.i05) < 1:
-            return np.nan, np.nan
+            raise ValueError("I5 data is empty. This could be due to masking or a bad input")
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         self.y_i04 = [0] * len(self.x_i05)
         if len(self.x_i05) < 1:
-            return np.nan, np.nan
+            raise ValueError("I4 data is empty. This could be due to masking or a bad input")
         for i, x in enumerate(self.x_i05):
             vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
             if len(vals) == 0:
@@ -78,19 +80,19 @@ class GTFit:
         self.x_i05 = np.delete(self.x_i05, zero_args)
         self.y_i04 = np.delete(self.y_i04, zero_args)
         if len(self.x_i05) < 4:
-            return np.nan, np.nan
+            raise ValueError("Problem is under-constrained, less than 4 free parameters")
 
-        try:
-            params, cov = sp.curve_fit(simple_piecewise, self.x_i05, self.y_i04, absolute_sigma=True,
-                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
-        except RuntimeError:
-            return np.nan, np.nan
+        params, cov = sp.curve_fit(simple_piecewise, self.x_i05, self.y_i04, absolute_sigma=True,
+                                   p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
+
+        err = np.sqrt(np.diag(cov))
+        self.gt_err = err[0]
         self.gt = params[0]
         r2 = 1 - (np.sum((self.y_i04 - simple_piecewise(self.x_i05, *params)) ** 2)) / np.sum(
             (self.y_i04 - self.y_i04.mean()) ** 2)
         if fig and ax:
             self.plot(fig, ax, func=simple_piecewise, params=params)
-        return self.gt, r2
+        return (self.gt, self.gt_err), (r2, params)
 
     def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
