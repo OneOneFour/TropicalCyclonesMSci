@@ -5,6 +5,8 @@ from typing import List
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
+import matplotlib.pyplot as plt
+import os
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 from CycloneSnapshot import CycloneSnapshot
@@ -114,14 +116,48 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) 
 
 
 if __name__ == "__main__":
-    # cys = all_cyclone_eyes_since(2016, 12, 24, cat_min=4)
+    histogram_dict = []
+    for file in os.listdir("proc/eyes_since_2012"):
+        filename = "proc/eyes_since_2012/" + file
+        c = CycloneSnapshot.load(filename)
+        try:
+            c.mask_thin_cirrus()
+            c.mask_array_I05(LOW=220, HIGH=280)
+            c.mask_using_I01(80)
+            gt, r = c.gt_piece_percentile(percentile=5, plot=False)
+            if gt is not np.nan and r > 0.95:
+                histogram_dict.append({"year": c.meta_data["SEASON"], "gt": gt, "r": r, "wind": c.meta_data["USA_WIND"],
+                                      "cat": c.meta_data["USA_SSHS"], "basin": c.meta_data["BASIN"]})
+        except:
+            continue
 
-    c = CycloneSnapshot.load("proc/eyes_since_2012/ALETTA06-08-2018_2048test")
-    #c.mask_thin_cirrus()
-    #c.mask_visible(70)
-    #c.mask_array_I05(LOW=220, HIGH=270)
-    #c.mask_half("left")
-    #c.mask_solar(20)
-    #c.mask_half("bottom")
-    c.gt_fit()
+    all_gts = []
+    all_winds = []
+    basin_gts = {"WP" : [], "NA": [], "NI": [], "SI": [], "NP": [], "SA": [], "EP": [], "SP": []}
+    year_gts = {2012: [], 2013: [], 2014: [], 2015: [], 2016: [], 2017: [], 2018: [], 2019: []}
+    cat_gts = {4.0: [], 5.0: []}
+    wind_gts = {110: [], 120: [], 130: [], 140: [], 150: [], 160: []}
+    for cyclone in histogram_dict:
+        for basin in basin_gts.keys():
+            if cyclone["basin"] == basin:
+                basin_gts[basin].append(cyclone["gt"])
+
+        for year in year_gts.keys():
+            if int(cyclone["year"]) == year:
+                year_gts[year].append(int(cyclone["gt"]))
+
+        for cat in cat_gts.keys():
+            if cyclone["cat"] == cat:
+                cat_gts[cat].append(cyclone["gt"])
+
+        for wind in wind_gts.keys():
+            if wind - 5 < cyclone["wind"] <= wind + 5:
+                wind_gts[wind].append(cyclone["gt"])
+
+        all_gts.append(cyclone["gt"])
+        all_winds.append(cyclone["wind"])
+
+    plt.hist(wind_gts.values(), bins=np.arange(-44, -10, 2), rwidth=0.8, histtype="barstacked",
+             label=wind_gts.keys())
+    plt.legend()
     plt.show()

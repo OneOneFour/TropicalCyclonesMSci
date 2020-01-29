@@ -67,6 +67,7 @@ class GTFit:
             return np.nan, np.nan
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         self.y_i04 = [0] * len(self.x_i05)
+        self.y_i04 = np.array(self.y_i04)
         if len(self.x_i05) < 1:
             return np.nan, np.nan
         for i, x in enumerate(self.x_i05):
@@ -90,6 +91,7 @@ class GTFit:
         r2 = 1 - (np.sum((self.y_i04 - simple_piecewise(self.x_i05, *params)) ** 2)) / np.sum(
             (self.y_i04 - self.y_i04.mean()) ** 2)
         if fig and ax:
+            ax.scatter(self.i04, self.i05, s=0.1)
             self.plot(fig, ax, func=simple_piecewise, params=params)
         return self.gt, r2
 
@@ -135,12 +137,14 @@ class GTFit:
 
         else:
             x = np.linspace(min(self.x_i05), max(self.x_i05))
-            ax.scatter(self.y_i04, self.x_i05, s=0.1)
+            ax.scatter(self.y_i04, self.x_i05, s=0.5)
 
         if func:
             ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Curve fit")
-        ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
-        ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
+        # ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
+        # ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
+        ax.axhline(self.gt)
+        ax.axhline(-38)
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")
