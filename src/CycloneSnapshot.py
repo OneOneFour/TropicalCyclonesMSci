@@ -62,6 +62,7 @@ class CycloneSnapshot:
 
         self.grid = []
 
+
     @property
     def is_shaded(self):
         return self.image_mean_azimuth < 180

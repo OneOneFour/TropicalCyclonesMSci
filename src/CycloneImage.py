@@ -206,8 +206,15 @@ class CycloneImage:
         gd.piecewise_r2()
         gd.gt_quadrant_distribution(gt)
 
-    def auto_gt_cycle(self,w,h,p_w=96,p_h = 96):
-        pass
+    def auto_gt_cycle(self,w=20,h=20,p_w=96,p_h=96):
+        gd = self.grid_data_edges(self.lon - w/2,self.lon + w/2,self.lat + h/2,self.lat - h/2,p_w,p_h)
+        self.plot_globe()
+        gd.piecewise_glaciation_temperature(show=False,save=True)
+        gt,gt_err,r2 = self.eye.gt_piece_percentile()
+        gd.piecewise_r2()
+        gd.gt_quadrant_distribution()
+
+
 
     def plot_globe(self, band="I05", show=-1):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
