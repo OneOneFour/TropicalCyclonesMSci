@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import numpy as np
 from pyresample import create_area_def
@@ -147,6 +148,29 @@ class CycloneImage:
         self.bounding_snapshot()
         self.draw_eye()
 
+    def get_dir(self) -> str:
+        """
+        Return directory assigned to this class instance in order to save all output files created by this instance run.
+        Will be created if it does not already exist.
+
+        :return: Directory path assigned to this class instance
+        """
+        dir = os.path.join(os.environ.get("BASE_DIR", "./out"), self.metadata["NAME"],
+                           self.metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
+        try:
+            Path(dir).mkdir(parents=True)
+        except FileExistsError:
+            pass
+        return dir
+
+    def clean_dir(self):
+        """
+        Remove all files in directory assigned to this class instance
+        :return: none
+        """
+        import shutil
+        shutil.rmtree(self.get_dir())
+
     def bounding_snapshot(self):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
@@ -209,7 +233,7 @@ class CycloneImage:
             else:
                 ax.add_geometries([box], crs=PlateCarree(), edgecolor="k", facecolor="none")
         ax.set_title(
-            f"{self.metadata['NAME']} on {self.metadata['ISO_TIME']}\nCategory {self.metadata['USA_SSHS']}, Wind Speed: {self.metadata['STORM_SPEED']}@{self.metadata['STORM_DIR']}\n Eye @ {self.lat} \u00b0N , {self.lon}\u00b0E")
+            f"{self.metadata['NAME']} on {self.metadata['ISO_TIME']}\nCategory {self.metadata['USA_SSHS']}, Wind Speed: {round(self.metadata['STORM_SPEED'])}kts@{round(self.metadata['STORM_DIR'])}\u00b0\n Eye @ {round(self.lat, 2)} \u00b0N , {round(self.lon, 2)}\u00b0E")
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
         plt.show()
@@ -221,6 +245,36 @@ class CycloneImage:
     @property
     def eye(self) -> CycloneSnapshot:
         return self.rects[1]
+
+    def grid_data_edges(self, left, right, top, bottom, p_width, p_height):
+        area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
+            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+        )
+        corrected_left = max(left, area.area_extent_ll[0])
+        corrected_right = min(right, area.area_extent_ll[2])
+        corrected_top = min(top, area.area_extent_ll[3])
+        corrected_bottom = max(bottom, area.area_extent_ll[1])
+
+        upper_left_x, upper_left_y = area.get_xy_from_lonlat(corrected_left, corrected_top)
+        lower_right_x, lower_right_y = area.get_xy_from_lonlat(corrected_right, corrected_bottom)
+
+        w_i = lower_right_x - upper_left_x
+        h_i = lower_right_y - upper_left_y
+        n_cols = w_i // p_width
+        n_rows = h_i // p_height
+
+        grid = [[0 for c in range(n_cols)] for r in range(n_rows)]
+
+        for r in range(n_rows):
+            for c in range(n_cols):
+                x_i = upper_left_x + c * p_width
+                y_i = upper_left_y + r * p_height
+                lon, lat = area.get_lonlat(int(y_i + p_height / 2), int(x_i - p_width / 2))
+                cs = self.bb.add_sub_snap_origin(x_i, y_i, p_width, p_height, lon, lat)
+                cs.mask_array_I05(HIGH=290, LOW=220)
+                self.rects.append(cs)
+                grid[r][c] = cs
+        return SnapshotGrid(grid)
 
     def grid_data(self, lat, lon, p_width, p_height, width, height):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(

@@ -1,4 +1,5 @@
 import pickle
+from pathlib import Path
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -60,6 +61,7 @@ class CycloneSnapshot:
         self.satellite_azimuth = sat_pos
 
         self.grid = []
+
 
     @property
     def is_shaded(self):
@@ -344,10 +346,11 @@ class CycloneSnapshot:
 
 
 class SnapshotGrid:
-    def __init__(self, gd: List[List[CycloneSnapshot]]):
+    def __init__(self, gd: List[List[CycloneSnapshot]],imageInstance=None):
         self.grid = gd
         self.height = len(gd)
         self.width = len(gd[0])
+        self.imageInstance = imageInstance
 
     def plot_all(self, band):
         fig, axs = plt.subplots(self.width, self.height)
@@ -361,7 +364,7 @@ class SnapshotGrid:
             for snap in row:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
 
-    def piecewise_glaciation_temperature(self, plot=True):
+    def piecewise_glaciation_temperature(self, plot=True,show=True,save=False):
         self.gt_grid = [[snap.gt_piece_percentile(plot=False)[0] for snap in row] for row in self.grid]
         if plot:
             fig, ax = plt.subplots()
@@ -369,15 +372,22 @@ class SnapshotGrid:
             cb = plt.colorbar(im)
             cb.set_label("Glaciation Temperature (C)")
             plt.show()
+            if save:
+                plt.savefig(self.imageInstance.get_dir())
+            if show:
+                plt.show()
 
-    def piecewise_r2(self, plot=True):
+    def piecewise_r2(self, plot=True,save=False,show=True):
         self.r2 = np.array([[snap.gt_piece_percentile(plot=False)[1] for snap in row] for row in self.grid])
         if plot:
             fig, ax = plt.subplots()
             im = ax.imshow(self.r2, origin="upper")
             cb = plt.colorbar(im)
             cb.set_label("R^2 goodness of fit coefficient")
-            plt.show()
+            if save:
+                plt.savefig(self.imageInstance.get_dir())
+            if show:
+                plt.show()
 
     def get_mean_r2(self):
         try:
@@ -393,7 +403,7 @@ class SnapshotGrid:
             self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_gt()
 
-    def gt_quadrant_distribution(self, ey_gt=0):
+    def gt_quadrant_distribution(self, ey_gt=0,save=False,show=True):
         """
         Plot distribution of the glaciation temperature in the four quadrants of the cyclone.
         If eye_gt is passed then will compare this against the glaciation temperature of the eye for visualisation
@@ -426,5 +436,7 @@ class SnapshotGrid:
                         xy=(rect.get_x() + rect.get_width() / 2, rect.get_height()),
                         xytext=(0, -5), textcoords="offset points",
                         ha="center", va="bottom")
-
-        plt.show()
+        if save:
+            plt.savefig(self.imageInstance.get_dir())
+        if show:
+            plt.show()
