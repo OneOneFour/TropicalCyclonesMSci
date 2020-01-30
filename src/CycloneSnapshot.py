@@ -250,6 +250,7 @@ class CycloneSnapshot:
         self.img_plot(fig, ax, band)
         if save_dir:
             plt.savefig(save_dir)
+            plt.close(fig)
         if show:
             plt.show()
 
@@ -306,6 +307,7 @@ class CycloneSnapshot:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit(fig, ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
+                    plt.close(fig)
                 if show:
                     plt.show()
             else:
@@ -320,6 +322,7 @@ class CycloneSnapshot:
                 gt_fitter.plot(fig, ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
+                    plt.close(fig)
                 if show:
                     plt.show()
             return np.nan, np.nan, np.nan
@@ -333,6 +336,7 @@ class CycloneSnapshot:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
+                    plt.close(fig)
                 if show:
                     plt.show()
             else:
@@ -408,6 +412,7 @@ class SnapshotGrid:
             cb.set_label("Glaciation Temperature (C)")
             if save:
                 plt.savefig(os.path.join(self.imageInstance.get_dir(), "piecewise_gt_distribution.png"))
+                plt.close(fig)
             if show:
                 plt.show()
             fig, ax = plt.subplots()
@@ -416,6 +421,7 @@ class SnapshotGrid:
             cb2.set_label("R^2 goodness of fit coefficent")
             if save:
                 plt.savefig(os.path.join(self.imageInstance.get_dir(), "piecewise_r2_distribution.png"))
+                plt.close(fig)
             if show:
                 plt.show()
 
@@ -474,6 +480,7 @@ class SnapshotGrid:
                         ha="center", va="bottom")
         if save:
             plt.savefig(os.path.join(self.imageInstance.get_dir(), "quadrant_plot.png"))
+            plt.close(fig)
         if show:
             plt.show()
 

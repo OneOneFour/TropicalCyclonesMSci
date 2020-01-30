@@ -93,7 +93,7 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
     dict_cy = df_cyclone.to_dict(orient="records")
     vals_series = []
     for i, cyclone_point in enumerate(dict_cy[:-1]):
-        if i > max_len:
+        if len(vals_series) >= max_len:
             break
         start_point = cyclone_point
         end_point = dict_cy[i + 1]

@@ -149,8 +149,8 @@ class CycloneImage:
         self.rects = []
         self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
-        self.bb.mask_array_I05(HIGH=280, LOW=220)
-        self.bb.mask_thin_cirrus(60)
+        self.bb.mask_array_I05(HIGH=280, LOW=225)
+        #self.bb.mask_thin_cirrus(60)
         self.draw_eye()
 
     @property
@@ -255,11 +255,12 @@ class CycloneImage:
             else:
                 ax.add_geometries([box], crs=PlateCarree(), edgecolor="k", facecolor="none")
         ax.set_title(
-            f"{self.metadata['NAME']} on {self.metadata['ISO_TIME']}\nCategory {self.metadata['USA_SSHS']}, Wind Speed: {round(self.metadata['STORM_SPEED'])}kts@{round(self.metadata['STORM_DIR'])}\u00b0\n Eye @ {round(self.lat, 2)} \u00b0N , {round(self.lon, 2)}\u00b0E")
+            f"{self.metadata['NAME']} on {self.metadata['ISO_TIME']}\nCategory {self.metadata['USA_SSHS']} Wind Speed:{self.metadata['USA_WIND']}kts\nSpeed: {round(self.metadata['STORM_SPEED'])}kts@{round(self.metadata['STORM_DIR'])}\u00b0\n Eye @ {round(self.lat, 2)} \u00b0N , {round(self.lon, 2)}\u00b0E")
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
         if save:
             plt.savefig(os.path.join(self.get_dir(), "image_grid.png"))
+            plt.clf()
         if show_fig:
             plt.show()
 

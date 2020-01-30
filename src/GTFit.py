@@ -30,7 +30,7 @@ class GTFit:
     def __init__(self, i04_flat, i05_flat):
         self.i04 = i04_flat
         self.i05 = i05_flat
-        self.gt = []
+        self.gt = None
         self.x_i05 = None
         self.y_i04 = None
 
@@ -141,7 +141,8 @@ class GTFit:
         if func:
             ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Curve fit")
         ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
-        ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
+        if self.gt:
+            ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")
