@@ -1,5 +1,5 @@
+import os
 import pickle
-from pathlib import Path
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -61,7 +61,6 @@ class CycloneSnapshot:
         self.satellite_azimuth = sat_pos
 
         self.grid = []
-
 
     @property
     def is_shaded(self):
@@ -173,7 +172,7 @@ class CycloneSnapshot:
             return "LF"
         else:
             raise ValueError(
-                f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, received {wrap(eye_azimuth - self.meta_data['STORM_DIR'])}")
+                f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, received {wrap_360(eye_azimuth - self.meta_data['STORM_DIR'])}")
 
     def mask_using_I01(self, reflectance_cutoff=80):
         """
@@ -246,10 +245,13 @@ class CycloneSnapshot:
         plt.connect("draw_event", draw_cb)
         plt.show()
 
-    def plot(self, band="I05"):
+    def plot(self, band="I05", show=True, save_dir=None):
         fig, ax = plt.subplots()
         self.img_plot(fig, ax, band)
-        plt.show()
+        if save_dir:
+            plt.savefig(save_dir)
+        if show:
+            plt.show()
 
     def mask_array_I04(self, HIGH=273, LOW=230):
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
@@ -295,31 +297,48 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.__I05, mask=blank_mask)
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
-    def gt_piece_all(self,plot=True,raise_up = 0,raise_lower =-38):
-        gt_fitter = GTFit(self.flat(self.I04),self.celcius(self.flat(self.I05)))
-        if plot:
-            fig,ax = plt.subplots(1,2)
-            self.img_plot(fig,ax[1])
-            (gt,gt_err),(r2,params) = gt_fitter.piecewise_fit(fig,ax[0])
-            plt.show()
-        else:
-            (gt,gt_err),(r2,params) = gt_fitter.piecewise_fit()
-        if raise_up < gt or gt < raise_lower:
-            raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
-        return gt,gt_err,r2
-
-    def gt_piece_percentile(self, percentile=5, plot=True,raise_up = 0, raise_lower = -45):
+    def gt_piece_all(self, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
-        if plot:
-            fig, ax = plt.subplots(1, 2)
-            self.img_plot(fig, ax[1])
-            (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
-            plt.show()
-        else:
-            (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile)
-        if raise_up < gt or gt < raise_lower:  # Sanity check
-            raise ValueError("Outside of range")
-        return gt,gt_err, r2
+        try:
+            if plot:
+                fig, ax = plt.subplots(1, 2)
+                self.img_plot(fig, ax[1])
+                (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit(fig, ax[0])
+                if save_fig:
+                    plt.savefig(save_fig)
+                if show:
+                    plt.show()
+            else:
+                (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit()
+            if raise_up < gt or gt < raise_lower or r2 < 0.8:
+                raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
+            return gt, gt_err, r2
+        except (RuntimeError, ValueError):
+            if plot:
+                if save_fig:
+                    plt.savefig(save_fig)
+                if show:
+                    plt.show()
+            return np.nan, np.nan, np.nan
+
+    def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-45, save_fig=None, show=True):
+        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
+        try:
+            if plot:
+                fig, ax = plt.subplots(1, 2)
+                self.img_plot(fig, ax[1])
+                (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
+                if save_fig:
+                    plt.savefig(save_fig)
+                if show:
+                    plt.show()
+            else:
+                (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile)
+            if raise_up < gt or gt < raise_lower or r2 < 0.8:  # Sanity check
+                raise ValueError("Outside predefined range")
+            return gt, gt_err, r2
+        except (RuntimeError, ValueError):
+            return np.nan, np.nan, np.nan
 
     def unmask_array(self):
         del self.I04_mask
@@ -377,27 +396,23 @@ class SnapshotGrid:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
 
     def piecewise_glaciation_temperature(self, plot=True, show=True, save=False):
-        self.gt_grid = [[snap.gt_piece_percentile(plot=False)[0] for snap in row] for row in self.grid]
+        gd = np.array([[list(snap.gt_piece_percentile(plot=False)) for snap in row] for row in self.grid])
+        self.gt_grid, self.gt_err, self.r2 = np.squeeze(np.split(gd, 3, 2))
         if plot:
             fig, ax = plt.subplots()
             im = ax.imshow(self.gt_grid, origin="upper")
             cb = plt.colorbar(im)
             cb.set_label("Glaciation Temperature (C)")
-            plt.show()
             if save:
-                plt.savefig(self.imageInstance.get_dir())
+                plt.savefig(os.path.join(self.imageInstance.get_dir(), "piecewise_gt_distribution.png"))
             if show:
                 plt.show()
-
-    def piecewise_r2(self, plot=True, save=False, show=True):
-        self.r2 = np.array([[snap.gt_piece_percentile(plot=False)[1] for snap in row] for row in self.grid])
-        if plot:
             fig, ax = plt.subplots()
-            im = ax.imshow(self.r2, origin="upper")
-            cb = plt.colorbar(im)
-            cb.set_label("R^2 goodness of fit coefficient")
+            im2 = ax.imshow(self.r2, origin="upper")
+            cb2 = plt.colorbar(im2)
+            cb2.set_label("R^2 goodness of fit coefficent")
             if save:
-                plt.savefig(self.imageInstance.get_dir())
+                plt.savefig(os.path.join(self.imageInstance.get_dir(), "piecewise_r2_distribution.png"))
             if show:
                 plt.show()
 
@@ -405,7 +420,7 @@ class SnapshotGrid:
         try:
             return np.nanmean(self.r2)
         except AttributeError:
-            self.piecewise_r2(plot=False)
+            self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_r2()
 
     def get_mean_gt(self):
@@ -415,7 +430,7 @@ class SnapshotGrid:
             self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_gt()
 
-    def gt_quadrant_distribution(self, ey_gt=0, save=False, show=True):
+    def gt_quadrant_distribution(self, ey_gt=0, ey_gt_err=0, save=False, show=True):
         """
         Plot distribution of the glaciation temperature in the four quadrants of the cyclone.
         If eye_gt is passed then will compare this against the glaciation temperature of the eye for visualisation
@@ -430,13 +445,18 @@ class SnapshotGrid:
                 distr[snap.quadrant].append(self.gt_grid[i][j])
         vals = {k: np.array(v).mean() for k, v in distr.items()}
         vals["EYE"] = ey_gt
+        from scipy.stats import sem
+        vals_err = {k: sem(np.array(v)) for k, v in distr.items()}
+        vals_err["EYE"] = ey_gt_err
 
         fig, ax = plt.subplots()
 
-        rects = ax.bar(range(len(vals)), list(vals.values()), align="center")
+        rects = ax.bar(range(len(vals)), list(vals.values()), align="center", yerr=vals_err.values(), capsize=5)
         ax.set_xticks(range(len(vals)))
         ax.set_xticklabels(list(vals.keys()))
         ax.set_ylabel("Glaciation Temperature (C)")
+        ax.invert_yaxis()
+        ax.set_ylim(bottom=0, top=-45)
 
         ax.set_title(
             f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature Distribution by Quadrant")
@@ -447,9 +467,11 @@ class SnapshotGrid:
         for rect in rects:
             ax.annotate(f"{round(rect.get_height(), 2)}",
                         xy=(rect.get_x() + rect.get_width() / 2, rect.get_height()),
-                        xytext=(0, -5), textcoords="offset points",
+                        xytext=(0, 5), textcoords="offset points",
                         ha="center", va="bottom")
         if save:
-            plt.savefig(self.imageInstance.get_dir())
+            plt.savefig(os.path.join(self.imageInstance.get_dir(), "quadrant_plot.png"))
         if show:
             plt.show()
+
+        return vals, vals_err

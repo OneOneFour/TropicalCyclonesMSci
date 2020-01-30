@@ -98,15 +98,15 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
             return snap_list
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
-        with ProgressBar():
             # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
             #                    cat=start_point["USA_SSHS"], dayOrNight="D")
             # if ci is not None:
             #     ci.draw_eye()
             #     return ci
-            cy = get_entire_cyclone(start_point, end_point)
-            if cy:
-                if shading ^ cy.is_eyewall_shaded:
-                    per_cyclone(cy)
-                    snap_list.append(cy)
+        cy = get_entire_cyclone(start_point, end_point)
+        if cy:
+            print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
+            if shading ^ cy.is_eyewall_shaded:
+                per_cyclone(cy)
+                snap_list.append(cy)
     return snap_list

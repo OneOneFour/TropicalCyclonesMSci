@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 from pyresample import create_area_def
+from pyresample.utils import proj4_dict_to_str
 from satpy import Scene
 from shapely import geometry
 
@@ -14,6 +15,7 @@ DEFAULT_MARGIN = 0.2
 RESOLUTION_DEF = (3.75 / 6371) * 2 * np.pi
 NM_TO_M = 1852
 R_E = 6371000
+DEG_STEP = 375 / (NM_TO_M * 60)
 
 spline_c = lambda dx, dv, T, v0: (3 * (dx - T * v0) - dv * T) / (T * T)
 spline_d = lambda dx, dv, T, v0: (2 * (T * v0 - dx) + dv * T) / (T * T * T)
@@ -145,8 +147,15 @@ class CycloneImage:
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
         self.rects = []
+        self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
+        self.bb.mask_array_I05(HIGH=280, LOW=230)
+        self.bb.mask_thin_cirrus(60)
         self.draw_eye()
+
+    @property
+    def proj_str(self):
+        return proj4_dict_to_str(self.proj_dict)
 
     def get_dir(self) -> str:
         """
@@ -173,7 +182,7 @@ class CycloneImage:
 
     def bounding_snapshot(self):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
-            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+            self.proj_dict
         )
         corrected_scene = self.scene.resample(area)
         self.bb = CycloneSnapshot(
@@ -202,21 +211,22 @@ class CycloneImage:
             finally:
                 self.plot_globe()
         gd.piecewise_glaciation_temperature()
-        gt, r2 = self.eye.gt_piece_percentile()
-        gd.piecewise_r2()
-        gd.gt_quadrant_distribution(gt)
+        gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
+        gd.gt_quadrant_distribution(gt, gt_err)
 
-    def auto_gt_cycle(self,w=20,h=20,p_w=96,p_h=96):
-        gd = self.grid_data_edges(self.lon - w/2,self.lon + w/2,self.lat + h/2,self.lat - h/2,p_w,p_h)
-        self.plot_globe()
-        gd.piecewise_glaciation_temperature(show=False,save=True)
-        gt,gt_err,r2 = self.eye.gt_piece_percentile()
-        gd.piecewise_r2()
-        gd.gt_quadrant_distribution()
+    def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
+        gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)
+        #self.plot_globe(band="I05", show_fig=False, save=True)
+        self.bb.plot(band="I05", save_dir=os.path.join(self.get_dir(), "whole_masked_plot.png"), show=False)
+        gd.piecewise_glaciation_temperature(show=False, save=True)
+        gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
+        gt_alt, gt_alt_err, r2_alt = self.eye.gt_piece_all(save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
+                                                           show=False)
+        print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
+        print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
+        gd.gt_quadrant_distribution(gt, gt_err, show=False, save=True)
 
-
-
-    def plot_globe(self, band="I05", show=-1):
+    def plot_globe(self, band="I05", show=-1, show_fig=True, save=False):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         )
@@ -246,7 +256,10 @@ class CycloneImage:
             f"{self.metadata['NAME']} on {self.metadata['ISO_TIME']}\nCategory {self.metadata['USA_SSHS']}, Wind Speed: {round(self.metadata['STORM_SPEED'])}kts@{round(self.metadata['STORM_DIR'])}\u00b0\n Eye @ {round(self.lat, 2)} \u00b0N , {round(self.lon, 2)}\u00b0E")
         cb = plt.colorbar(im)
         cb.set_label("Kelvin (K)")
-        plt.show()
+        if save:
+            plt.savefig(os.path.join(self.get_dir(), "image_grid.png"))
+        if show_fig:
+            plt.show()
 
     @property
     def is_eyewall_shaded(self):
@@ -258,14 +271,23 @@ class CycloneImage:
 
     def grid_data_edges(self, left, right, top, bottom, p_width, p_height):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
-            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+            self.proj_dict
         )
-        corrected_left = max(left, area.area_extent_ll[0])
-        corrected_right = min(right, area.area_extent_ll[2])
-        corrected_top = min(top, area.area_extent_ll[3])
-        corrected_bottom = max(bottom, area.area_extent_ll[1])
+        corrected_left = max(left,
+                             np.rad2deg(max(area.outer_boundary_corners[0].lon,
+                                            area.outer_boundary_corners[3].lon)) + DEG_STEP)
+        corrected_bottom = max(bottom,
+                               np.rad2deg(max(area.outer_boundary_corners[2].lat,
+                                              area.outer_boundary_corners[3].lat)) + DEG_STEP)
+        corrected_right = min(right,
+                              np.rad2deg(min(area.outer_boundary_corners[1].lon,
+                                             area.outer_boundary_corners[2].lon)) - DEG_STEP)
+        corrected_top = min(top,
+                            np.rad2deg(
+                                min(area.outer_boundary_corners[0].lat, area.outer_boundary_corners[1].lat)) - DEG_STEP)
 
         upper_left_x, upper_left_y = area.get_xy_from_lonlat(corrected_left, corrected_top)
+
         lower_right_x, lower_right_y = area.get_xy_from_lonlat(corrected_right, corrected_bottom)
 
         w_i = lower_right_x - upper_left_x
@@ -281,14 +303,13 @@ class CycloneImage:
                 y_i = upper_left_y + r * p_height
                 lon, lat = area.get_lonlat(int(y_i + p_height / 2), int(x_i - p_width / 2))
                 cs = self.bb.add_sub_snap_origin(x_i, y_i, p_width, p_height, lon, lat)
-                cs.mask_array_I05(HIGH=290, LOW=220)
                 self.rects.append(cs)
                 grid[r][c] = cs
-        return SnapshotGrid(grid)
+        return SnapshotGrid(grid, self)
 
     def grid_data(self, lat, lon, p_width, p_height, width, height):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
-            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+            self.proj_dict
         )
         upper_left_x, upper_left_y = (area.get_xy_from_lonlat(lon - width / 2, lat + height / 2))
         lower_right_x, lower_right_y = area.get_xy_from_lonlat(lon + width / 2,
@@ -306,10 +327,10 @@ class CycloneImage:
                 y_i = upper_left_y + r * p_height
                 lon, lat = area.get_lonlat(int(y_i + p_height / 2), int(x_i - p_width / 2))
                 cs = self.bb.add_sub_snap_origin(x_i, y_i, p_width, p_height, lon, lat)
-                cs.mask_array_I05(HIGH=290, LOW=220)
+                cs.mask_array_I05(HIGH=290, LOW=230)
                 self.rects.append(cs)
                 grid[r][c] = cs
-        return SnapshotGrid(grid)
+        return SnapshotGrid(grid, self)
 
     def draw_eye(self):
         return self.get_rect(self.metadata["USA_LAT"], self.metadata["USA_LON"],
@@ -330,7 +351,7 @@ class CycloneImage:
 
     def get_rect(self, lat, lon, width, height):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
-            {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
+            self.proj_dict
         )
         bottom_left = area.get_xy_from_lonlat(lon - width / 2, lat - height / 2)
         top_right = area.get_xy_from_lonlat(lon + width / 2, lat + height / 2)
