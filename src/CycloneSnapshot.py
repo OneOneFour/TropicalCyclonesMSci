@@ -315,6 +315,9 @@ class CycloneSnapshot:
             return gt, gt_err, r2
         except (RuntimeError, ValueError):
             if plot:
+                fig, ax = plt.subplots(1, 2)
+                self.img_plot(fig, ax[1])
+                gt_fitter.plot(fig, ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
                 if show:

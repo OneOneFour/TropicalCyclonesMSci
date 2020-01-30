@@ -149,7 +149,7 @@ class CycloneImage:
         self.rects = []
         self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
-        self.bb.mask_array_I05(HIGH=280, LOW=230)
+        self.bb.mask_array_I05(HIGH=280, LOW=220)
         self.bb.mask_thin_cirrus(60)
         self.draw_eye()
 
@@ -212,11 +212,12 @@ class CycloneImage:
                 self.plot_globe()
         gd.piecewise_glaciation_temperature()
         gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
-        gd.gt_quadrant_distribution(gt, gt_err)
+        val,val_errs = gd.gt_quadrant_distribution(gt, gt_err)
+        return val,val_errs
 
     def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
         gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)
-        #self.plot_globe(band="I05", show_fig=False, save=True)
+        # self.plot_globe(band="I05", show_fig=False, save=True)
         self.bb.plot(band="I05", save_dir=os.path.join(self.get_dir(), "whole_masked_plot.png"), show=False)
         gd.piecewise_glaciation_temperature(show=False, save=True)
         gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
@@ -224,7 +225,8 @@ class CycloneImage:
                                                            show=False)
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
-        gd.gt_quadrant_distribution(gt, gt_err, show=False, save=True)
+        val, val_errs = gd.gt_quadrant_distribution(gt, gt_err, show=False, save=True)
+        return val, val_errs
 
     def plot_globe(self, band="I05", show=-1, show_fig=True, save=False):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
