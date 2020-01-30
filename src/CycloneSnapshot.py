@@ -305,6 +305,9 @@ class CycloneSnapshot:
 
         if 0 < gt or gt < -45:  # Sanity check
             return np.nan, np.nan
+        if (gt < np.min(self.I05) - 273.15) or (gt > np.max(self.I05) - 273.15):
+            return np.nan, np.nan
+
         return gt, r2
 
     def unmask_array(self):

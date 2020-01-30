@@ -7,6 +7,7 @@ import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 import matplotlib.pyplot as plt
 import os
+import scipy.optimize as sp
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 from CycloneSnapshot import CycloneSnapshot
@@ -14,6 +15,10 @@ from CycloneSnapshot import CycloneSnapshot
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.since1980.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
+
+
+def gauss(x, a, x0, sigma):
+    return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
 
 def all_cyclones_since(year, month, day, cat_min=4):
@@ -122,10 +127,10 @@ if __name__ == "__main__":
         c = CycloneSnapshot.load(filename)
         try:
             c.mask_thin_cirrus()
-            c.mask_array_I05(LOW=220, HIGH=280)
+            c.mask_array_I05(LOW=220, HIGH=270)
             c.mask_using_I01(80)
             gt, r = c.gt_piece_percentile(percentile=5, plot=False)
-            if gt is not np.nan and r > 0.95:
+            if gt is not np.nan and r > 0.90:
                 histogram_dict.append({"year": c.meta_data["SEASON"], "gt": gt, "r": r, "wind": c.meta_data["USA_WIND"],
                                       "cat": c.meta_data["USA_SSHS"], "basin": c.meta_data["BASIN"]})
         except:
@@ -133,7 +138,7 @@ if __name__ == "__main__":
 
     all_gts = []
     all_winds = []
-    basin_gts = {"WP" : [], "NA": [], "NI": [], "SI": [], "NP": [], "SA": [], "EP": [], "SP": []}
+    basin_gts = {"WP": [], "NA": [], "NI": [], "SI": [], "NP": [], "SA": [], "EP": [], "SP": []}
     year_gts = {2012: [], 2013: [], 2014: [], 2015: [], 2016: [], 2017: [], 2018: [], 2019: []}
     cat_gts = {4.0: [], 5.0: []}
     wind_gts = {110: [], 120: [], 130: [], 140: [], 150: [], 160: []}
@@ -157,7 +162,22 @@ if __name__ == "__main__":
         all_gts.append(cyclone["gt"])
         all_winds.append(cyclone["wind"])
 
-    plt.hist(wind_gts.values(), bins=np.arange(-44, -10, 2), rwidth=0.8, histtype="barstacked",
-             label=wind_gts.keys())
+    n, bins, patches = plt.hist(basin_gts.values(), bins=np.arange(-44, -10, 2), rwidth=0.8, histtype="barstacked",
+                                label=basin_gts.keys())
+
+    x = []
+    for i in bins:
+        x.append(i + 1)
+    x = np.array(x[:-1])
+    y = np.array(n[-1])
+
+    n = len(x)
+    mean = np.mean(x)
+    sigma = np.std(x)
+    popt, pcov = sp.curve_fit(gauss, x, y, p0=[1, mean, sigma])
+    ss_res = np.sum((y - gauss(x,*popt))**2)
+    ss_tot= np.sum((y - np.mean(y))**2)
+    r2 = 1 - ss_res/ss_tot
+    plt.plot(x, gauss(x, *popt), 'ro:', label=f"mean={round(popt[1], 2)}, sigma={round(popt[2], 2)}, r2={round(r2, 2)}")
     plt.legend()
     plt.show()
