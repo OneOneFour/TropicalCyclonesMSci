@@ -20,6 +20,9 @@ DEG_STEP = 375 / (NM_TO_M * 60)
 spline_c = lambda dx, dv, T, v0: (3 * (dx - T * v0) - dv * T) / (T * T)
 spline_d = lambda dx, dv, T, v0: (2 * (T * v0 - dx) + dv * T) / (T * T * T)
 
+FULL_SET = ("I05", "I04", "I01", "M09", "i_satellite_azimuth_angle", "i_lat", "i_lon")
+REDUCED_SET = ("I05", "I04", "i_satellite_azimuth_angle", "I01")
+
 
 def wrap(x):
     if x > 180:
@@ -108,7 +111,7 @@ def get_eye(start_point, end_point):
                            metadata)
 
 
-def get_entire_cyclone(start_point, end_point):
+def get_entire_cyclone(start_point, end_point,set=FULL_SET):
     lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
     lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
     north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
@@ -119,6 +122,7 @@ def get_entire_cyclone(start_point, end_point):
     try:
         files, urls = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(),
                                end_point["ISO_TIME"].to_pydatetime(),
+                               set=set,
                                north=lat_0 + north_extent,
                                south=lat_0 - south_extent,
                                west=lon_0 - west_extent,
@@ -131,7 +135,7 @@ def get_entire_cyclone(start_point, end_point):
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
 
-    return CycloneImage(scene, metadata)
+    return CycloneImage(scene, metadata,set=set)
 
 
 import matplotlib.pyplot as plt
@@ -139,18 +143,18 @@ import matplotlib.pyplot as plt
 
 class CycloneImage:
 
-    def __init__(self, scene: Scene, metadata: dict):
+    def __init__(self, scene: Scene, metadata: dict,set):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(["I05", "I04", "I01", "M09", "i_lat", "i_lon", "i_satellite_azimuth_angle"])
+        self.scene.load(set)
         self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
         self.rects = []
         self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
-        self.bb.mask_array_I05(HIGH=280, LOW=225)
-        #self.bb.mask_thin_cirrus(60)
+        self.bb.mask_array_I05(HIGH=285, LOW=225)
+        # self.bb.mask_thin_cirrus(60)
         self.draw_eye()
 
     @property
@@ -192,7 +196,7 @@ class CycloneImage:
             corrected_scene["i_satellite_azimuth_angle"].values, self.metadata,
             area.get_lonlat(area.shape[0] - 1, 0)[0],
             area.get_lonlat(area.shape[0] - 1, 0)[1],
-            corrected_scene["M09"].values, corrected_scene["I01"].values
+            None, corrected_scene["I01"].values
         )
         self.rects.append(self.bb)
 
@@ -212,12 +216,14 @@ class CycloneImage:
                 self.plot_globe()
         gd.piecewise_glaciation_temperature()
         gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
-        val,val_errs = gd.gt_quadrant_distribution(gt, gt_err)
-        return val,val_errs
+        val, val_errs = gd.gt_quadrant_distribution(gt, gt_err)
+        return val, val_errs
 
-    def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
+    def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96,
+                      save_attrs=("NAME", "ISO_TIME", "USA_SSHS", "USA_WIND", "STORM_SPEED", "STORM_DIR")):
         gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)
-        # self.plot_globe(band="I05", show_fig=False, save=True)
+        self.plot_globe(band="I05", show_fig=False, save=True)
+        self.bb.plot(band="I01", save_dir=os.path.join(self.get_dir(), "whole_i1_plot.png"), show=False)
         self.bb.plot(band="I05", save_dir=os.path.join(self.get_dir(), "whole_masked_plot.png"), show=False)
         gd.piecewise_glaciation_temperature(show=False, save=True)
         gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
@@ -225,8 +231,16 @@ class CycloneImage:
                                                            show=False)
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
-        val, val_errs = gd.gt_quadrant_distribution(gt, gt_err, show=False, save=True)
-        return val, val_errs
+        val = gd.gt_quadrant_distribution(gt, gt_err, show=False, save=True)
+        for att in save_attrs:
+            val[att] = self.metadata[att]
+            if att == "ISO_TIME":
+                val["ISO_TIME"] = self.metadata[att].strftime("%Y-%m-%d %H:%M:%S")
+        import json
+        with open(os.path.join(self.get_dir(), "out.json"), "w") as f:
+            json.dump(val, f)
+
+        return val
 
     def plot_globe(self, band="I05", show=-1, show_fig=True, save=False):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
@@ -267,6 +281,10 @@ class CycloneImage:
     @property
     def is_eyewall_shaded(self):
         return self.eye.is_shaded
+
+    @property
+    def is_eyewall_gt_good(self):
+        return not np.isnan(self.eye.gt_piece_percentile(plot=False, show=False)[0])
 
     @property
     def eye(self) -> CycloneSnapshot:

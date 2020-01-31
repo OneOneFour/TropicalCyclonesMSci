@@ -112,7 +112,7 @@ class CycloneSnapshot:
                              self.satellite_azimuth[bottom:top, left:right], self.meta_data,
                              b_lon,
                              b_lat,
-                             M09=self.M09[bottom:top, left:right], I01=self.I01[bottom:top, left:right])
+                             M09=None, I01=self.I01[bottom:top, left:right])
         self.grid.append([(left, right, bottom, top), cs])
 
         return cs
@@ -312,19 +312,10 @@ class CycloneSnapshot:
                     plt.show()
             else:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit()
-            if raise_up < gt or gt < raise_lower or r2 < 0.8:
+            if raise_up < gt or gt + gt_err < raise_lower or r2 < 0.8:
                 raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
             return gt, gt_err, r2
         except (RuntimeError, ValueError):
-            if plot:
-                fig, ax = plt.subplots(1, 2)
-                self.img_plot(fig, ax[1])
-                gt_fitter.plot(fig, ax[0])
-                if save_fig:
-                    plt.savefig(save_fig)
-                    plt.close(fig)
-                if show:
-                    plt.show()
             return np.nan, np.nan, np.nan
 
     def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-45, save_fig=None, show=True):
@@ -447,12 +438,14 @@ class SnapshotGrid:
         :return: None
         """
         distr = {"LF": [], "RF": [], "RB": [], "LB": []}
+        vals = {}
         for i, row in enumerate(self.grid):
             for j, snap in enumerate(row):
                 if np.isnan(self.gt_grid[i][j]):
                     continue
                 distr[snap.quadrant].append(self.gt_grid[i][j])
-        vals = {k: np.array(v).mean() for k, v in distr.items()}
+        for k, v in distr.items():
+            vals[k] = np.nanmean(v)
         vals["EYE"] = ey_gt
         from scipy.stats import sem
         vals_err = {k: sem(np.array(v)) for k, v in distr.items()}
@@ -470,8 +463,14 @@ class SnapshotGrid:
         ax.set_title(
             f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature Distribution by Quadrant")
 
+        for k,v in vals_err.items():
+            if k== "EYE":
+                continue
+            vals[f"{k}_ERR"] = v
+            vals[f"{k}_COUNT"] = len(distr[k])
+
         print(
-            f"Number of grid cells per quadrant\nLF:{len(distr['LF'])}\nRF:{len(distr['RF'])}\nRB:{len(distr['RB'])}\nLB:{len(distr['LB'])}")
+            f"Number of grid cells per quadrant\nLF:{vals['LF_COUNT']}\nRF:{vals['RF_COUNT']}\nRB:{vals['RB_COUNT']}\nLB:{vals['LB_COUNT']}")
 
         for rect in rects:
             ax.annotate(f"{round(rect.get_height(), 2)}",
@@ -484,4 +483,4 @@ class SnapshotGrid:
         if show:
             plt.show()
 
-        return vals, vals_err
+        return vals
