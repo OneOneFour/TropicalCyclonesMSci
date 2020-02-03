@@ -111,7 +111,7 @@ def get_eye(start_point, end_point):
                            metadata)
 
 
-def get_entire_cyclone(start_point, end_point,set=FULL_SET):
+def get_entire_cyclone(start_point, end_point, set=FULL_SET):
     lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
     lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
     north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
@@ -135,7 +135,7 @@ def get_entire_cyclone(start_point, end_point,set=FULL_SET):
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
 
-    return CycloneImage(scene, metadata,set=set)
+    return CycloneImage(scene, metadata, set=set)
 
 
 import matplotlib.pyplot as plt
@@ -143,7 +143,7 @@ import matplotlib.pyplot as plt
 
 class CycloneImage:
 
-    def __init__(self, scene: Scene, metadata: dict,set):
+    def __init__(self, scene: Scene, metadata: dict, set):
         self.scene = scene
         self.metadata = metadata
         self.scene.load(set)
@@ -219,8 +219,7 @@ class CycloneImage:
         val, val_errs = gd.gt_quadrant_distribution(gt, gt_err)
         return val, val_errs
 
-    def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96,
-                      save_attrs=("NAME", "ISO_TIME", "USA_SSHS", "USA_WIND", "STORM_SPEED", "STORM_DIR")):
+    def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
         gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)
         self.plot_globe(band="I05", show_fig=False, save=True)
         self.bb.plot(band="I01", save_dir=os.path.join(self.get_dir(), "whole_i1_plot.png"), show=False)
@@ -231,16 +230,8 @@ class CycloneImage:
                                                            show=False)
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
-        val = gd.gt_quadrant_distribution(gt, gt_err, show=False, save=True)
-        for att in save_attrs:
-            val[att] = self.metadata[att]
-            if att == "ISO_TIME":
-                val["ISO_TIME"] = self.metadata[att].strftime("%Y-%m-%d %H:%M:%S")
-        import json
-        with open(os.path.join(self.get_dir(), "out.json"), "w") as f:
-            json.dump(val, f)
-
-        return val
+        gd.gt_quadrant_distribution(show=False, save=True)
+        return gd.vals
 
     def plot_globe(self, band="I05", show=-1, show_fig=True, save=False):
         area = self.scene[band].attrs["area"].compute_optimal_bb_area(
@@ -274,7 +265,7 @@ class CycloneImage:
         cb.set_label("Kelvin (K)")
         if save:
             plt.savefig(os.path.join(self.get_dir(), "image_grid.png"))
-            plt.clf()
+            plt.close(plt.gcf())
         if show_fig:
             plt.show()
 
@@ -290,7 +281,7 @@ class CycloneImage:
     def eye(self) -> CycloneSnapshot:
         return self.rects[1]
 
-    def grid_data_edges(self, left, right, top, bottom, p_width, p_height):
+    def grid_data_edges(self, left, right, top, bottom, p_width, p_height, ignore_eye=False):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
             self.proj_dict
         )
@@ -323,7 +314,12 @@ class CycloneImage:
                 x_i = upper_left_x + c * p_width
                 y_i = upper_left_y + r * p_height
                 lon, lat = area.get_lonlat(int(y_i + p_height / 2), int(x_i - p_width / 2))
+
                 cs = self.bb.add_sub_snap_origin(x_i, y_i, p_width, p_height, lon, lat)
+                if self.eye.check_overlap(cs):
+                    # Skip the overlap if one exists
+                    del cs
+                    continue
                 self.rects.append(cs)
                 grid[r][c] = cs
         return SnapshotGrid(grid, self)

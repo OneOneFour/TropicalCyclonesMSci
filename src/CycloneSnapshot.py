@@ -79,11 +79,31 @@ class CycloneSnapshot:
             return self.__I04
 
     @property
+    def t_lat(self):
+        return self.b_lat + self.height
+
+    @property
+    def t_lon(self):
+        return self.b_lon + self.width
+
+    @property
     def I05(self):
         if hasattr(self, "I05_mask"):
             return self.I05_mask
         else:
             return self.__I05
+
+    def check_overlap(self, other: "CycloneSnapshot"):
+        """
+        Check whether other CycloneSnapshot object is overlap
+        :param other:
+        :return:
+        """
+        if self.b_lon > other.t_lon or other.b_lon > self.t_lon:
+            return False
+        if self.b_lat > other.t_lat or other.b_lat > self.t_lat:
+            return False
+        return True
 
     @property
     def is_complete(self):
@@ -380,6 +400,16 @@ class SnapshotGrid:
         self.height = len(gd)
         self.width = len(gd[0])
         self.imageInstance = imageInstance
+        if imageInstance:
+            self.vals = {}
+            for k, v in self.imageInstance.metadata.items():
+                if k == "ISO_TIME":
+                    self.vals[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+                self.vals[k] = v
+
+    def set_eye_gt(self, gt, gt_err):
+        self.vals["EYE"] = gt
+        self.vals["EYE_ERR"] = gt_err
 
     def plot_all(self, band):
         fig, axs = plt.subplots(self.width, self.height)
@@ -392,6 +422,12 @@ class SnapshotGrid:
         for row in self.grid:
             for snap in row:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
+
+    def save(self, path):
+        import json
+
+        with open(os.path.join(self.imageInstance.get_dir(), "out.json"), "w") as f:
+            json.dump(self.vals, f)
 
     def piecewise_glaciation_temperature(self, plot=True, show=True, save=False):
         gd = np.array([[list(snap.gt_piece_percentile(plot=False)) for snap in row] for row in self.grid])
@@ -409,12 +445,15 @@ class SnapshotGrid:
             fig, ax = plt.subplots()
             im2 = ax.imshow(self.r2, origin="upper")
             cb2 = plt.colorbar(im2)
-            cb2.set_label("R^2 goodness of fit coefficent")
+            cb2.set_label("R^2 goodness of fit coefficient")
             if save:
                 plt.savefig(os.path.join(self.imageInstance.get_dir(), "piecewise_r2_distribution.png"))
                 plt.close(fig)
             if show:
                 plt.show()
+
+        self.vals["GT_MEAN"] = np.nanmean(self.gt_grid)
+        self.vals["GT_STD"] = np.nanstd(self.gt_grid)
 
     def get_mean_r2(self):
         try:
@@ -430,7 +469,10 @@ class SnapshotGrid:
             self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_gt()
 
-    def gt_quadrant_distribution(self, ey_gt=0, ey_gt_err=0, save=False, show=True):
+    def gt_radial_distribution(self, radial_step, units="m", eye_gt=0, eye_gt_err=0, plot=True, save=False, show=True):
+        pass
+
+    def gt_quadrant_distribution(self, plot=True, save=False, show=True):
         """
         Plot distribution of the glaciation temperature in the four quadrants of the cyclone.
         If eye_gt is passed then will compare this against the glaciation temperature of the eye for visualisation
@@ -438,49 +480,50 @@ class SnapshotGrid:
         :return: None
         """
         distr = {"LF": [], "RF": [], "RB": [], "LB": []}
-        vals = {}
         for i, row in enumerate(self.grid):
             for j, snap in enumerate(row):
                 if np.isnan(self.gt_grid[i][j]):
                     continue
                 distr[snap.quadrant].append(self.gt_grid[i][j])
         for k, v in distr.items():
-            vals[k] = np.nanmean(v)
-        vals["EYE"] = ey_gt
+            self.vals[k] = np.nanmean(v)
         from scipy.stats import sem
         vals_err = {k: sem(np.array(v)) for k, v in distr.items()}
-        vals_err["EYE"] = ey_gt_err
+        vals_err["EYE"] = self.vals["EYE_ERR"]
 
-        fig, ax = plt.subplots()
+        if plot:
+            fig, ax = plt.subplots()
 
-        rects = ax.bar(range(len(vals)), list(vals.values()), align="center", yerr=vals_err.values(), capsize=5)
-        ax.set_xticks(range(len(vals)))
-        ax.set_xticklabels(list(vals.keys()))
-        ax.set_ylabel("Glaciation Temperature (C)")
-        ax.invert_yaxis()
-        ax.set_ylim(bottom=0, top=-45)
+            rects = ax.bar(range(5),
+                           [self.vals["LB"], self.vals["RB"], self.vals["RF"], self.vals["LF"], self.vals["EYE"]],
+                           align="center", yerr=vals_err.values(), capsize=5)
+            ax.set_xticks(range(5))
+            ax.set_xticklabels(["LB", "RB", "RF", "LF", "EYE"])
+            ax.set_ylabel("Glaciation Temperature (C)")
+            ax.invert_yaxis()
+            ax.set_ylim(bottom=0, top=-45)
 
-        ax.set_title(
-            f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature Distribution by Quadrant")
+            ax.set_title(
+                f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature Distribution by Quadrant")
 
-        for k,v in vals_err.items():
-            if k== "EYE":
+            for rect in rects:
+                ax.annotate(f"{round(rect.get_height(), 2)}",
+                            xy=(rect.get_x() + rect.get_width() / 2, rect.get_height()),
+                            xytext=(0, 5), textcoords="offset points",
+                            ha="center", va="bottom")
+            if save:
+                plt.savefig(os.path.join(self.imageInstance.get_dir(), "quadrant_plot.png"))
+                plt.close(fig)
+            if show:
+                plt.show()
+
+        for k, v in vals_err.items():
+            if k == "EYE":
                 continue
-            vals[f"{k}_ERR"] = v
-            vals[f"{k}_COUNT"] = len(distr[k])
+            self.vals[f"{k}_ERR"] = v
+            self.vals[f"{k}_COUNT"] = len(distr[k])
 
         print(
-            f"Number of grid cells per quadrant\nLF:{vals['LF_COUNT']}\nRF:{vals['RF_COUNT']}\nRB:{vals['RB_COUNT']}\nLB:{vals['LB_COUNT']}")
+            f"Number of grid cells per quadrant\nLF:{self.vals['LF_COUNT']}\nRF:{self.vals['RF_COUNT']}\nRB:{self.vals['RB_COUNT']}\nLB:{self.vals['LB_COUNT']}")
 
-        for rect in rects:
-            ax.annotate(f"{round(rect.get_height(), 2)}",
-                        xy=(rect.get_x() + rect.get_width() / 2, rect.get_height()),
-                        xytext=(0, 5), textcoords="offset points",
-                        ha="center", va="bottom")
-        if save:
-            plt.savefig(os.path.join(self.imageInstance.get_dir(), "quadrant_plot.png"))
-            plt.close(fig)
-        if show:
-            plt.show()
-
-        return vals
+        return self.vals
