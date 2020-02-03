@@ -7,11 +7,12 @@ import numpy as np
 import numpy.ma as npma
 from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
-
+from scipy.stats import sem
 from GTFit import GTFit
 
 ABSOLUTE_ZERO = 273.15
 NM_TO_M = 1852
+R_E = 6371000
 
 
 def wrap_360(x):
@@ -81,6 +82,14 @@ class CycloneSnapshot:
     @property
     def t_lat(self):
         return self.b_lat + self.height
+
+    def distance_to_snap(self, snap: "CycloneSnapshot", units="m"):
+        angle = np.arcos(np.sin(self.b_lat) * np.sin(snap.b_lat) + np.cos(self.b_lat) * np.cos(snap.b_lat) * np.cos(
+            np.abs(snap.b_lon - self.b_lon)))
+        if units == "m":
+            return angle * R_E
+        if units == "nm":
+            return angle * R_E / NM_TO_M
 
     @property
     def t_lon(self):
@@ -407,6 +416,10 @@ class SnapshotGrid:
                     self.vals[k] = v.strftime("%Y-%m-%d %H:%M:%S")
                 self.vals[k] = v
 
+    @property
+    def corners(self) -> List[CycloneSnapshot]:
+        return [self.grid[0][0], self.grid[0][-1], self.grid[-1][0], self.grid[-1][-1]]
+
     def set_eye_gt(self, gt, gt_err):
         self.vals["EYE"] = gt
         self.vals["EYE_ERR"] = gt_err
@@ -469,8 +482,46 @@ class SnapshotGrid:
             self.piecewise_glaciation_temperature(plot=False)
             self.get_mean_gt()
 
-    def gt_radial_distribution(self, radial_step, units="m", eye_gt=0, eye_gt_err=0, plot=True, save=False, show=True):
-        pass
+    def radial_distribution(self):
+
+        fig,ax = plt.subplots()
+        ax.scatter(self.gt_grid.flatten,[ for snap in self.grid])
+
+    # def gt_radial_step_distr(self, radial_step, eye_gt=0, eye_gt_err=0, plot=True, save=False, show=True):
+    #     # Check each corner for maximum radial distance to the eye
+    #     max_r = np.inf
+    #     for c in self.corners:
+    #         dist = c.distance_to_snap(self.imageInstance.eye)
+    #         if dist < max_r:
+    #             max_r = dist
+    #
+    #     radial_steps = np.arange(0, max_r, radial_step)
+    #     bins = [[] for i in range(len(radial_steps) - 1)]
+    #     for i, row in enumerate(self.grid):
+    #         for j, snap in enumerate(row):
+    #             if np.isnan(self.gt_grid[i][j]):
+    #                 continue
+    #             distance = snap.distance_to_snap(self.imageInstance.eye)
+    #             bins[distance // radial_step].append(self.gt_grid[i][j])
+    #
+    #     for i, r in enumerate(radial_steps[1:]):
+    #         self.vals[f"{radial_steps[i - 1]}-{r}"] = np.nanmean(bins[i - 1])
+    #         self.vals[f"{radial_steps[i - 1]}-{r}_ERR"] = sem(bins[i - 1])
+    #
+    #     if plot:
+    #         fig, ax = plt.subplots()
+    #         rects = ax.errorbar(radial_steps,
+    #                             [self.vals[f"{radial_steps[i - 1]}-{radial_steps[i]}"] for i in
+    #                              range(1, len(radial_steps))].insert(0, self.vals["EYE"]),
+    #                             capsize=5,
+    #                             yerr=[self.vals[f"{radial_steps[i - 1]}-{radial_steps[i]}_ERR"] for i in
+    #                                   range(1, len(radial_steps))].insert(0, self.vals["EYE_ERR"]))
+    #         # ax.set_xticklabels() TODO: Get the labels working
+    #         ax.set_ylabel("Glaciation Temperature (C)")
+    #         ax.invert_yaxis()
+    #         ax.set_ylim(bottom=0, top=-45)
+    #         ax.set_title(
+    #             f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature over radius")
 
     def gt_quadrant_distribution(self, plot=True, save=False, show=True):
         """
@@ -487,7 +538,7 @@ class SnapshotGrid:
                 distr[snap.quadrant].append(self.gt_grid[i][j])
         for k, v in distr.items():
             self.vals[k] = np.nanmean(v)
-        from scipy.stats import sem
+
         vals_err = {k: sem(np.array(v)) for k, v in distr.items()}
         vals_err["EYE"] = self.vals["EYE_ERR"]
 
