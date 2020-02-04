@@ -231,6 +231,7 @@ class CycloneImage:
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)
+        gd.radial_distribution()
         return gd.vals
 
     def plot_globe(self, band="I05", show=-1, show_fig=True, save=False):
