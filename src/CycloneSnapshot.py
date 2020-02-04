@@ -483,9 +483,10 @@ class SnapshotGrid:
             self.get_mean_gt()
 
     def radial_distribution(self):
-
-        fig,ax = plt.subplots()
-        ax.scatter(self.gt_grid.flatten,[ for snap in self.grid])
+        fig, ax = plt.subplots()
+        ax.scatter(self.gt_grid.flatten(),
+                   [snap.distance_to_snap(self.imageInstance.eye) for row in self.grid for snap in row])
+        plt.show()
 
     # def gt_radial_step_distr(self, radial_step, eye_gt=0, eye_gt_err=0, plot=True, save=False, show=True):
     #     # Check each corner for maximum radial distance to the eye
