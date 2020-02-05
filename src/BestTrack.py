@@ -21,6 +21,10 @@ def gauss(x, a, x0, sigma):
     return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
 
+def bimodal(x, x01, sigma1, a1, x02, sigma2, a2):
+    return gauss(x, x01, sigma1, a1)+gauss(x, x02, sigma2, a2)
+
+
 def all_cyclones_since(year, month, day, cat_min=4):
     cat_4_5_all_basins = best_track_df.loc[
         (best_track_df["USA_SSHS"] >= cat_min) & (
@@ -129,8 +133,8 @@ if __name__ == "__main__":
             c.mask_thin_cirrus()
             c.mask_array_I05(LOW=220, HIGH=270)
             c.mask_using_I01(80)
-            gt, r = c.gt_piece_percentile(percentile=5, plot=False)
-            if gt is not np.nan and r > 0.90:
+            gt, gt_err, r = c.gt_piece_percentile(percentile=5, plot=False)
+            if gt is not np.nan and r > 0.85:
                 histogram_dict.append({"year": c.meta_data["SEASON"], "gt": gt, "r": r, "wind": c.meta_data["USA_WIND"],
                                       "cat": c.meta_data["USA_SSHS"], "basin": c.meta_data["BASIN"]})
         except:
@@ -162,22 +166,52 @@ if __name__ == "__main__":
         all_gts.append(cyclone["gt"])
         all_winds.append(cyclone["wind"])
 
-    n, bins, patches = plt.hist(basin_gts.values(), bins=np.arange(-44, -10, 2), rwidth=0.8, histtype="barstacked",
-                                label=basin_gts.keys())
+    for basin in basin_gts:
+        plt.figure()
+        n, bins, patches = plt.hist(basin_gts[basin], rwidth=0.8, label=basin)
+        x = []
+        for i in bins:
+            x.append(i + 1)
+        x = np.array(x[:-1])
+        y = np.array(n[-1])
 
-    x = []
-    for i in bins:
-        x.append(i + 1)
-    x = np.array(x[:-1])
-    y = np.array(n[-1])
+        n = len(basin_gts[basin])
+        mean = np.mean(basin_gts[basin])
+        sigma = np.std(basin_gts[basin])
+        combined_sigma = sigma/np.sqrt(n)
 
-    n = len(x)
-    mean = np.mean(x)
-    sigma = np.std(x)
-    popt, pcov = sp.curve_fit(gauss, x, y, p0=[1, mean, sigma])
-    ss_res = np.sum((y - gauss(x,*popt))**2)
-    ss_tot= np.sum((y - np.mean(y))**2)
-    r2 = 1 - ss_res/ss_tot
-    plt.plot(x, gauss(x, *popt), 'ro:', label=f"mean={round(popt[1], 2)}, sigma={round(popt[2], 2)}, r2={round(r2, 2)}")
-    plt.legend()
+        plt.plot(x, gauss(x, a=1, x0=mean, sigma=combined_sigma), 'ro:',
+                 label=f"mean={round(mean, 2)}, sigmas={round(combined_sigma, 2)}")
+        plt.xlabel("Glaciation Temperature (Degrees)")
+        plt.ylabel("Frequency")
+        plt.legend()
+
+    #n, bins, patches = plt.hist(year_gts.values(), bins=np.arange(-44, -10, 2), rwidth=0.8, histtype="barstacked",
+    #                            label=year_gts.keys())
+
+    #plt.title(f"GT by Year, n={len(all_gts)}")
+    #x = []
+    #for i in bins:
+    #    x.append(i + 1)
+    #x = np.array(x[:-1])
+    #y = np.array(n[-1])
+
+    #n = len(x)
+    #mean = np.mean(x)
+    #sigma = np.std(x)
+
+    #popt, pcov = sp.curve_fit(gauss, x, y, p0=[1, mean, sigma])
+    #ss_res = np.sum((y - gauss(x,*popt))**2)
+    #ss_tot= np.sum((y - np.mean(y))**2)
+    #r2 = 1 - ss_res/ss_tot
+
+    # popt, pcov = sp.curve_fit(bimodal, x, y, p0=[1, -36, sigma, 1, -29, sigma])
+    # ss_res = np.sum((y - bimodal(x,*popt))**2)
+    # ss_tot= np.sum((y - np.mean(y))**2)
+    # r2 = 1 - ss_res/ss_tot
+
+    #plt.plot(x, gauss(x, *popt), 'ro:', label=f"peaks={round(popt[1], 2)}, sigmas={round(popt[2], 2)}, r2={round(r2, 2)}")
+    #plt.xlabel("Glaciation Temperature (Degrees)")
+    #plt.ylabel("Frequency")
+    #plt.legend()
     plt.show()

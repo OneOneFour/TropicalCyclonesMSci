@@ -34,22 +34,6 @@ class GTFit:
         self.x_i05 = None
         self.y_i04 = None
 
-    # def curve_fit_funcs(self, fitting_function=cubic):
-    #     (a, b, c, d), cov = sp.curve_fit(fitting_function, self.i05, self.i04, absolute_sigma=True)
-    #
-    #     a_err, b_err, c_err, d_err = np.sqrt(np.diag(cov))
-    #
-    #     gt_ve = (-b + np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
-    #     # gt = -params[1] / (2 * params[0])
-    #     # gt_err = np.sqrt((perr[1] / (2 * params[0])) ** 2 + (perr[0] * params[1] / (2 * params[0] ** 2)) ** 2)
-    #     if np.iscomplex(gt_ve) or (min(self.i05) > gt_ve > max(self.i05)):
-    #         return
-    #
-    #     curve_fit_err = np.sqrt(((b_err * c) / (2 * b * b)) ** 2 + (c_err / 2 * b) ** 2)
-    #     gt_err = curve_fit_err
-    #     self.gt = [gt_ve, gt_err]
-    #     return gt_ve, gt_err, (a, b, c, d)
-
     def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
         self.x_i05 = self.i05
         self.y_i04 = self.i04
@@ -87,13 +71,14 @@ class GTFit:
                                        p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
         except RuntimeError:
             return np.nan, np.nan
+        self.gt_err = (np.diag(cov)[0] + np.diag(cov)[1]) ** 0.5
         self.gt = params[0]
         r2 = 1 - (np.sum((self.y_i04 - simple_piecewise(self.x_i05, *params)) ** 2)) / np.sum(
             (self.y_i04 - self.y_i04.mean()) ** 2)
         if fig and ax:
-            ax.scatter(self.i04, self.i05, s=0.1)
+            ax.scatter(self.i04, self.i05, s=0.1, label=r2)
             self.plot(fig, ax, func=simple_piecewise, params=params)
-        return self.gt, r2
+        return self.gt, self.gt_err, r2
 
     def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
@@ -140,10 +125,12 @@ class GTFit:
             ax.scatter(self.y_i04, self.x_i05, s=0.5)
 
         if func:
-            ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Curve fit")
-        # ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
-        # ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
+            ax.plot([func(x_i, *params) for x_i in x], x, "y", label=self.gt)
+            ax.legend()
+
         ax.axhline(self.gt)
+        ax.axhline(self.gt + self.gt_err, c='b', linestyle='--')
+        ax.axhline(self.gt - self.gt_err, c='b', linestyle='--')
         ax.axhline(-38)
         ax.invert_yaxis()
         ax.invert_xaxis()

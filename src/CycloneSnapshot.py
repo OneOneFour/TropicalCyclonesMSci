@@ -298,17 +298,17 @@ class CycloneSnapshot:
         if plot:
             fig, ax = plt.subplots(1, 2)
             self.img_plot(fig, ax[1])
-            gt, r2 = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
+            gt, gt_err, r2 = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
             plt.show()
         else:
-            gt, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
+            gt, gt_err, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
 
         if 0 < gt or gt < -45:  # Sanity check
             return np.nan, np.nan
         if (gt < np.min(self.I05) - 273.15) or (gt > np.max(self.I05) - 273.15):
             return np.nan, np.nan
 
-        return gt, r2
+        return gt, gt_err, r2
 
     def unmask_array(self):
         del self.I04_mask
