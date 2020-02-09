@@ -12,10 +12,10 @@ HOMOGENEOUS_FREEZING_TEMP = -38
 
 
 def piecewise_step(t, t_g, t_m, t_b, r_e_0, a, r_e_g):
-    return np.piecewise(t, [t > t_b and t > t_m and t > t_g,
-                            t_g < t and t_m < t and t < t_b,
-                            t_m > t and t > t_g and t < t_b,
-                            t < t_g and t < t_b and t < t_m],
+    return np.piecewise(t, [(t > t_b) & (t > t_m) & (t > t_g),
+                            (t_g < t) & (t_m < t) & (t < t_b),
+                            (t_m > t) & (t > t_g) & (t < t_b),
+                            (t < t_g) & (t < t_b) & (t < t_m)],
                         [lambda t: a * t + r_e_0 - a * t_b, lambda t: r_e_0,
                          lambda t: (r_e_g - r_e_0) / (t_g - t_m) * t + r_e_0 - (r_e_g - r_e_0) / (t_g - t_m) * t_m,
                          lambda t: r_e_g])
@@ -27,9 +27,10 @@ def simple_piecewise(t, t_g, r_e, a, b):
 
 
 class GTFit:
-    def __init__(self, i04_flat, i05_flat):
+    def __init__(self, i04_flat, i05_flat, i01_flat=None):
         self.i04 = i04_flat
         self.i05 = i05_flat
+        self.i01 = i01_flat
         self.gt = None
         self.x_i05 = None
         self.y_i04 = None
@@ -50,12 +51,19 @@ class GTFit:
     #     self.gt = [gt_ve, gt_err]
     #     return gt_ve, gt_err, (a, b, c, d)
 
-    def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
+    def piecewise_fit(self, fig=None, ax=None, func=piecewise_step):
         self.x_i05 = self.i05
         self.y_i04 = self.i04
         if len(self.i05) < 4 or len(self.i04) < 4:
             raise ValueError("Problem underconstrained.")
-        params, cov = sp.curve_fit(func, self.x_i05, self.y_i04, p0=(HOMOGENEOUS_FREEZING_TEMP, 220, 1, 1))
+        if not self.i01 is None:
+            params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
+                                       p0=(HOMOGENEOUS_FREEZING_TEMP, -30, -10, 290, 1, 285),
+                                       sigma=(100 / self.i01**2))
+        else:
+            params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
+                                       p0=(HOMOGENEOUS_FREEZING_TEMP, -30, -10, 290, 1, 285),
+                                       )
         gt_err = np.sqrt(np.diag(cov))[0]
         r2 = 1 - (np.sum((self.y_i04 - func(self.x_i05, *params)) ** 2)) / np.sum((self.y_i04 - self.y_i04.mean()) ** 2)
 
@@ -139,10 +147,12 @@ class GTFit:
             ax.scatter(self.y_i04, self.x_i05, s=0.1)
 
         if func:
-            ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Curve fit")
-        ax.axhline(-38, xmin=min(x), xmax=max(x), lw=1, color="g")  # homogenous ice freezing temperature:
+            y = [func(x_i, *params) for x_i in x]
+            ax.plot(y, x, "y", label="Curve fit")
+        ax.axhline(-38, lw=1, color="g")  # homogenous ice freezing temperature:
         if self.gt:
-            ax.axhline(self.gt, xmin=min(x), xmax=max(x), lw=1, color="r")
+            if min(x) < self.gt < max(x):
+                ax.axhline(self.gt, lw=1, color="r")
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")

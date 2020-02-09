@@ -252,19 +252,21 @@ class CycloneSnapshot:
 
     def point_display(self):
         fig, ax = plt.subplots(1, 2)
+
         gt_fitter = GTFit(self.flat(self.I04), self.flat(self.I05))
         self.scatter(fig, ax[0])
         self.__discrete_img(fig, ax[1])
 
         def __select_callback(eclick, erelease):
-            print("Point selected")
             ax[1].clear()
             self.__discrete_img(fig, ax[1])
             i4min, i4max = min(eclick.xdata, erelease.xdata), max(eclick.xdata, erelease.xdata)
             i5min, i5max = min(eclick.ydata, erelease.ydata), max(eclick.ydata, erelease.ydata)
-            selected_points = np.argwhere(np.logical_and(np.logical_and(i4min < self.I04, self.I04 < i4max),
-                                                         np.logical_and(i5min < self.I05, self.I05 < i5max)))
-            ax[1].scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=0.15,c="r")
+            i4_points = np.logical_and(i4min < self.I04, self.I04 < i4max)
+            i5_points = np.logical_and(i5min < self.celcius(self.I05), self.celcius(self.I05) < i5max)
+            selected_points = np.argwhere(np.logical_and(i4_points, i5_points))
+            ax[1].scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=0.5, c="r")
+            fig.canvas.draw()
 
         def draw_cb(event):
             if draw_cb.RS.active:
@@ -332,7 +334,12 @@ class CycloneSnapshot:
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
     def gt_piece_all(self, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True):
-        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
+        if isinstance(self.I04, npma.MaskedArray):
+            i01 = np.ma.array(self.I01, mask=self.I04.mask)
+        else:
+            i01 = self.I01
+
+        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)),self.flat(i01))
         try:
             if plot:
                 fig, ax = plt.subplots(1, 2)
@@ -348,7 +355,9 @@ class CycloneSnapshot:
             if raise_up < gt or gt + gt_err < raise_lower or r2 < 0.85:
                 raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
             return gt, gt_err, r2
-        except (RuntimeError, ValueError):
+        except (RuntimeError, ValueError) as e:
+            import traceback
+            traceback.print_exc()
             return np.nan, np.nan, np.nan
 
     def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-38, save_fig=None, show=True,
@@ -376,12 +385,14 @@ class CycloneSnapshot:
             return np.nan, np.nan, np.nan
 
     def unmask_array(self):
-        del self.I04_mask
-        del self.I05_mask
         if np.isnan(self.__I04).any():
             self.I04_mask = npma.masked_invalid(self.__I04)
+        else:
+            del self.I04_mask
         if np.isnan(self.__I05).any():
             self.I05_mask = npma.masked_invalid(self.__I05)
+        else:
+            del self.I05_mask
 
     def save(self, fpath):
         with open(fpath, "wb") as file:

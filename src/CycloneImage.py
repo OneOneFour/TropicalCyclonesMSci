@@ -184,7 +184,6 @@ class CycloneImage:
             import pickle
             obj = pickle.load(f_pickle)
         assert isinstance(obj, CycloneImage)
-        obj.init_mask()
         return obj
 
     def __init__(self, scene: Scene, metadata: dict, set):
@@ -198,13 +197,12 @@ class CycloneImage:
         self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
         self.draw_eye()
-        self.init_mask()
+        self.mask(self.eye)
 
-    def init_mask(self):
-        self.eye.mask_array_I05(HIGH=280, LOW=220)
-        self.bb.mask_array_I05(HIGH=280, LOW=220)
-        self.bb.mask_using_I01(15)
-        self.eye.mask_using_I01(15)
+    def mask(self, instance: CycloneSnapshot):
+        #instance.mask_using_I01(30)
+        instance.mask_array_I05(HIGH=273, LOW=220)
+
 
     def save(self):
         with open(os.path.join(self.get_dir(), "img_pickle.pickle"), 'wb') as f_pickle:
@@ -364,6 +362,7 @@ class CycloneImage:
                 lon, lat = area.get_lonlat(int(y_i + p_height / 2), int(x_i - p_width / 2))
 
                 cs = self.bb.add_sub_snap_origin(x_i, y_i, p_width, p_height, lon, lat)
+                self.mask(cs)
                 self.rects.append(cs)
                 grid[r][c] = cs
         return SnapshotGrid(grid, self)
