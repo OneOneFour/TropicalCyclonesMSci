@@ -104,14 +104,16 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
         #     return ci
         try:
             from CycloneImage import REDUCED_SET
-            cy = get_entire_cyclone(start_point, end_point,set=REDUCED_SET)
+            cy = get_entire_cyclone(start_point, end_point, set=REDUCED_SET)
 
             if cy:
                 print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
                 if not (shading and cy.is_eyewall_shaded):
                     vals = per_cyclone(cy)
                     vals_series.append(vals)
-        except Exception as e:
-            print(e)
+        except Exception:
+            import traceback
+            traceback.print_exc()
             continue
+
     return vals_series

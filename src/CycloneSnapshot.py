@@ -8,6 +8,7 @@ import numpy.ma as npma
 from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
 from scipy.stats import sem
+
 from GTFit import GTFit
 
 ABSOLUTE_ZERO = 273.15
@@ -84,8 +85,10 @@ class CycloneSnapshot:
         return self.b_lat + self.height
 
     def distance_to_snap(self, snap: "CycloneSnapshot", units="m"):
-        angle = np.arcos(np.sin(self.b_lat) * np.sin(snap.b_lat) + np.cos(self.b_lat) * np.cos(snap.b_lat) * np.cos(
-            np.abs(snap.b_lon - self.b_lon)))
+        angle = np.arccos(
+            np.sin(np.deg2rad(self.b_lat)) * np.sin(np.deg2rad(snap.b_lat)) + np.cos(np.deg2rad(self.b_lat)) * np.cos(
+                np.deg2rad(snap.b_lat)) * np.cos(
+                np.abs(np.deg2rad(snap.b_lon - self.b_lon))))
         if units == "m":
             return angle * R_E
         if units == "nm":
@@ -279,7 +282,7 @@ class CycloneSnapshot:
         self.img_plot(fig, ax, band)
         if save_dir:
             plt.savefig(save_dir)
-            plt.close(fig)
+            plt.close()
         if show:
             plt.show()
 
@@ -336,19 +339,24 @@ class CycloneSnapshot:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit(fig, ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
-                    plt.close(fig)
+                    plt.close("all")
                 if show:
                     plt.show()
             else:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit()
-            if raise_up < gt or gt + gt_err < raise_lower or r2 < 0.8:
+            if raise_up < gt or gt + gt_err < raise_lower or r2 < 0.85:
                 raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
             return gt, gt_err, r2
         except (RuntimeError, ValueError):
             return np.nan, np.nan, np.nan
 
-    def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-45, save_fig=None, show=True):
+
+    def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-38, save_fig=None, show=True,
+                            overlap=None):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
+        if overlap:
+            if self.check_overlap(overlap):
+                return np.nan, np.nan, np.nan
         try:
             if plot:
                 fig, ax = plt.subplots(1, 2)
@@ -356,12 +364,12 @@ class CycloneSnapshot:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
-                    plt.close(fig)
+                    plt.close("all")
                 if show:
                     plt.show()
             else:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile)
-            if raise_up < gt or gt < raise_lower or r2 < 0.8:  # Sanity check
+            if raise_up + gt_err*2 < gt or gt - gt_err*2 < raise_lower or r2 < 0.85:  # Sanity check
                 raise ValueError("Outside predefined range")
             return gt, gt_err, r2
         except (RuntimeError, ValueError):
@@ -376,9 +384,7 @@ class CycloneSnapshot:
             self.I05_mask = npma.masked_invalid(self.__I05)
 
     def save(self, fpath):
-        date = self.meta_data["ISO_TIME"].strftime("%m-%d-%Y_%H%M")
-        total_fpath = fpath + self.meta_data["NAME"] + date + "Extra"
-        with open(total_fpath, "wb") as file:
+        with open(fpath, "wb") as file:
             pickle.dump(self, file)
 
     def plot_solar(self):
@@ -414,6 +420,7 @@ class SnapshotGrid:
             for k, v in self.imageInstance.metadata.items():
                 if k == "ISO_TIME":
                     self.vals[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+                    continue
                 self.vals[k] = v
 
     @property
@@ -436,15 +443,16 @@ class SnapshotGrid:
             for snap in row:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
 
-    def save(self, path):
+    def save(self):
         import json
-
         with open(os.path.join(self.imageInstance.get_dir(), "out.json"), "w") as f:
             json.dump(self.vals, f)
 
     def piecewise_glaciation_temperature(self, plot=True, show=True, save=False):
-        gd = np.array([[list(snap.gt_piece_percentile(plot=False)) for snap in row] for row in self.grid])
-        self.gt_grid, self.gt_err, self.r2 = np.squeeze(np.split(gd, 3, 2))
+        gd = [[list(snap.gt_piece_percentile(plot=False, overlap=self.imageInstance.eye)) for snap in row] for row in
+              self.grid]
+
+        self.gt_grid, self.gt_err, self.r2 = np.squeeze(np.split(np.array(gd), 3, 2))
         if plot:
             fig, ax = plt.subplots()
             im = ax.imshow(self.gt_grid, origin="upper")
@@ -452,7 +460,7 @@ class SnapshotGrid:
             cb.set_label("Glaciation Temperature (C)")
             if save:
                 plt.savefig(os.path.join(self.imageInstance.get_dir(), "piecewise_gt_distribution.png"))
-                plt.close(fig)
+                plt.close()
             if show:
                 plt.show()
             fig, ax = plt.subplots()
@@ -461,7 +469,7 @@ class SnapshotGrid:
             cb2.set_label("R^2 goodness of fit coefficient")
             if save:
                 plt.savefig(os.path.join(self.imageInstance.get_dir(), "piecewise_r2_distribution.png"))
-                plt.close(fig)
+                plt.close()
             if show:
                 plt.show()
 
@@ -484,15 +492,17 @@ class SnapshotGrid:
 
     def radial_distribution(self, show=True, save=False):
         fig, ax = plt.subplots()
-        ax.scatter(self.gt_grid.flatten(),
-                   [snap.distance_to_snap(self.imageInstance.eye) for row in self.grid for snap in row])
+        ax.scatter(
+            [snap.distance_to_snap(self.imageInstance.eye) / 1000 for row in self.grid for snap in row if snap != 0],
+            self.gt_grid.flatten())
+        ax.invert_yaxis()
+        ax.set_ylabel("Glaciation Temperature (C)")
+        ax.set_xlabel("Radial distance from eye (km)")
         if save:
             plt.savefig(os.path.join(self.imageInstance.get_dir(), "radial_distribution.png"))
-            plt.close(fig)
+            plt.close()
         if show:
             plt.show()
-
-
 
     # def gt_radial_step_distr(self, radial_step, eye_gt=0, eye_gt_err=0, plot=True, save=False, show=True):
     #     # Check each corner for maximum radial distance to the eye
@@ -540,7 +550,7 @@ class SnapshotGrid:
         distr = {"LF": [], "RF": [], "RB": [], "LB": []}
         for i, row in enumerate(self.grid):
             for j, snap in enumerate(row):
-                if np.isnan(self.gt_grid[i][j]):
+                if np.isnan(self.gt_grid[i][j]) or self.gt_grid[i][j] == 0:
                     continue
                 distr[snap.quadrant].append(self.gt_grid[i][j])
         for k, v in distr.items():
@@ -571,7 +581,7 @@ class SnapshotGrid:
                             ha="center", va="bottom")
             if save:
                 plt.savefig(os.path.join(self.imageInstance.get_dir(), "quadrant_plot.png"))
-                plt.close(fig)
+                plt.close()
             if show:
                 plt.show()
 

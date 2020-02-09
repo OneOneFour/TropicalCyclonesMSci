@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 
 import numpy as np
-from pyresample import create_area_def
+from pyproj import Proj
+from pyresample import create_area_def, AreaDefinition
 from pyresample.utils import proj4_dict_to_str
 from satpy import Scene
 from shapely import geometry
@@ -22,6 +23,34 @@ spline_d = lambda dx, dv, T, v0: (2 * (T * v0 - dx) + dv * T) / (T * T * T)
 
 FULL_SET = ("I05", "I04", "I01", "M09", "i_satellite_azimuth_angle", "i_lat", "i_lon")
 REDUCED_SET = ("I05", "I04", "i_satellite_azimuth_angle", "I01")
+
+
+def get_xy_from_lon_lat(lon, lat, area: AreaDefinition):
+    """
+    Extension to the pyresample method to return the x,y position of the lon lat coordinate rounded
+    :return:
+    """
+    p = Proj(area.proj_str)
+    x_m, y_m = p(lon, lat)
+    upl_x = area.area_extent[0]
+    upl_y = area.area_extent[3]
+    xscale = (area.area_extent[2] -
+              area.area_extent[0]) / float(area.width)
+    # because rows direction is the opposite of y's
+    yscale = (area.area_extent[1] -
+              area.area_extent[3]) / float(area.height)
+
+    x__ = int((x_m - upl_x) / xscale)
+    y__ = int((y_m - upl_y) / yscale)
+
+    if x__ < 0 or x__ >= area.width:
+        print("Out of bounds -> Rounding x")
+        x__ = __clamp(x__, 0, area.width - 1)
+    if y__ < 0 or y__ >= area.height:
+        print("Out of bounds -> Rounding y")
+        y__ = __clamp(y__, 0, area.height - 1)
+
+    return x__, y__
 
 
 def wrap(x):
@@ -134,7 +163,13 @@ def get_entire_cyclone(start_point, end_point, set=FULL_SET):
     scene = Scene(filenames=files, reader="viirs_l1b")
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
+    metadata["DELTA_SPEED"] = end_point["USA_WIND"] - start_point["USA_WIND"]
 
+    checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
+                             metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
+    if os.path.isdir(checkpath):
+        if os.path.isfile(os.path.join(checkpath, "img_pickle.pickle")):
+            return CycloneImage.load(os.path.join(checkpath, "img_pickle.pickle"))
     return CycloneImage(scene, metadata, set=set)
 
 
@@ -142,6 +177,15 @@ import matplotlib.pyplot as plt
 
 
 class CycloneImage:
+
+    @staticmethod
+    def load(fpath):
+        with open(fpath, "rb") as f_pickle:
+            import pickle
+            obj = pickle.load(f_pickle)
+        assert isinstance(obj, CycloneImage)
+        obj.init_mask()
+        return obj
 
     def __init__(self, scene: Scene, metadata: dict, set):
         self.scene = scene
@@ -153,9 +197,18 @@ class CycloneImage:
         self.rects = []
         self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
-        self.bb.mask_array_I05(HIGH=285, LOW=225)
-        # self.bb.mask_thin_cirrus(60)
         self.draw_eye()
+
+
+    def init_mask(self):
+        self.bb.mask_array_I05(HIGH=285, LOW=225)
+        self.eye.mask_array_I05(HIGH=285,LOW=225)
+
+
+    def save(self):
+        with open(os.path.join(self.get_dir(), "img_pickle.pickle"), 'wb') as f_pickle:
+            import pickle
+            pickle.dump(self, f_pickle)
 
     @property
     def proj_str(self):
@@ -221,17 +274,22 @@ class CycloneImage:
 
     def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
         gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)
-        self.plot_globe(band="I05", show_fig=False, save=True)
+        if not os.path.isfile(os.path.join(self.get_dir(), "image_grid.png")):
+            self.plot_globe(band="I05", show_fig=False, save=True)
         self.bb.plot(band="I01", save_dir=os.path.join(self.get_dir(), "whole_i1_plot.png"), show=False)
         self.bb.plot(band="I05", save_dir=os.path.join(self.get_dir(), "whole_masked_plot.png"), show=False)
-        gd.piecewise_glaciation_temperature(show=False, save=True)
+
         gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
         gt_alt, gt_alt_err, r2_alt = self.eye.gt_piece_all(save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
                                                            show=False)
+        gd.set_eye_gt(gt, gt_err)
+        gd.piecewise_glaciation_temperature(show=False, save=True)
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)
-        gd.radial_distribution()
+        gd.radial_distribution(show=False, save=True)
+        self.save()
+        gd.save()
         return gd.vals
 
     def plot_globe(self, band="I05", show=-1, show_fig=True, save=False):
@@ -266,7 +324,7 @@ class CycloneImage:
         cb.set_label("Kelvin (K)")
         if save:
             plt.savefig(os.path.join(self.get_dir(), "image_grid.png"))
-            plt.close(plt.gcf())
+            plt.close()
         if show_fig:
             plt.show()
 
@@ -286,22 +344,10 @@ class CycloneImage:
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
             self.proj_dict
         )
-        corrected_left = max(left,
-                             np.rad2deg(max(area.outer_boundary_corners[0].lon,
-                                            area.outer_boundary_corners[3].lon)) + DEG_STEP)
-        corrected_bottom = max(bottom,
-                               np.rad2deg(max(area.outer_boundary_corners[2].lat,
-                                              area.outer_boundary_corners[3].lat)) + DEG_STEP)
-        corrected_right = min(right,
-                              np.rad2deg(min(area.outer_boundary_corners[1].lon,
-                                             area.outer_boundary_corners[2].lon)) - DEG_STEP)
-        corrected_top = min(top,
-                            np.rad2deg(
-                                min(area.outer_boundary_corners[0].lat, area.outer_boundary_corners[1].lat)) - DEG_STEP)
 
-        upper_left_x, upper_left_y = area.get_xy_from_lonlat(corrected_left, corrected_top)
+        upper_left_x, upper_left_y = get_xy_from_lon_lat(left, top, area)
 
-        lower_right_x, lower_right_y = area.get_xy_from_lonlat(corrected_right, corrected_bottom)
+        lower_right_x, lower_right_y = get_xy_from_lon_lat(right, bottom, area)
 
         w_i = lower_right_x - upper_left_x
         h_i = lower_right_y - upper_left_y
@@ -317,10 +363,6 @@ class CycloneImage:
                 lon, lat = area.get_lonlat(int(y_i + p_height / 2), int(x_i - p_width / 2))
 
                 cs = self.bb.add_sub_snap_origin(x_i, y_i, p_width, p_height, lon, lat)
-                if self.eye.check_overlap(cs):
-                    # Skip the overlap if one exists
-                    del cs
-                    continue
                 self.rects.append(cs)
                 grid[r][c] = cs
         return SnapshotGrid(grid, self)

@@ -53,7 +53,7 @@ class GTFit:
     def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
         self.x_i05 = self.i05
         self.y_i04 = self.i04
-        if len(self.i05) or len(self.i04) < 4:
+        if len(self.i05) < 4 or len(self.i04) < 4:
             raise ValueError("Problem underconstrained.")
         params, cov = sp.curve_fit(func, self.x_i05, self.y_i04, p0=(HOMOGENEOUS_FREEZING_TEMP, 220, 1, 1))
         gt_err = np.sqrt(np.diag(cov))[0]
