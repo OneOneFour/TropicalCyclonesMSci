@@ -253,17 +253,18 @@ class CycloneSnapshot:
     def point_display(self):
         fig, ax = plt.subplots(1, 2)
         gt_fitter = GTFit(self.flat(self.I04), self.flat(self.I05))
-        self.scatter(fig, ax)
+        self.scatter(fig, ax[0])
         self.__discrete_img(fig, ax[1])
 
         def __select_callback(eclick, erelease):
+            print("Point selected")
             ax[1].clear()
             self.__discrete_img(fig, ax[1])
             i4min, i4max = min(eclick.xdata, erelease.xdata), max(eclick.xdata, erelease.xdata)
             i5min, i5max = min(eclick.ydata, erelease.ydata), max(eclick.ydata, erelease.ydata)
             selected_points = np.argwhere(np.logical_and(np.logical_and(i4min < self.I04, self.I04 < i4max),
                                                          np.logical_and(i5min < self.I05, self.I05 < i5max)))
-            ax[1].scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=0.15)
+            ax[1].scatter([p[1] for p in selected_points], [p[0] for p in selected_points], s=0.15,c="r")
 
         def draw_cb(event):
             if draw_cb.RS.active:
@@ -350,7 +351,6 @@ class CycloneSnapshot:
         except (RuntimeError, ValueError):
             return np.nan, np.nan, np.nan
 
-
     def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-38, save_fig=None, show=True,
                             overlap=None):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
@@ -369,7 +369,7 @@ class CycloneSnapshot:
                     plt.show()
             else:
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile)
-            if raise_up + gt_err*2 < gt or gt - gt_err*2 < raise_lower or r2 < 0.85:  # Sanity check
+            if raise_up + gt_err * 2 < gt or gt - gt_err * 2 < raise_lower or r2 < 0.85:  # Sanity check
                 raise ValueError("Outside predefined range")
             return gt, gt_err, r2
         except (RuntimeError, ValueError):
@@ -539,6 +539,10 @@ class SnapshotGrid:
     #         ax.set_ylim(bottom=0, top=-45)
     #         ax.set_title(
     #             f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature over radius")
+
+    @property
+    def valid_cells(self):
+        return [ci for row in self.grid for ci in row if not np.isnan(ci.gt_piece_percentile(plot=False)[0])]
 
     def gt_quadrant_distribution(self, plot=True, save=False, show=True):
         """

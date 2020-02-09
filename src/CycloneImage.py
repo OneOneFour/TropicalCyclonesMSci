@@ -198,12 +198,13 @@ class CycloneImage:
         self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
         self.draw_eye()
-
+        self.init_mask()
 
     def init_mask(self):
-        self.bb.mask_array_I05(HIGH=285, LOW=225)
-        self.eye.mask_array_I05(HIGH=285,LOW=225)
-
+        self.eye.mask_array_I05(HIGH=280, LOW=220)
+        self.bb.mask_array_I05(HIGH=280, LOW=220)
+        self.bb.mask_using_I01(15)
+        self.eye.mask_using_I01(15)
 
     def save(self):
         with open(os.path.join(self.get_dir(), "img_pickle.pickle"), 'wb') as f_pickle:
