@@ -21,9 +21,6 @@ DEG_STEP = 375 / (NM_TO_M * 60)
 spline_c = lambda dx, dv, T, v0: (3 * (dx - T * v0) - dv * T) / (T * T)
 spline_d = lambda dx, dv, T, v0: (2 * (T * v0 - dx) + dv * T) / (T * T * T)
 
-FULL_SET = ("I05", "I04", "I01", "M09", "i_satellite_azimuth_angle", "i_lat", "i_lon")
-REDUCED_SET = ("I05", "I04", "i_satellite_azimuth_angle", "I01")
-
 
 def get_xy_from_lon_lat(lon, lat, area: AreaDefinition):
     """
@@ -140,7 +137,7 @@ def get_eye(start_point, end_point):
                            metadata)
 
 
-def get_entire_cyclone(start_point, end_point, set=FULL_SET):
+def get_entire_cyclone(start_point, end_point):
     lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
     lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
     north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
@@ -151,12 +148,11 @@ def get_entire_cyclone(start_point, end_point, set=FULL_SET):
     try:
         files, urls = get_data(DATA_DIRECTORY, start_point["ISO_TIME"].to_pydatetime(),
                                end_point["ISO_TIME"].to_pydatetime(),
-                               set=set,
                                north=lat_0 + north_extent,
                                south=lat_0 - south_extent,
                                west=lon_0 - west_extent,
                                east=lon_0 + east_extent,
-                               dayOrNight="D")
+                               dayOrNight="D", include_mod=True)
     except FileNotFoundError:
         return None
 
@@ -170,7 +166,7 @@ def get_entire_cyclone(start_point, end_point, set=FULL_SET):
     if os.path.isdir(checkpath):
         if os.path.isfile(os.path.join(checkpath, "img_pickle.pickle")):
             return CycloneImage.load(os.path.join(checkpath, "img_pickle.pickle"))
-    return CycloneImage(scene, metadata, set=set)
+    return CycloneImage(scene, metadata, load_mod=True)
 
 
 import matplotlib.pyplot as plt
@@ -186,10 +182,13 @@ class CycloneImage:
         assert isinstance(obj, CycloneImage)
         return obj
 
-    def __init__(self, scene: Scene, metadata: dict, set):
+    def __init__(self, scene: Scene, metadata: dict, load_mod=False):
         self.scene = scene
         self.metadata = metadata
-        self.scene.load(set)
+        self.scene.load(["I01", "I04", "I05", "i_satellite_azimuth_angle", "i_solar_zenith_angle"])
+        if load_mod:
+            self.scene.load(["M09"])
+        self.load_mod = load_mod
         self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
@@ -200,9 +199,8 @@ class CycloneImage:
         self.mask(self.eye)
 
     def mask(self, instance: CycloneSnapshot):
-        #instance.mask_using_I01(30)
+        # instance.mask_using_I01(30)
         instance.mask_array_I05(HIGH=273, LOW=220)
-
 
     def save(self):
         with open(os.path.join(self.get_dir(), "img_pickle.pickle"), 'wb') as f_pickle:
@@ -248,7 +246,7 @@ class CycloneImage:
             corrected_scene["i_satellite_azimuth_angle"].values, self.metadata,
             area.get_lonlat(area.shape[0] - 1, 0)[0],
             area.get_lonlat(area.shape[0] - 1, 0)[1],
-            None, corrected_scene["I01"].values
+            corrected_scene["M09"].values if self.load_mod else None, corrected_scene["I01"].values
         )
         self.rects.append(self.bb)
 

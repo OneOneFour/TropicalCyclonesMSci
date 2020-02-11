@@ -45,18 +45,17 @@ def download_files_from_server(root_dir, file_urls):
     return fpath
 
 
-def get_data(root_dir, start_time, end_time,set, north=90, south=-90, west=-180, east=180, collection="5110",
+def get_data(root_dir, start_time, end_time,include_mod = False, north=90, south=-90, west=-180, east=180, collection="5110",
              dayOrNight="DNB", ):
     '''
     Use SatPy to check if data exists already in root dir. If not contact the NASA LAADS DAC server to download the required data.
     '''
 
     # TODO: Is there away to get the filepath without two requests server? Doesn't seem to be be studying the API documentation
-    products = ""
-    if "I05" in set:
-        products +="VNP02IMG,VNP03IMG"
-    if "M09" in set:
+    products = "VNP02IMG,VNP03IMG"
+    if include_mod:
         products += ",VNP02MOD,VNP03MOD"
+
 
     assert 'LAADS_API_KEY' in os.environ
     query_response = requests.get(WEBSERVER_QUERY_URL + SEARCH_FOR_FILES, params={

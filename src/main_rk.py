@@ -23,7 +23,7 @@ def plt_time_series(series):
 
 if __name__ == "__main__":
     ## NA
-    irma_series = get_cyclone_by_name("IRMA", 2017, per_cyclone=lambda x: x.auto_gt_cycle())
+    irma_series = get_cyclone_by_name("GENEVIEVE", 2014, per_cyclone=lambda x: x.auto_gt_cycle())
     # walaka = get_cyclone_by_name_date("WALAKA", datetime(year=2018, month=10, day=2, hour=0, minute=0),
     #                                    datetime(year=2018, month=10, day=2, hour=6, minute=0))
     # walaka.grid_data(7,7,2*96,2*96)

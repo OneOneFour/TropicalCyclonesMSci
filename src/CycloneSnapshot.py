@@ -144,7 +144,9 @@ class CycloneSnapshot:
                              self.satellite_azimuth[bottom:top, left:right], self.meta_data,
                              b_lon,
                              b_lat,
-                             M09=None, I01=self.I01[bottom:top, left:right])
+                             M09=self.M09[bottom:top, left:right] if self.M09 is not None else None,
+                             I01=self.I01[bottom:top, left:right],
+                             solar=self.solar_zenith[bottom:top, left:right] if self.solar_zenith is not None else None)
         self.grid.append([(left, right, bottom, top), cs])
 
         return cs
@@ -339,7 +341,7 @@ class CycloneSnapshot:
         else:
             i01 = self.I01
 
-        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)),self.flat(i01))
+        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)), self.flat(i01))
         try:
             if plot:
                 fig, ax = plt.subplots(1, 2)
@@ -554,6 +556,14 @@ class SnapshotGrid:
     @property
     def valid_cells(self):
         return [ci for row in self.grid for ci in row if not np.isnan(ci.gt_piece_percentile(plot=False)[0])]
+
+    def histogram_from_eye(self):
+        assert self.imageInstance.is_eyewall_gt_good
+        gt_from_eye = self.vals["EYE"] - self.gt_grid.flatten()
+        gt_from_eye = gt_from_eye[~np.isnan(gt_from_eye)]
+        fig, ax = plt.subplots()
+        ax.hist(gt_from_eye, bins=10)
+        plt.show()
 
     def gt_quadrant_distribution(self, plot=True, save=False, show=True):
         """
