@@ -197,14 +197,19 @@ if __name__ == "__main__":
             c.mask_using_I01(80)
             gt, gt_err, r = c.gt_piece_percentile(percentile=5, plot=False)
             if gt is not np.nan and r > 0.85:
-                cyc_future = best_track_df.loc[
-                    (best_track_df["ISO_TIME"] > c.meta_data["ISO_TIME"].strftime("%x %X")) & (
-                                best_track_df["NAME"] == c.meta_data["NAME"]) & (best_track_df["USA_SSHS"] > 1)]
+                c.unmask_array()
+                max_I05 = c.I05.max()
+                min_I05 = c.I05.max()
+                cyc_date_minus_day = c.meta_data["ISO_TIME"] - timedelta(days=1)
+                cyc_time_minus_day = cyc_date_minus_day.strftime("%Y-%m-%d %H:%M:%S")
+                cyc_future = best_track_df.loc[(best_track_df["ISO_TIME"] > cyc_time_minus_day) &
+                                               (best_track_df["NAME"] == c.meta_data["NAME"]) &
+                                               (best_track_df["USA_SSHS"] > 1)]
                 histogram_dict.append({"year": c.meta_data["SEASON"], "gt": gt, "r": r, "wind": c.meta_data["USA_WIND"],
-                                      "cat": c.meta_data["USA_SSHS"], "basin": c.meta_data["BASIN"],
-                                       "future_winds": [cyc_future["USA_WIND"].values[:32]],
-                                      "position": [c.meta_data["LAT"], c.meta_data["LON"]],
-                                      "month": c.meta_data["ISO_TIME"].strftime("%m")})
+                                       "cat": c.meta_data["USA_SSHS"], "basin": c.meta_data["BASIN"],
+                                       "future_winds": cyc_future["USA_WIND"].values[:16],
+                                       "position": [c.meta_data["LAT"], c.meta_data["LON"]],
+                                       "time": c.meta_data["ISO_TIME"], "SST": max_I05, "CTT": min_I05})
         except:
             continue
 
@@ -219,53 +224,46 @@ if __name__ == "__main__":
     max_wind_gts = {110: [], 120: [], 130: [], 140: [], 150: [], 160: []}
     WP_gts_by_lat = {9.5: [], 11.5: [], 13.5: [], 15.5: [], 17.5: [], 19.5: [],
                      21.5: [], 23.5: [], 25.5: [], 27.5: [], 29.5: [], 31.5: []}
+    WP_gts_by_long = {110: [], 120: [], 130: [], 140: [], 150: []}
     season_gts = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [],  11: [], 12: []}
-    when_intensify_gts = {-1: [], 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [],  11: [], 12: [],
-                          13: [], 14: [], 15: [], 16: [], 17: [], 18: [], 19: [], 20: [], 21: [], 22: [], 23: [],  24: [], 25: []}
     increasing_gts = []
     decreasing_gts = []
+    in_or_de_tensifying_gts = {"Increasing": [], "Decreasing" : [], "Max" : [], "Min": [], "Steady" :[]}
     for cyclone in histogram_dict:
+
         if cyclone["basin"] == "WP":
+            if np.mean(cyclone["future_winds"][6:8]) < cyclone["wind"] < np.mean(cyclone["future_winds"][9:11]):
+                in_or_de_tensifying_gts["Increasing"].append(cyclone["gt"])
+            elif np.mean(cyclone["future_winds"][6:8]) > cyclone["wind"] > np.mean(cyclone["future_winds"][9:11]):
+                in_or_de_tensifying_gts["Decreasing"].append(cyclone["gt"])
+            elif np.mean(cyclone["future_winds"][6:8]) < cyclone["wind"] and np.mean(cyclone["future_winds"][9:11]) < cyclone["wind"]:
+                in_or_de_tensifying_gts["Max"].append(cyclone["gt"])
+            elif np.mean(cyclone["future_winds"][6:8]) > cyclone["wind"] and cyclone["wind"] < np.mean(cyclone["future_winds"][9:10]):
+                in_or_de_tensifying_gts["Min"].append(cyclone["gt"])
+            elif np.mean(cyclone["future_winds"][6:8]) == cyclone["wind"] and np.mean(cyclone["future_winds"][9:11]) == cyclone["wind"]:
+                in_or_de_tensifying_gts["Steady"].append(cyclone["gt"])
+
             for lat in WP_gts_by_lat.keys():
                 if lat - 1 < cyclone["position"][0] <= lat + 1:
                     WP_gts_by_lat[lat].append(cyclone["gt"])
 
-        for basin in basin_gts.keys():
-            if cyclone["basin"] == basin:
-                basin_gts[basin].append(cyclone["gt"])
-                if len(np.where(cyclone["future_winds"][0] > cyclone["wind"])[0]) > 0:
-                    increasing_basin_gts[basin].append(cyclone["gt"])
-                elif len(np.where(cyclone["future_winds"][0] > cyclone["wind"])[0]) == 0:
-                    decreasing_basin_gts[basin].append(cyclone["gt"])
-
-        for time in when_intensify_gts.keys():
-            if len(np.where(cyclone["future_winds"][0] > cyclone["wind"])[0]) == 0:
-                # when_intensify_gts[-1].append(cyclone["gt"])
-                break
-            elif np.where(cyclone["future_winds"][0] > cyclone["wind"])[0][0] == time:
-                when_intensify_gts[time].append(cyclone["gt"])
-
-        for year in year_gts.keys():
-            if int(cyclone["year"]) == year:
-                year_gts[year].append(int(cyclone["gt"]))
-
-        for cat in cat_gts.keys():
-            if cyclone["cat"] == cat:
-                cat_gts[cat].append(cyclone["gt"])
+            for long in WP_gts_by_long.keys():
+                if long < cyclone["position"][1] <= long + 10:
+                    WP_gts_by_long[long].append(cyclone["gt"])
 
         for wind in wind_gts.keys():
             if wind - 5 < cyclone["wind"] <= wind + 5:
                 wind_gts[wind].append(cyclone["gt"])
-            if wind + 10 > max(np.insert(cyclone["future_winds"][0], 0, cyclone["wind"])) >= wind:
+            if wind + 10 > max(np.insert(cyclone["future_winds"], 0, cyclone["wind"])) >= wind:
                 max_wind_gts[wind].append(cyclone["gt"])
 
         for month in season_gts.keys():
-            if int(cyclone["month"]) == month:
+            if int(cyclone["time"].strftime("%m")) == month:
                 season_gts[month].append(cyclone["gt"])
 
         all_gts.append(cyclone["gt"])
         all_winds.append(cyclone["wind"])
 
-    analysing_x(when_intensify_gts, "If and when the cyclone intensifies", fit="bimodal")
+    analysing_x(in_or_de_tensifying_gts, "Intensity (WP)", fit="bimodal")
     # analysing_basin(season_gts)
     plt.show()
