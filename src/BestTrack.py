@@ -1,6 +1,9 @@
 import os
 from datetime import timedelta, datetime
 from typing import List
+from shapely.geometry import Point
+import geopandas as gpd
+from geopandas import GeoDataFrame
 
 import numpy as np
 import pandas as pd
@@ -183,6 +186,7 @@ def analysing_x(array, title, fit="gauss"):
     plt.xlabel("Glaciation Temperature (Degrees)")
     plt.ylabel("Frequency")
     plt.legend()
+    plt.savefig("Graphs/To Show/14.2.20/" + title)
 
 
 if __name__ == "__main__":
@@ -199,7 +203,7 @@ if __name__ == "__main__":
             if gt is not np.nan and r > 0.85:
                 c.unmask_array()
                 max_I05 = c.I05.max()
-                min_I05 = c.I05.max()
+                min_I05 = c.I05.min()
                 cyc_date_minus_day = c.meta_data["ISO_TIME"] - timedelta(days=1)
                 cyc_time_minus_day = cyc_date_minus_day.strftime("%Y-%m-%d %H:%M:%S")
                 cyc_future = best_track_df.loc[(best_track_df["ISO_TIME"] > cyc_time_minus_day) &
@@ -226,9 +230,13 @@ if __name__ == "__main__":
                      21.5: [], 23.5: [], 25.5: [], 27.5: [], 29.5: [], 31.5: []}
     WP_gts_by_long = {110: [], 120: [], 130: [], 140: [], 150: []}
     season_gts = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [],  11: [], 12: []}
+    SST_gts = {260: [], 270: [], 280: [], 290: [], 300: []}
+    deltaT_gts = {60: [], 70: [], 80: [], 90: [], 100: []}
     increasing_gts = []
     decreasing_gts = []
     in_or_de_tensifying_gts = {"Increasing": [], "Decreasing" : [], "Max" : [], "Min": [], "Steady" :[]}
+    upper_WP_peak = {"gt": [], "longitude": [], "latitude" : []}
+    lower_WP_peak = {"gt": [], "longitude": [], "latitude" : []}
     for cyclone in histogram_dict:
 
         if cyclone["basin"] == "WP":
@@ -251,6 +259,23 @@ if __name__ == "__main__":
                 if long < cyclone["position"][1] <= long + 10:
                     WP_gts_by_long[long].append(cyclone["gt"])
 
+            for temp in SST_gts.keys():
+                if temp < cyclone["SST"] <= temp + 10:
+                    SST_gts[temp].append(cyclone["gt"])
+
+            for deltaT in deltaT_gts.keys():
+                if deltaT < (cyclone["SST"]-cyclone["CTT"]) <= deltaT + 10:
+                    deltaT_gts[deltaT].append(cyclone["gt"])
+
+            if cyclone["gt"] > -33:
+                upper_WP_peak["gt"].append(cyclone["gt"])
+                upper_WP_peak["longitude"].append(cyclone["position"][1])
+                upper_WP_peak["latitude"].append(cyclone["position"][0])
+            elif cyclone["gt"] < -33:
+                lower_WP_peak["gt"].append(cyclone["gt"])
+                lower_WP_peak["longitude"].append(cyclone["position"][1])
+                lower_WP_peak["latitude"].append(cyclone["position"][0])
+
         for wind in wind_gts.keys():
             if wind - 5 < cyclone["wind"] <= wind + 5:
                 wind_gts[wind].append(cyclone["gt"])
@@ -264,6 +289,29 @@ if __name__ == "__main__":
         all_gts.append(cyclone["gt"])
         all_winds.append(cyclone["wind"])
 
-    analysing_x(in_or_de_tensifying_gts, "Intensity (WP)", fit="bimodal")
+    # analysing_x(deltaT_gts, "SST - CTT(WP)", fit="bimodal")
     # analysing_basin(season_gts)
+
+    avg_lower_dict = {}
+    for k, v in lower_WP_peak.items():
+        avg_lower_dict[k] = sum(v) / float(len(v))
+    avg_upper_dict = {}
+    for k, v in upper_WP_peak.items():
+        avg_upper_dict[k] = sum(v) / float(len(v))
+    print(avg_lower_dict, avg_upper_dict)
+    print("Lower", np.std(lower_WP_peak["longitude"]), np.std(lower_WP_peak["latitude"]))
+    print("Upper", np.std(upper_WP_peak["longitude"]), np.std(upper_WP_peak["latitude"]))
+
+    loc_df_upper = pd.DataFrame(data=upper_WP_peak)
+    loc_df_lower = pd.DataFrame(data=lower_WP_peak)
+    world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+
+    geometry = [Point(xy) for xy in zip(loc_df_lower['longitude'], loc_df_lower['latitude'])]
+    gdf = GeoDataFrame(loc_df_lower, geometry=geometry)
+    gdf.plot(ax=world.plot(figsize=(10, 6)), marker='o', color='blue', markersize=10)
+
+    geometry = [Point(xy) for xy in zip(loc_df_upper['longitude'], loc_df_upper['latitude'])]
+    gdf = GeoDataFrame(loc_df_upper, geometry=geometry)
+    gdf.plot(ax=world.plot(figsize=(10, 6)), marker='o', color='red', markersize=10)
+
     plt.show()
