@@ -137,7 +137,7 @@ def get_eye(start_point, end_point):
                            metadata)
 
 
-def get_entire_cyclone(start_point, end_point):
+def get_entire_cyclone(start_point, end_point, twelve_hour=None):
     lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
     lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
     north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
@@ -160,6 +160,8 @@ def get_entire_cyclone(start_point, end_point):
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
     metadata["DELTA_SPEED"] = end_point["USA_WIND"] - start_point["USA_WIND"]
+    if twelve_hour is not None:
+        metadata["DELTA_SPEED_12HR"] = twelve_hour["USA_WIND"] - metadata["USA_WIND"]
 
     checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
                              metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
@@ -201,8 +203,11 @@ class CycloneImage:
     def mask(self, instance: CycloneSnapshot):
         # instance.mask_using_I01(30)
         instance.mask_array_I05(HIGH=273, LOW=220)
+        instance.mask_using_I01(30)
 
     def save(self):
+        # Grid is not saved, dump all others
+        self.rects = self.rects[:3]
         with open(os.path.join(self.get_dir(), "img_pickle.pickle"), 'wb') as f_pickle:
             import pickle
             pickle.dump(self, f_pickle)
@@ -271,9 +276,10 @@ class CycloneImage:
 
     def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
         gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)
-        if not os.path.isfile(os.path.join(self.get_dir(), "image_grid.png")):
-            self.plot_globe(band="I05", show_fig=False, save=True)
+        # if not os.path.isfile(os.path.join(self.get_dir(), "image_grid.png")):
+        #     self.plot_globe(band="I05", show_fig=False, save=True)
         self.bb.plot(band="I01", save_dir=os.path.join(self.get_dir(), "whole_i1_plot.png"), show=False)
+        self.mask(self.bb)
         self.bb.plot(band="I05", save_dir=os.path.join(self.get_dir(), "whole_masked_plot.png"), show=False)
 
         gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
@@ -281,6 +287,8 @@ class CycloneImage:
                                                            show=False)
         gd.set_eye_gt(gt, gt_err)
         gd.piecewise_glaciation_temperature(show=False, save=True)
+        gd.histogram_from_eye(show=False, save=True)
+
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)

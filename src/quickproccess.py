@@ -1,21 +1,11 @@
+import glob
 import json
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.stats import sem
 
-files = [r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\IRMA\2017-09-05 17-00\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\IRMA\2017-09-06 16-42\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\IRMA\2017-09-06 18-24\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\IRMA\2017-09-07 18-06\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\IRMA\2017-09-08 17-48\out.json",
-         # r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\LEKIMA\2019-08-08 04-06\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\WALAKA\2018-10-01 23-18\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\WALAKA\2018-10-02 00-54\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\WALAKA\2018-10-03 00-36\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\YUTU\2018-10-24 04-06\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\YUTU\2018-10-25 03-48\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\YUTU\2018-10-26 03-30\out.json",
-         r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\YUTU\2018-10-27 03-12\out.json"]
+outdir = glob.glob("D:\out_new\**\out.json", recursive=True)
 
 lb = []
 rb = []
@@ -23,10 +13,17 @@ lf = []
 rf = []
 avg = []
 var = []
-for file in files:
+delta = []
+eye = []
+diff_eye_agg = np.array([])
+diff_eye_median = []
+diff_eye_mean = []
+for file in outdir:
     with open(file) as f:
+        print(file)
         obj = json.load(f)
         l = []
+        eye.append(obj["EYE"])
         if not np.isnan(obj["LB"]):
             lb.append(obj["LB"])
             l.append(obj["LB"])
@@ -39,18 +36,79 @@ for file in files:
         if not np.isnan(obj["LF"]):
             lf.append(obj["LF"])
             l.append(obj["LF"])
-        l = np.array(l)
-        var.append(l.std())
+        if "GT_GRID" in obj and not np.isnan(obj["EYE"]):
+            diff_eye_agg = np.append(diff_eye_agg, np.array(obj["GT_GRID"]) - obj["EYE"])
+            diff_eye_median.append(np.median(np.array(obj["GT_GRID"]) - obj["EYE"]))
+            diff_eye_mean.append(np.mean(np.array(obj["GT_GRID"]) - obj["EYE"]))
 
+        delta.append(obj["DELTA_SPEED"])
+        l = np.array(l)
+        avg.append(l.mean())
+        var.append(l.std())
 
 lb = np.array(lb)
 rb = np.array(rb)
 rf = np.array(rf)
 lf = np.array(lf)
-
+eye = np.array(eye)
+print(f"Average deviation from eye:{np.nanmean(eye - avg)}")
+print(f"Avergage stderror : {np.nanstd(eye - avg) / np.sqrt(len(eye))}")
 print(f"Mean LF:{np.nanmean(lf)} std:{sem(lf)}")
 print(f"Mean RF:{np.nanmean(rf)} std:{sem(rf)}")
 print(f"Mean LB:{np.nanmean(lb)} std:{sem(lb)}")
 print(f"Mean  RB:{np.nanmean(rb)} std:{sem(rb)}")
 
 print(f"Avg std:{np.nanmean(var)}")
+
+
+def plot_distribution_of_temp_total(bins=30):
+    fig, ax = plt.subplots()
+    ax.hist(diff_eye_agg, bins=bins)
+    mean = np.mean(diff_eye_agg)
+    median = np.median(diff_eye_median)
+    ax.axvline(mean, c='r', label=f"Mean:{round(mean, 2)}pm{round(sem(diff_eye_agg), 2)}")
+    ax.axvline(median, c='g', label=f"Median:{round(median, 2)}pm{round(1.253 * sem(diff_eye_agg), 2)}")
+    ax.set_ylabel("Frequency")
+    ax.set_xlabel("Cell temperature minus eye temperature")
+    plt.legend()
+
+
+def diff_against_ds():
+    fig, ax = plt.subplots()
+    ax.scatter(delta,diff_eye_median)
+    ax.set_xlabel("Median cell difference to eye")
+    ax.set_ylabel("3 hour Wind Speed change")
+
+
+def plot_distr_of_mean():
+    fig, ax = plt.subplots()
+    ax.hist(diff_eye_mean)
+    ax.set_ylabel("Frequency")
+    ax.set_xlabel("Mean cell temperature minus eye temperature")
+
+
+def plot_distr_of_median():
+    fig, ax = plt.subplots()
+    ax.hist(diff_eye_median)
+    ax.set_ylabel("Frequency")
+    ax.set_xlabel("Median cell temperature minus eye temperature")
+
+
+def plot_windspeed_avg():
+    fig, ax = plt.subplots()
+    ax.scatter(delta, avg)
+    ax.invert_yaxis()
+    ax.set_xlabel("3 hours change in wind speed (kts)")
+    ax.set_ylabel("External glaciation temperature")
+
+
+def plot_windspeed_eye():
+    fig, ax = plt.subplots()
+    ax.scatter(delta, eye)
+    ax.set_xlabel("3 hours change in wind speed (kts)")
+    ax.set_ylabel("Eye glaciation temperature")
+
+
+plot_distribution_of_temp_total(50)
+plot_distr_of_mean()
+plot_distr_of_median()

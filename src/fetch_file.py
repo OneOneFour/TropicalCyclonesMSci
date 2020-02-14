@@ -81,6 +81,6 @@ def get_data(root_dir, start_time, end_time,include_mod = False, north=90, south
     if file_name_response.status_code != 200:
         raise ConnectionError(file_name_response.content)
     files = [f.text for f in ET.fromstring(file_name_response.content)]
-    if len(files) > 4:
+    if len(files) > 8:
         raise RuntimeError("Too many files loaded to process efficiently")
     return download_files_from_server(root_dir, files), files

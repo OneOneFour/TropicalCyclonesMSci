@@ -335,7 +335,10 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.__I05, mask=blank_mask)
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
-    def gt_piece_all(self, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True):
+    def gt_piece_all(self, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True, overlap=None):
+        if overlap:
+            if self.check_overlap(overlap):
+                return np.nan, np.nan, np.nan
         if isinstance(self.I04, npma.MaskedArray):
             i01 = np.ma.array(self.I01, mask=self.I04.mask)
         else:
@@ -357,9 +360,7 @@ class CycloneSnapshot:
             if raise_up < gt or gt + gt_err < raise_lower or r2 < 0.85:
                 raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
             return gt, gt_err, r2
-        except (RuntimeError, ValueError) as e:
-            import traceback
-            traceback.print_exc()
+        except (RuntimeError, ValueError):
             return np.nan, np.nan, np.nan
 
     def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-38, save_fig=None, show=True,
@@ -485,7 +486,7 @@ class SnapshotGrid:
                 plt.close()
             if show:
                 plt.show()
-
+        self.vals["GT_GRID"] = self.gt_grid[~np.isnan(self.gt_grid)].tolist()
         self.vals["GT_MEAN"] = np.nanmean(self.gt_grid)
         self.vals["GT_STD"] = np.nanstd(self.gt_grid)
 
@@ -557,13 +558,17 @@ class SnapshotGrid:
     def valid_cells(self):
         return [ci for row in self.grid for ci in row if not np.isnan(ci.gt_piece_percentile(plot=False)[0])]
 
-    def histogram_from_eye(self):
-        assert self.imageInstance.is_eyewall_gt_good
-        gt_from_eye = self.vals["EYE"] - self.gt_grid.flatten()
+    def histogram_from_eye(self, show=True, save=False):
+        gt_from_eye = self.gt_grid.flatten() - self.vals["EYE"]
         gt_from_eye = gt_from_eye[~np.isnan(gt_from_eye)]
         fig, ax = plt.subplots()
         ax.hist(gt_from_eye, bins=10)
-        plt.show()
+        ax.set_xlabel("T_g of external cell - T_g of the eye ")
+        if save:
+            plt.savefig(os.path.join(self.imageInstance.get_dir(), "eye_t_offset_hist.png"))
+            plt.close(fig)
+        if show:
+            plt.show()
 
     def gt_quadrant_distribution(self, plot=True, save=False, show=True):
         """
@@ -606,6 +611,16 @@ class SnapshotGrid:
                             ha="center", va="bottom")
             if save:
                 plt.savefig(os.path.join(self.imageInstance.get_dir(), "quadrant_plot.png"))
+                plt.close()
+            q_fig, q_ax = plt.subplots(2, 2, figsize=(8, 6))
+            for i, quad in enumerate(("LB", "RB", "LF", "LB")):
+                if len(distr[quad]) < 1:
+                    continue
+                q_ax[i // 2][i % 2].hist(distr[quad])
+                q_ax[i // 2][i % 2].set_ylabel("Frequency")
+                q_ax[i // 2][i % 2].set_xlabel("Glaciation Temperature (C)")
+            if save:
+                plt.savefig(os.path.join(self.imageInstance.get_dir(), "quadrant_distribution.png"))
                 plt.close()
             if show:
                 plt.show()

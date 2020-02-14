@@ -51,22 +51,20 @@ class GTFit:
     #     self.gt = [gt_ve, gt_err]
     #     return gt_ve, gt_err, (a, b, c, d)
 
-    def piecewise_fit(self, fig=None, ax=None, func=piecewise_step):
+    def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
         self.x_i05 = self.i05
         self.y_i04 = self.i04
-        if len(self.i05) < 4 or len(self.i04) < 4:
+        if len(self.i05) < 50 or len(self.i04) < 50:
             raise ValueError("Problem underconstrained.")
         if not self.i01 is None:
             params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
-                                       p0=(HOMOGENEOUS_FREEZING_TEMP, -30, -10, 290, 1, 285),
-                                       sigma=(100 / self.i01**2))
+                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280,1,1),
+                                       sigma=(100 / (self.i01**2)))
         else:
             params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
-                                       p0=(HOMOGENEOUS_FREEZING_TEMP, -30, -10, 290, 1, 285),
-                                       )
-        gt_err = np.sqrt(np.diag(cov))[0]
+                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280,1,1) )
         r2 = 1 - (np.sum((self.y_i04 - func(self.x_i05, *params)) ** 2)) / np.sum((self.y_i04 - self.y_i04.mean()) ** 2)
-
+        gt_err = np.sqrt(np.diag(cov))[0]
         self.gt = params[0]
         if fig and ax:
             self.plot(fig, ax, func=func, params=params)
