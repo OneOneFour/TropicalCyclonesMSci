@@ -4,7 +4,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from pandas.plotting import register_matplotlib_converters
 
-from BestTrack import get_cyclone_by_name
+from BestTrack import *
 
 register_matplotlib_converters()
 
@@ -26,16 +26,5 @@ def plt_time_series(series):
 
 if __name__ == "__main__":
     ## ALL
-    # all_cyclones_since(2014, 12, 1, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("DORIAN", 2019, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("IRMA", 2017, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("GENEVIEVE", 2014, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("HELLEN", 2014, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("IAN", 2014, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("JELAWAT", 2012, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("LEKIMA", 2013, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("NEOGURI", 2014, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("RAMMASUN", 2014, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("USAGI", 2013, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("WALAKA", 2018, per_cyclone=lambda x: x.auto_gt_cycle())
-    get_cyclone_by_name("YUYU", 2018, per_cyclone=lambda x: x.auto_gt_cycle())
+    # all_cyclones_since(2018, 9,1, per_cyclone=lambda x: x.auto_gt_cycle())
+    get_cyclone_eye_name_image("GENEVIEVE", 2014)

@@ -15,6 +15,7 @@ avg = []
 var = []
 delta = []
 eye = []
+gt_grid = []
 diff_eye_agg = np.array([])
 diff_eye_median = []
 diff_eye_mean = []
@@ -40,8 +41,8 @@ for file in outdir:
             diff_eye_agg = np.append(diff_eye_agg, np.array(obj["GT_GRID"]) - obj["EYE"])
             diff_eye_median.append(np.median(np.array(obj["GT_GRID"]) - obj["EYE"]))
             diff_eye_mean.append(np.mean(np.array(obj["GT_GRID"]) - obj["EYE"]))
-
-        delta.append(obj["DELTA_SPEED"])
+            gt_grid.extend(obj["GT_GRID"])
+        delta.append(obj["DELTA_SPEED_12HR"])
         l = np.array(l)
         avg.append(l.mean())
         var.append(l.std())
@@ -51,6 +52,9 @@ rb = np.array(rb)
 rf = np.array(rf)
 lf = np.array(lf)
 eye = np.array(eye)
+gt_grid = np.array(gt_grid)
+diff_eye_mean = np.array(diff_eye_mean)
+diff_eye_median = np.array(diff_eye_median)
 print(f"Average deviation from eye:{np.nanmean(eye - avg)}")
 print(f"Avergage stderror : {np.nanstd(eye - avg) / np.sqrt(len(eye))}")
 print(f"Mean LF:{np.nanmean(lf)} std:{sem(lf)}")
@@ -73,23 +77,51 @@ def plot_distribution_of_temp_total(bins=30):
     plt.legend()
 
 
+def plot_external_distribution(bins=30):
+    fig, ax = plt.subplots()
+    ax.hist(gt_grid, bins=bins)
+    mean = np.mean(gt_grid)
+    median = np.median(gt_grid)
+    ax.axvline(mean, c='r', label=f"Mean:{round(mean, 2)}pm{round(sem(gt_grid), 2)}")
+    ax.axvline(median, c='g', label=f"Median:{round(median, 2)}pm{round(1.253 * sem(gt_grid), 2)}")
+    ax.set_ylabel("Frequency")
+    ax.set_xlabel("Cell temperature minus eye temperature")
+    plt.legend()
+
+
 def diff_against_ds():
     fig, ax = plt.subplots()
-    ax.scatter(delta,diff_eye_median)
+    ax.scatter(delta, diff_eye_median)
     ax.set_xlabel("Median cell difference to eye")
-    ax.set_ylabel("3 hour Wind Speed change")
+    ax.set_ylabel("12 hour Wind Speed change")
 
 
-def plot_distr_of_mean():
+def plot_distr_of_mean(class_by_eye_gt=True):
     fig, ax = plt.subplots()
-    ax.hist(diff_eye_mean)
+    if class_by_eye_gt:
+        diff_eye_warm = diff_eye_mean[np.argwhere(eye > -30)]
+        diff_eye_cold = diff_eye_mean[np.argwhere(eye <= -30)]
+        bins = np.linspace(-10, 10, 20)
+        ax.hist(diff_eye_warm, bins, label="Warm eyes")
+        ax.hist(diff_eye_cold, bins, label="Cool eyes")
+        plt.legend()
+    else:
+        ax.hist(diff_eye_mean)
     ax.set_ylabel("Frequency")
     ax.set_xlabel("Mean cell temperature minus eye temperature")
 
 
-def plot_distr_of_median():
+def plot_distr_of_median(class_by_eye_gt=True):
     fig, ax = plt.subplots()
-    ax.hist(diff_eye_median)
+    if class_by_eye_gt:
+        diff_eye_warm = diff_eye_median[np.argwhere(eye > -30)]
+        diff_eye_cold = diff_eye_median[np.argwhere(eye <= -30)]
+        bins = np.linspace(-10, 10, 20)
+        ax.hist(diff_eye_warm, bins, label="Warm eyes")
+        ax.hist(diff_eye_cold, bins, label="Cool eyes")
+        plt.legend()
+    else:
+        ax.hist(diff_eye_median)
     ax.set_ylabel("Frequency")
     ax.set_xlabel("Median cell temperature minus eye temperature")
 

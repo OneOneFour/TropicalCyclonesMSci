@@ -137,7 +137,7 @@ def get_eye(start_point, end_point):
                            metadata)
 
 
-def get_entire_cyclone(start_point, end_point, twelve_hour=None):
+def get_entire_cyclone(start_point, end_point, history=None):
     lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
     lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
     north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
@@ -159,15 +159,12 @@ def get_entire_cyclone(start_point, end_point, twelve_hour=None):
     scene = Scene(filenames=files, reader="viirs_l1b")
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
-    metadata["DELTA_SPEED"] = end_point["USA_WIND"] - start_point["USA_WIND"]
-    if twelve_hour is not None:
-        metadata["DELTA_SPEED_12HR"] = twelve_hour["USA_WIND"] - metadata["USA_WIND"]
+    for i, h in enumerate(history):
+        metadata[f"DELTA_SPEED_{(4-i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
 
-    checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
-                             metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
-    if os.path.isdir(checkpath):
-        if os.path.isfile(os.path.join(checkpath, "img_pickle.pickle")):
-            return CycloneImage.load(os.path.join(checkpath, "img_pickle.pickle"))
+    # checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
+    #                         metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
+
     return CycloneImage(scene, metadata, load_mod=True)
 
 
@@ -204,6 +201,7 @@ class CycloneImage:
         # instance.mask_using_I01(30)
         instance.mask_array_I05(HIGH=273, LOW=220)
         instance.mask_using_I01(30)
+        instance.mask_thin_cirrus(50)
 
     def save(self):
         # Grid is not saved, dump all others
@@ -293,7 +291,6 @@ class CycloneImage:
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)
         gd.radial_distribution(show=False, save=True)
-        self.save()
         gd.save()
         return gd.vals
 

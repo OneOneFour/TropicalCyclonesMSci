@@ -17,16 +17,19 @@ def all_cyclones_since(year, month, day, cat_min=4, per_cyclone=None):
         (best_track_df["USA_SSHS"] >= cat_min) & (
                 best_track_df["ISO_TIME"] > pd.Timestamp(year=year, month=month, day=day))]
     cat_4_5_all_basins_group = cat_4_5_all_basins.groupby(["SID"])
-    for name, cyclone in cat_4_5_all_basins_group:
+    for sid, cyclone in cat_4_5_all_basins_group:
         dict_cy = cyclone.to_dict(orient="records")
         for i, cyclone_point in enumerate(dict_cy[:-1]):
             start_point = cyclone_point
             end_point = dict_cy[i + 1]
-            if end_point["ISO_TIME"] - start_point["ISO_TIME"] > timedelta(hours=3):
-                continue
+            history = best_track_df.loc[(best_track_df["SID"] == sid) &
+                                        (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"]) & (
+                                                best_track_df["ISO_TIME"] > start_point["ISO_TIME"] - timedelta(
+                                            hours=12))].to_dict(orient="records")
             try:
-                ci = get_entire_cyclone(start_point, end_point)
+                ci = get_entire_cyclone(start_point, end_point, history=history)
                 if ci and ci.is_eyewall_gt_good:
+                    print(ci.metadata["NAME"])
                     per_cyclone(ci)
             except Exception:
                 import traceback
@@ -60,6 +63,7 @@ def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
         if len(snap_list) >= max_len:
             return snap_list
         start_point = cyclone_point
+
         end_point = dict_cy[i + 1]
         with ProgressBar():
             # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
@@ -69,8 +73,6 @@ def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
             #     return ci
             eye = get_eye(start_point, end_point)
             if eye:
-                if pickle:
-                    eye.save("proc/pickle_data/%s%i" % (name, len(snap_list)))
                 snap_list.append(get_eye(start_point, end_point))
     return snap_list
 
@@ -84,16 +86,17 @@ def get_cyclone_by_name_date(name, start, end, per_cyclone=None):
     for i, cyclone_point in enumerate(dict_cy[:-1]):
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
-        twelve_hour = dict_cy[i - 4] if i - 4 > 0 else None
+        history = best_track_df.loc[(best_track_df["NAME"] == name) &
+                                    (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"]) & (
+                                            best_track_df["ISO_TIME"] > start_point["ISO_TIME"] - timedelta(
+                                        hours=12))]
         try:
-            cy = get_entire_cyclone(start_point, end_point,twelve_hour=twelve_hour)
+            cy = get_entire_cyclone(start_point, end_point, history=history)
             if cy and cy.is_eyewall_gt_good:
                 per_cyclone(cy)
         except Exception:
             import traceback
             traceback.print_exc()
-
-
 
 
 def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=False):
@@ -106,14 +109,17 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
             break
         start_point = cyclone_point
         end_point = dict_cy[i + 1]
-        twelve_hour = dict_cy[i - 4] if i - 4 > 0 else None
+        history = best_track_df.loc[(best_track_df["NAME"] == name) &
+                                    (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"]) & (
+                                            best_track_df["ISO_TIME"] > start_point["ISO_TIME"] - timedelta(
+                                        hours=12))]
         # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
         #                    cat=start_point["USA_SSHS"], dayOrNight="D")
         # if ci is not None:
         #     ci.draw_eye()
         #     return ci
         try:
-            cy = get_entire_cyclone(start_point, end_point, twelve_hour=twelve_hour)
+            cy = get_entire_cyclone(start_point, end_point, history=history)
 
             if cy and cy.is_eyewall_gt_good:
                 print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")

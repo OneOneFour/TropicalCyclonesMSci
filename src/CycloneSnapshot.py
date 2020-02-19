@@ -255,7 +255,6 @@ class CycloneSnapshot:
     def point_display(self):
         fig, ax = plt.subplots(1, 2)
 
-        gt_fitter = GTFit(self.flat(self.I04), self.flat(self.I05))
         self.scatter(fig, ax[0])
         self.__discrete_img(fig, ax[1])
 
