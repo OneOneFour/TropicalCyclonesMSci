@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 import matplotlib.pyplot as plt
+import matplotlib
 import os
 import scipy.optimize as sp
 
@@ -18,6 +19,11 @@ from CycloneSnapshot import CycloneSnapshot
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.since1980.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
+
+font = {'family': 'normal',
+            'weight': 'bold',
+            'size': 15}
+matplotlib.rc('font', **font)
 
 
 def gauss(x, a, x0, sigma):
@@ -155,13 +161,13 @@ def analysing_x(array, title, fit="gauss"):
     plt.figure()
     n, bins, patches = plt.hist(array.values(), bins=np.arange(-44, -10, 2), rwidth=0.8,
                                 histtype="barstacked", label=array.keys())
-    plt.title(f"GT by {title}, n={sum(n[-1])}")
+    # plt.title(f"GT by {title}, n={sum(n)}")
+    plt.title("Distribution of all cyclones glaciation temperatures", fontsize=40)
     x = []
     for i in bins:
        x.append(i + 1)
     x = np.array(x[:-1])
-    y = np.array(n[-1])
-
+    y = np.array(n)
     n = len(x)
     mean = np.mean(x)
     sigma = np.std(x)
@@ -186,11 +192,57 @@ def analysing_x(array, title, fit="gauss"):
     plt.xlabel("Glaciation Temperature (Degrees)")
     plt.ylabel("Frequency")
     plt.legend()
-    plt.savefig("Graphs/To Show/14.2.20/" + title)
+
+
+def plot_peak_pos(lower_peak_data, upper_peak_data):
+    avg_lower_dict = {}
+    for k, v in lower_peak_data.items():
+        avg_lower_dict[k] = sum(v) / float(len(v))
+    avg_upper_dict = {}
+    for k, v in upper_peak_data.items():
+        avg_upper_dict[k] = sum(v) / float(len(v))
+    print(avg_lower_dict, avg_upper_dict)
+    print("Lower", np.std(lower_peak_data["longitude"]), np.std(lower_peak_data["latitude"]))
+    print("Upper", np.std(upper_peak_data["longitude"]), np.std(upper_peak_data["latitude"]))
+
+    loc_df_upper = pd.DataFrame(data=upper_peak_data)
+    loc_df_lower = pd.DataFrame(data=lower_peak_data)
+    world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+
+    geometry = [Point(xy) for xy in zip(loc_df_lower['longitude'], loc_df_lower['latitude'])]
+    gdf = GeoDataFrame(loc_df_lower, geometry=geometry)
+    gdf.plot(ax=world.plot(figsize=(10, 6)), marker='o', color='blue', markersize=10)
+
+    geometry = [Point(xy) for xy in zip(loc_df_upper['longitude'], loc_df_upper['latitude'])]
+    gdf = GeoDataFrame(loc_df_upper, geometry=geometry)
+    gdf.plot(ax=world.plot(figsize=(10, 6)), marker='o', color='red', markersize=10)
+
+
+def analyse_peak(data, key, which):
+    list = []
+    for cyclone in data:
+        if key == "future_winds":
+            intensity_after_24 = cyclone[key][-1] - cyclone["wind"]
+            list.append(intensity_after_24)
+        elif key == "deltaT":
+            deltaT = cyclone["SST"] - cyclone["CTT"]
+            list.append(deltaT)
+        elif key == "time":
+            time = int(cyclone[key].strftime("%m"))
+            list.append(time)
+        elif key == "longitude":
+            list.append(cyclone["position"][1])
+        elif key == "latitude":
+            list.append(cyclone["position"][0])
+        else:
+            list.append(cyclone[key])
+    print(which, np.mean(list), np.std(list)/np.sqrt(len(data)))
 
 
 if __name__ == "__main__":
     histogram_dict = []
+    names = ["ATSANI", "DUJUAN", "HAGIBIS", "JEBI", "JELAWAT", "LEKIMA", "MANGKHUT", "MARIA", "MAYSAK", "NANGKA"
+             "NEOGURI", "NEPARTAK", "TRAMI", "WUTIP", "YUTU"]
     best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
     for file in os.listdir("proc/eyes_since_2012"):
         filename = "proc/eyes_since_2012/" + file
@@ -209,15 +261,25 @@ if __name__ == "__main__":
                 cyc_future = best_track_df.loc[(best_track_df["ISO_TIME"] > cyc_time_minus_day) &
                                                (best_track_df["NAME"] == c.meta_data["NAME"]) &
                                                (best_track_df["USA_SSHS"] > 1)]
+                name = c.meta_data["NAME"]
+                iso_time = c.meta_data["ISO_TIME"]
+                speed = c.meta_data["USA_WIND"]
+                winds = cyc_future["USA_WIND"].values[:16]
+                if c.meta_data["NAME"] in names:
+                    print(f"{name}, {iso_time} has gt {gt}, {speed}, {winds}")
+                    c.plot()
+                    c.plot("I04")
+                    plt.show()
                 histogram_dict.append({"year": c.meta_data["SEASON"], "gt": gt, "r": r, "wind": c.meta_data["USA_WIND"],
                                        "cat": c.meta_data["USA_SSHS"], "basin": c.meta_data["BASIN"],
                                        "future_winds": cyc_future["USA_WIND"].values[:16],
                                        "position": [c.meta_data["LAT"], c.meta_data["LON"]],
-                                       "time": c.meta_data["ISO_TIME"], "SST": max_I05, "CTT": min_I05})
+                                       "time": c.meta_data["ISO_TIME"], "SST": max_I05, "CTT": min_I05,
+                                       "name": c.meta_data["NAME"]})
         except:
             continue
 
-    all_gts = []
+    all_gts = {"all": []}
     all_winds = []
     basin_gts = {"WP": [], "NA": [], "NI": [], "SI": [], "NP": [], "SA": [], "EP": [], "SP": []}
     increasing_basin_gts = {"WP": [], "NA": [], "NI": [], "SI": [], "NP": [], "SA": [], "EP": [], "SP": []}
@@ -231,12 +293,14 @@ if __name__ == "__main__":
     WP_gts_by_long = {110: [], 120: [], 130: [], 140: [], 150: []}
     season_gts = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [],  11: [], 12: []}
     SST_gts = {260: [], 270: [], 280: [], 290: [], 300: []}
-    deltaT_gts = {60: [], 70: [], 80: [], 90: [], 100: []}
-    increasing_gts = []
-    decreasing_gts = []
+    deltaT_gts = {60: [], 70: [], 80: [], 90: [], 100: [], 110: []}
     in_or_de_tensifying_gts = {"Increasing": [], "Decreasing" : [], "Max" : [], "Min": [], "Steady" :[]}
     upper_WP_peak = {"gt": [], "longitude": [], "latitude" : []}
     lower_WP_peak = {"gt": [], "longitude": [], "latitude" : []}
+    non_WP_gts = {"NonWP": []}
+    upper_peak_cyclones_WP = []
+    lower_peak_cyclones_WP = []
+
     for cyclone in histogram_dict:
 
         if cyclone["basin"] == "WP":
@@ -267,14 +331,22 @@ if __name__ == "__main__":
                 if deltaT < (cyclone["SST"]-cyclone["CTT"]) <= deltaT + 10:
                     deltaT_gts[deltaT].append(cyclone["gt"])
 
+            name = cyclone["name"]
+            iso_time = cyclone["time"]
+            speed = cyclone["wind"]
+            winds = cyclone["future_winds"]
             if cyclone["gt"] > -33:
                 upper_WP_peak["gt"].append(cyclone["gt"])
                 upper_WP_peak["longitude"].append(cyclone["position"][1])
                 upper_WP_peak["latitude"].append(cyclone["position"][0])
+                upper_peak_cyclones_WP.append(cyclone)
             elif cyclone["gt"] < -33:
                 lower_WP_peak["gt"].append(cyclone["gt"])
                 lower_WP_peak["longitude"].append(cyclone["position"][1])
                 lower_WP_peak["latitude"].append(cyclone["position"][0])
+                lower_peak_cyclones_WP.append(cyclone)
+        else:
+            non_WP_gts["NonWP"].append(cyclone["gt"])
 
         for wind in wind_gts.keys():
             if wind - 5 < cyclone["wind"] <= wind + 5:
@@ -286,32 +358,15 @@ if __name__ == "__main__":
             if int(cyclone["time"].strftime("%m")) == month:
                 season_gts[month].append(cyclone["gt"])
 
-        all_gts.append(cyclone["gt"])
-        all_winds.append(cyclone["wind"])
+        for basin in basin_gts.keys():
+            if basin == cyclone["basin"]:
+                basin_gts[basin].append(cyclone["gt"])
 
-    # analysing_x(deltaT_gts, "SST - CTT(WP)", fit="bimodal")
-    # analysing_basin(season_gts)
+        all_gts["all"].append(cyclone["gt"])
 
-    avg_lower_dict = {}
-    for k, v in lower_WP_peak.items():
-        avg_lower_dict[k] = sum(v) / float(len(v))
-    avg_upper_dict = {}
-    for k, v in upper_WP_peak.items():
-        avg_upper_dict[k] = sum(v) / float(len(v))
-    print(avg_lower_dict, avg_upper_dict)
-    print("Lower", np.std(lower_WP_peak["longitude"]), np.std(lower_WP_peak["latitude"]))
-    print("Upper", np.std(upper_WP_peak["longitude"]), np.std(upper_WP_peak["latitude"]))
-
-    loc_df_upper = pd.DataFrame(data=upper_WP_peak)
-    loc_df_lower = pd.DataFrame(data=lower_WP_peak)
-    world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-
-    geometry = [Point(xy) for xy in zip(loc_df_lower['longitude'], loc_df_lower['latitude'])]
-    gdf = GeoDataFrame(loc_df_lower, geometry=geometry)
-    gdf.plot(ax=world.plot(figsize=(10, 6)), marker='o', color='blue', markersize=10)
-
-    geometry = [Point(xy) for xy in zip(loc_df_upper['longitude'], loc_df_upper['latitude'])]
-    gdf = GeoDataFrame(loc_df_upper, geometry=geometry)
-    gdf.plot(ax=world.plot(figsize=(10, 6)), marker='o', color='red', markersize=10)
+    # analyse_peak(lower_peak_cyclones_WP, "wind", "Lower")
+    # analyse_peak(upper_peak_cyclones_WP, "wind", "Upper")
+    # analysing_x(all_gts, "Non WP", fit="bimodal")
+    # analysing_basin(all_gts)
 
     plt.show()
