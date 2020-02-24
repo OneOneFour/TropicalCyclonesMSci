@@ -134,10 +134,10 @@ def get_eye(start_point, end_point):
 
     return CycloneSnapshot(new_scene["I04"].values, new_scene["I05"].values, recentered_area.pixel_size_x,
                            recentered_area.pixel_size_y, new_scene["i_satellite_azimuth_angle"].values,
-                           metadata)
+                           metadata,b_lon =centered_lon - 2 * eye_radius,b_lat =  centered_lat - 2 * eye_radius )
 
 
-def get_entire_cyclone(start_point, end_point, history=None):
+def get_entire_cyclone(start_point, end_point, history=None,future=None):
     lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
     lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
     north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
@@ -160,7 +160,9 @@ def get_entire_cyclone(start_point, end_point, history=None):
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
     for i, h in enumerate(history):
-        metadata[f"DELTA_SPEED_{(4-i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
+        metadata[f"DELTA_SPEED_-{(len(history)-i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
+    for i,f in enumerate(future):
+        metadata[f"DELTA_SPEED_+{(i + 1)*3}HR"] = f["USA_WIND"] - metadata["USA_WIND"]
 
     # checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
     #                         metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
@@ -172,6 +174,8 @@ import matplotlib.pyplot as plt
 
 
 class CycloneImage:
+
+    __slots__ = ["scene","metadata","lon","lat","rects"]
 
     @staticmethod
     def load(fpath):

@@ -30,6 +30,9 @@ class CycloneSnapshot:
     Uniformly gridded single snapshot of cyclone.
     """
 
+    __slots__ = ["__I04", "__I05", "I04_mask", "I05_mask", "I01", "M09", "pixel_x", "pixel_y", "b_lon", "b_lat",
+                 "metadata", "solar_zenith", "satellite_azimuth"]
+
     @staticmethod
     def load(fpath):
         with open(fpath, "rb") as file:
@@ -50,19 +53,28 @@ class CycloneSnapshot:
         self.M09 = M09
         self.I01 = I01
         assert self.I04.shape == self.I05.shape
-        self.shape = self.I04.shape
+
         self.pixel_x = pixel_x
         self.pixel_y = pixel_y
         self.b_lon = b_lon
         self.b_lat = b_lat
-        self.width = self.pixel_x * self.shape[1] / (NM_TO_M * 60)
-        self.height = self.pixel_y * self.shape[0] / (NM_TO_M * 60)
 
-        self.meta_data = dict(metadata)
+        self.metadata = dict(metadata)
         self.solar_zenith = solar
         self.satellite_azimuth = sat_pos
 
-        self.grid = []
+
+    @property
+    def shape(self):
+        return self.I04.shape
+
+    @property
+    def width(self):
+        return self.pixel_x * self.shape[1] / (NM_TO_M * 60)
+
+    @property
+    def height(self):
+        return self.pixel_y * self.shape[0] / (NM_TO_M * 60)
 
     @property
     def is_shaded(self):
@@ -128,26 +140,16 @@ class CycloneSnapshot:
     def celcius(self, a):
         return a - ABSOLUTE_ZERO
 
-    def show_sub_snaps(self):
-        fig, ax = plt.subplots()
-        self.img_plot(fig, ax, "I05")
-        for pos, cs in self.grid:
-            ax.add_patch(
-                Rectangle(xy=(pos[0], pos[2]), width=pos[1], height=pos[3], facecolor="none", lw=1)
-            )
-        plt.show()
-
     def add_sub_snap_edge(self, left, right, bottom, top, b_lon, b_lat):
         I04_tmp = self.I04[bottom:top, left:right]
         I05_tmp = self.I05[bottom:top, left:right]
         cs = CycloneSnapshot(I04_tmp, I05_tmp, self.pixel_x, self.pixel_y,
-                             self.satellite_azimuth[bottom:top, left:right], self.meta_data,
+                             self.satellite_azimuth[bottom:top, left:right], self.metadata,
                              b_lon,
                              b_lat,
                              M09=self.M09[bottom:top, left:right] if self.M09 is not None else None,
                              I01=self.I01[bottom:top, left:right],
                              solar=self.solar_zenith[bottom:top, left:right] if self.solar_zenith is not None else None)
-        self.grid.append([(left, right, bottom, top), cs])
 
         return cs
 
@@ -175,7 +177,7 @@ class CycloneSnapshot:
                                self.pixel_x * 0.5 * self.shape[1] / 1000,
                                -self.pixel_y * 0.5 * self.shape[0] / 1000,
                                self.pixel_y * 0.5 * self.shape[0] / 1000])
-        ax.set_title("%s %s" % (self.meta_data["NAME"], self.meta_data["ISO_TIME"]))
+        ax.set_title("%s %s" % (self.metadata["NAME"], self.metadata["ISO_TIME"]))
         ax.set_xlabel("km")
         ax.set_ylabel("km")
         cb = plt.colorbar(im)
@@ -194,19 +196,19 @@ class CycloneSnapshot:
 
     @property
     def quadrant(self):
-        eye_azimuth = wrap_360(np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.meta_data["USA_LON"],
-                                                     self.b_lat + self.height / 2 - self.meta_data["USA_LAT"])))
-        if 0 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 90:
+        eye_azimuth = wrap_360(np.rad2deg(np.arctan2(self.b_lon + (self.width / 2) - self.metadata["USA_LON"],
+                                                     self.b_lat + self.height / 2 - self.metadata["USA_LAT"])))
+        if 0 <= wrap_360(eye_azimuth - self.metadata["STORM_DIR"]) < 90:
             return "RF"
-        elif 90 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 180:
+        elif 90 <= wrap_360(eye_azimuth - self.metadata["STORM_DIR"]) < 180:
             return "RB"
-        elif 180 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 270:
+        elif 180 <= wrap_360(eye_azimuth - self.metadata["STORM_DIR"]) < 270:
             return "LB"
-        elif 270 <= wrap_360(eye_azimuth - self.meta_data["STORM_DIR"]) < 360:
+        elif 270 <= wrap_360(eye_azimuth - self.metadata["STORM_DIR"]) < 360:
             return "LF"
         else:
             raise ValueError(
-                f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, received {wrap_360(eye_azimuth - self.meta_data['STORM_DIR'])}")
+                f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, received {wrap_360(eye_azimuth - self.metadata['STORM_DIR'])}")
 
     def mask_using_I01(self, reflectance_cutoff=80):
         """
@@ -346,7 +348,7 @@ class CycloneSnapshot:
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)), self.flat(i01))
         try:
             if plot:
-                fig, ax = plt.subplots(1, 2)
+                fig, ax = plt.subplots(1, 2, figsize=(9, 6))
                 self.img_plot(fig, ax[1])
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit(fig, ax[0])
                 if save_fig:
@@ -370,7 +372,7 @@ class CycloneSnapshot:
                 return np.nan, np.nan, np.nan
         try:
             if plot:
-                fig, ax = plt.subplots(1, 2)
+                fig, ax = plt.subplots(1, 2, figsize=(9, 6))
                 self.img_plot(fig, ax[1])
                 (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
                 if save_fig:
