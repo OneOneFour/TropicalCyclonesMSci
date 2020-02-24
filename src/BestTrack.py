@@ -134,6 +134,7 @@ def get_cyclone_by_name(name, year, max_len=np.inf, pickle=False, shading=True) 
 
 
 def analysing_basin(dict):
+    """Takes dict of lists and loops through and plots each separately as a histogram."""
     for key in dict:
         plt.figure()
         n, bins, patches = plt.hist(dict[key], rwidth=0.8)
@@ -158,6 +159,7 @@ def analysing_basin(dict):
 
 
 def analysing_x(array, title, fit="gauss"):
+    """Takes dict of lists and plots stacked histogram of the values"""
     plt.figure()
     n, bins, patches = plt.hist(array.values(), bins=np.arange(-44, -10, 2), rwidth=0.8,
                                 histtype="barstacked", label=array.keys())
@@ -195,6 +197,7 @@ def analysing_x(array, title, fit="gauss"):
 
 
 def plot_peak_pos(lower_peak_data, upper_peak_data):
+    """Method to plot cyclone positions on world map. Takes data as a dict presented below in main by the same name."""
     avg_lower_dict = {}
     for k, v in lower_peak_data.items():
         avg_lower_dict[k] = sum(v) / float(len(v))
@@ -219,6 +222,8 @@ def plot_peak_pos(lower_peak_data, upper_peak_data):
 
 
 def analyse_peak(data, key, which):
+    """Method takes dictionary and ideally a key with which the value is an integer and calculates avg and error.
+    Used for the two gt peaks."""
     list = []
     for cyclone in data:
         if key == "future_winds":
@@ -241,8 +246,6 @@ def analyse_peak(data, key, which):
 
 if __name__ == "__main__":
     histogram_dict = []
-    names = ["ATSANI", "DUJUAN", "HAGIBIS", "JEBI", "JELAWAT", "LEKIMA", "MANGKHUT", "MARIA", "MAYSAK", "NANGKA"
-             "NEOGURI", "NEPARTAK", "TRAMI", "WUTIP", "YUTU"]
     best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
     for file in os.listdir("proc/eyes_since_2012"):
         filename = "proc/eyes_since_2012/" + file
@@ -251,7 +254,7 @@ if __name__ == "__main__":
             c.mask_thin_cirrus()
             c.mask_array_I05(LOW=220, HIGH=270)
             c.mask_using_I01(80)
-            gt, gt_err, r = c.gt_piece_percentile(percentile=5, plot=False)
+            gt, gt_err, r = c.gt_piece_percentile(percentile=5, plot=True)
             if gt is not np.nan and r > 0.85:
                 c.unmask_array()
                 max_I05 = c.I05.max()
@@ -261,15 +264,6 @@ if __name__ == "__main__":
                 cyc_future = best_track_df.loc[(best_track_df["ISO_TIME"] > cyc_time_minus_day) &
                                                (best_track_df["NAME"] == c.meta_data["NAME"]) &
                                                (best_track_df["USA_SSHS"] > 1)]
-                name = c.meta_data["NAME"]
-                iso_time = c.meta_data["ISO_TIME"]
-                speed = c.meta_data["USA_WIND"]
-                winds = cyc_future["USA_WIND"].values[:16]
-                if c.meta_data["NAME"] in names:
-                    print(f"{name}, {iso_time} has gt {gt}, {speed}, {winds}")
-                    c.plot()
-                    c.plot("I04")
-                    plt.show()
                 histogram_dict.append({"year": c.meta_data["SEASON"], "gt": gt, "r": r, "wind": c.meta_data["USA_WIND"],
                                        "cat": c.meta_data["USA_SSHS"], "basin": c.meta_data["BASIN"],
                                        "future_winds": cyc_future["USA_WIND"].values[:16],
@@ -364,6 +358,7 @@ if __name__ == "__main__":
 
         all_gts["all"].append(cyclone["gt"])
 
+    """Below function are for getting results, above is for getting dictionary with data needed."""
     # analyse_peak(lower_peak_cyclones_WP, "wind", "Lower")
     # analyse_peak(upper_peak_cyclones_WP, "wind", "Upper")
     # analysing_x(all_gts, "Non WP", fit="bimodal")
