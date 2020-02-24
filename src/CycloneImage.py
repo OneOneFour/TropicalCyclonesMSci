@@ -134,10 +134,10 @@ def get_eye(start_point, end_point):
 
     return CycloneSnapshot(new_scene["I04"].values, new_scene["I05"].values, recentered_area.pixel_size_x,
                            recentered_area.pixel_size_y, new_scene["i_satellite_azimuth_angle"].values,
-                           metadata,b_lon =centered_lon - 2 * eye_radius,b_lat =  centered_lat - 2 * eye_radius )
+                           metadata, b_lon=centered_lon - 2 * eye_radius, b_lat=centered_lat - 2 * eye_radius)
 
 
-def get_entire_cyclone(start_point, end_point, history=None,future=None):
+def get_entire_cyclone(start_point, end_point, history=None, future=None):
     lat_0 = (start_point["USA_LAT"] + end_point["USA_LAT"]) / 2
     lon_0 = (start_point["USA_LON"] + end_point["USA_LON"]) / 2
     north_extent = (start_point["USA_R34_NE"] + start_point["USA_R34_NW"]) / 120
@@ -160,9 +160,9 @@ def get_entire_cyclone(start_point, end_point, history=None,future=None):
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
     for i, h in enumerate(history):
-        metadata[f"DELTA_SPEED_-{(len(history)-i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
-    for i,f in enumerate(future):
-        metadata[f"DELTA_SPEED_+{(i + 1)*3}HR"] = f["USA_WIND"] - metadata["USA_WIND"]
+        metadata[f"DELTA_SPEED_-{(len(history) - i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
+    for i, f in enumerate(future):
+        metadata[f"DELTA_SPEED_+{(i + 1) * 3}HR"] = f["USA_WIND"] - metadata["USA_WIND"]
 
     # checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
     #                         metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
@@ -174,8 +174,7 @@ import matplotlib.pyplot as plt
 
 
 class CycloneImage:
-
-    __slots__ = ["scene","metadata","lon","lat","rects"]
+    __slots__ = ["scene", "metadata", "lon", "lat", "rects", "proj_dict"]
 
     @staticmethod
     def load(fpath):
@@ -188,10 +187,10 @@ class CycloneImage:
     def __init__(self, scene: Scene, metadata: dict, load_mod=False):
         self.scene = scene
         self.metadata = metadata
+
         self.scene.load(["I01", "I04", "I05", "i_satellite_azimuth_angle", "i_solar_zenith_angle"])
         if load_mod:
             self.scene.load(["M09"])
-        self.load_mod = load_mod
         self.scene = self.scene.resample(resampler="nearest")
         self.lat = metadata["USA_LAT"]
         self.lon = metadata["USA_LON"]
@@ -213,6 +212,10 @@ class CycloneImage:
         with open(os.path.join(self.get_dir(), "img_pickle.pickle"), 'wb') as f_pickle:
             import pickle
             pickle.dump(self, f_pickle)
+
+    @property
+    def loaded(self):
+        return {k.name for k in self.scene.keys()}
 
     @property
     def proj_str(self):
@@ -241,21 +244,27 @@ class CycloneImage:
         import shutil
         shutil.rmtree(self.get_dir())
 
+    @property
+    def bb(self) -> CycloneSnapshot:
+        return self.rects[0]
+
     def bounding_snapshot(self):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
             self.proj_dict
         )
+
         corrected_scene = self.scene.resample(area)
-        self.bb = CycloneSnapshot(
+        bb = CycloneSnapshot(
             corrected_scene["I04"].values,
             corrected_scene["I05"].values,
             area.pixel_size_x, area.pixel_size_y,
             corrected_scene["i_satellite_azimuth_angle"].values, self.metadata,
             area.get_lonlat(area.shape[0] - 1, 0)[0],
             area.get_lonlat(area.shape[0] - 1, 0)[1],
-            corrected_scene["M09"].values if self.load_mod else None, corrected_scene["I01"].values
+            corrected_scene["M09"].values if "M09" in self.loaded else None,
+            corrected_scene["I01"].values
         )
-        self.rects.append(self.bb)
+        self.rects.append(bb)
 
     def manual_gt_cycle(self):
         self.plot_globe()
