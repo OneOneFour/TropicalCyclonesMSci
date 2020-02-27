@@ -20,6 +20,8 @@ jobs:
       run: |
         conda env create -f environment.yml
         source activate msciproject
+        python --version
+
     - name: Lint with flake8
       run: |
         conda install -y flake8
