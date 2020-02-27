@@ -6,7 +6,7 @@ import numpy as np
 from netCDF4 import Dataset
 from pyresample import geometry
 from pyresample.kd_tree import resample_nearest
-
+from glob import glob
 MODIS_PATH = os.environ.get("MODIS_PATH",os.getcwd())
 
 
@@ -16,6 +16,14 @@ class AerosolImageMODIS:
     LONGITUDE = "longitude"
     DEFAULT_PROJECTION = {"proj": "eqc", "lat_ts": 0}
     DEGREE_TO_M = 111000
+
+    @classmethod
+    def generate_pickles(cls):
+        for year in os.listdir(MODIS_PATH):
+            files = glob(os.path.join(MODIS_PATH,year,"new.***.c6.nc"))
+            for file in files:
+                day = file[-9:-7]
+                AerosolImageMODIS(int(year),int(day)).save()
 
     @classmethod
     def get_aerosol(cls, year, day) -> "AerosolImageMODIS":
