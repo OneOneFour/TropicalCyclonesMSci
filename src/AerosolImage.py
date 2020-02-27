@@ -12,8 +12,8 @@ MODIS_PATH = os.environ.get("MODIS_PATH",os.getcwd())
 
 class AerosolImageMODIS:
     AEROSOL_VARIABLE = "AODc_int"
-    LATITUDE = "latitude"
-    LONGITUDE = "longitude"
+    LATITUDE = "lat"
+    LONGITUDE = "lon"
     DEFAULT_PROJECTION = {"proj": "eqc", "lat_ts": 0}
     DEGREE_TO_M = 111000
 
@@ -47,10 +47,10 @@ class AerosolImageMODIS:
             self.__raw_aod = rootgrp[self.AEROSOL_VARIABLE][0]
             lat = rootgrp[self.LATITUDE]
             lon = rootgrp[self.LONGITUDE]
-        self.lat, self.lon = np.meshgrid(lat, lon)
-        self.__swath = geometry.SwathDefinition(lats=self.lat, lons=self.lon)
-        self.bb_area = self.__swath.compute_optimal_bb_area(self.DEFAULT_PROJECTION)
-        self.aod = resample_nearest(self.__swath, self.__raw_aod, self.bb_area, radius_of_influence=self.DEGREE_TO_M)
+            self.lat, self.lon = np.meshgrid(lat, lon)
+            self.__swath = geometry.SwathDefinition(lats=self.lat, lons=self.lon)
+            self.bb_area = self.__swath.compute_optimal_bb_area(self.DEFAULT_PROJECTION)
+            self.aod = resample_nearest(self.__swath, self.__raw_aod, self.bb_area, radius_of_influence=self.DEGREE_TO_M)
 
     @property
     def crs(self):
@@ -71,7 +71,7 @@ class AerosolImageMODIS:
         print(bottom_left)
 
     def save(self):
-        with open(self.path(self.year, self.day), "w") as fp:
+        with open(self.path(self.year, self.day), "wb") as fp:
             pickle.dump(self, fp)
 
 if __name__ == "__main__":

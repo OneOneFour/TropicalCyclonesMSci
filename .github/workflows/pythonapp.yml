@@ -15,8 +15,7 @@ jobs:
         python-version: 3.8
     - name: Initalize Conda
       run: |
-        conda init bash
-        source ~/.bashrc
+        source activate
     - name: Install dependencies
       run: |
         conda env create -f environment.yml
