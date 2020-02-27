@@ -163,13 +163,12 @@ def analysing_x(array, title, fit="gauss"):
     plt.figure()
     n, bins, patches = plt.hist(array.values(), bins=np.arange(-44, -10, 2), rwidth=0.8,
                                 histtype="barstacked", label=array.keys())
-    # plt.title(f"GT by {title}, n={sum(n)}")
-    plt.title("Distribution of all cyclones glaciation temperatures", fontsize=40)
+    plt.title(f"GT by {title}, n={sum(n[-1])}")
     x = []
     for i in bins:
        x.append(i + 1)
     x = np.array(x[:-1])
-    y = np.array(n)
+    y = np.array(n[-1])
     n = len(x)
     mean = np.mean(x)
     sigma = np.std(x)
@@ -227,7 +226,7 @@ def analyse_peak(data, key, which):
     list = []
     for cyclone in data:
         if key == "future_winds":
-            intensity_after_24 = cyclone[key][-1] - cyclone["wind"]
+            intensity_after_24 = cyclone[key][-5] - cyclone["wind"]
             list.append(intensity_after_24)
         elif key == "deltaT":
             deltaT = cyclone["SST"] - cyclone["CTT"]
@@ -246,6 +245,10 @@ def analyse_peak(data, key, which):
 
 if __name__ == "__main__":
     histogram_dict = []
+    avg_cyc_img_upper = np.zeros((200, 200))
+    avg_cyc_img_lower = np.zeros((200, 200))
+    number_upper = 0
+    number_lower = 0
     best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
     for file in os.listdir("proc/eyes_since_2012"):
         filename = "proc/eyes_since_2012/" + file
@@ -254,11 +257,21 @@ if __name__ == "__main__":
             c.mask_thin_cirrus()
             c.mask_array_I05(LOW=220, HIGH=270)
             c.mask_using_I01(80)
-            gt, gt_err, r = c.gt_piece_percentile(percentile=5, plot=True)
+            gt, gt_err, r = c.gt_piece_percentile(percentile=5, plot=False)
             if gt is not np.nan and r > 0.85:
                 c.unmask_array()
                 max_I05 = c.I05.max()
                 min_I05 = c.I05.min()
+                middle = sum(np.argwhere(c.I05 > 260)) / len(np.argwhere(c.I05 > 260))
+                if gt < -33 and c.meta_data["BASIN"] != "WP":
+                    avg_cyc_img_lower += c.I04[int(middle[0])-100:int(middle[0])+100,
+                                               int(middle[1])-100:int(middle[1])+100]
+                    number_lower += 1
+
+                elif gt > -33 and c.meta_data["BASIN"] != "WP":
+                    avg_cyc_img_upper += c.I04[int(middle[0])-100:int(middle[0])+100,
+                                               int(middle[1])-100:int(middle[1])+100]
+                    number_upper += 1
                 cyc_date_minus_day = c.meta_data["ISO_TIME"] - timedelta(days=1)
                 cyc_time_minus_day = cyc_date_minus_day.strftime("%Y-%m-%d %H:%M:%S")
                 cyc_future = best_track_df.loc[(best_track_df["ISO_TIME"] > cyc_time_minus_day) &
@@ -272,6 +285,19 @@ if __name__ == "__main__":
                                        "name": c.meta_data["NAME"]})
         except:
             continue
+
+    plt.figure()
+    im = plt.imshow(avg_cyc_img_lower/number_lower)
+    plt.colorbar(im)
+    plt.title("Lower")
+    plt.figure()
+    im = plt.imshow(avg_cyc_img_upper/number_upper)
+    plt.colorbar(im)
+    plt.title("Upper")
+    plt.figure()
+    im = plt.imshow(avg_cyc_img_upper/number_upper - avg_cyc_img_lower/number_lower)
+    plt.colorbar(im)
+    plt.title("Difference (Upper-Lower)")
 
     all_gts = {"all": []}
     all_winds = []
@@ -294,10 +320,19 @@ if __name__ == "__main__":
     non_WP_gts = {"NonWP": []}
     upper_peak_cyclones_WP = []
     lower_peak_cyclones_WP = []
+    intensifying_gts = {"RapidIncrease": [], "Increase": [], "Decrease": [], "RapidDecrease": []}
 
     for cyclone in histogram_dict:
-
         if cyclone["basin"] == "WP":
+            if any(f > cyclone["wind"] + 30 for f in cyclone["future_winds"][8:-1]):
+                intensifying_gts["RapidIncrease"].append(cyclone["gt"])
+            elif any(f < cyclone["wind"] - 30 for f in cyclone["future_winds"][8:-1]):
+                intensifying_gts["RapidDecrease"].append(cyclone["gt"])
+            elif cyclone["wind"] < np.mean(cyclone["future_winds"][8:-1]):
+                intensifying_gts["Increase"].append(cyclone["gt"])
+            elif cyclone["wind"] > np.mean(cyclone["future_winds"][8:-1]):
+                intensifying_gts["Decrease"].append(cyclone["gt"])
+
             if np.mean(cyclone["future_winds"][6:8]) < cyclone["wind"] < np.mean(cyclone["future_winds"][9:11]):
                 in_or_de_tensifying_gts["Increasing"].append(cyclone["gt"])
             elif np.mean(cyclone["future_winds"][6:8]) > cyclone["wind"] > np.mean(cyclone["future_winds"][9:11]):
@@ -325,10 +360,6 @@ if __name__ == "__main__":
                 if deltaT < (cyclone["SST"]-cyclone["CTT"]) <= deltaT + 10:
                     deltaT_gts[deltaT].append(cyclone["gt"])
 
-            name = cyclone["name"]
-            iso_time = cyclone["time"]
-            speed = cyclone["wind"]
-            winds = cyclone["future_winds"]
             if cyclone["gt"] > -33:
                 upper_WP_peak["gt"].append(cyclone["gt"])
                 upper_WP_peak["longitude"].append(cyclone["position"][1])
@@ -359,9 +390,9 @@ if __name__ == "__main__":
         all_gts["all"].append(cyclone["gt"])
 
     """Below function are for getting results, above is for getting dictionary with data needed."""
-    # analyse_peak(lower_peak_cyclones_WP, "wind", "Lower")
-    # analyse_peak(upper_peak_cyclones_WP, "wind", "Upper")
-    # analysing_x(all_gts, "Non WP", fit="bimodal")
+    # analyse_peak(lower_peak_cyclones_WP, "future_winds", "Lower")
+    # analyse_peak(upper_peak_cyclones_WP, "future_winds", "Upper")
+    # analysing_x(intensifying_gts, "Change in next 24 hours (WP)", fit="bimodal")
     # analysing_basin(all_gts)
 
     plt.show()
