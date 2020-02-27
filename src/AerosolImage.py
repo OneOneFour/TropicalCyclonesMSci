@@ -14,13 +14,19 @@ class AerosolImageMODIS:
     AEROSOL_VARIABLE = "AODc_int"
     LATITUDE = "latitude"
     LONGITUDE = "longitude"
+    DEFAULT_PROJECTION = {"proj": "eqc", "lat_ts": 0}
+    DEGREE_TO_M = 111000
 
     @classmethod
     def get_aerosol(cls, year, day) -> "AerosolImageMODIS":
-        with open(os.path.join(MODIS_PATH, year, f"AerosolImage.{day.zfill(3)}.pickle")) as fp:
+        with open(cls.path(year, day)) as fp:
             inst__ = pickle.load(fp)
         assert isinstance(inst__, cls)
         return inst__
+
+    @staticmethod
+    def path(year, day):
+        return os.path.join(MODIS_PATH, year, f"AerosolImage.{day.zfill(3)}.pickle")
 
     @staticmethod
     def get_modis_file(year, day) -> str:
@@ -35,8 +41,8 @@ class AerosolImageMODIS:
             lon = rootgrp[self.LONGITUDE]
         self.lat, self.lon = np.meshgrid(lat, lon)
         self.__swath = geometry.SwathDefinition(lats=self.lat, lons=self.lon)
-        self.bb_area = self.__swath.compute_optimal_bb_area({"proj": "eqc", "lat_ts": 0})
-        self.aod = resample_nearest(self.__swath, self.__raw_aod, self.bb_area, radius_of_influence=111000)
+        self.bb_area = self.__swath.compute_optimal_bb_area(self.DEFAULT_PROJECTION)
+        self.aod = resample_nearest(self.__swath, self.__raw_aod, self.bb_area, radius_of_influence=self.DEGREE_TO_M)
 
     @property
     def crs(self):
@@ -55,7 +61,7 @@ class AerosolImageMODIS:
         bottom_left = self.bb_area.get_xy_from_lonlat(lon - width // 2, lat - height // 2)
         print(top_right)
         print(bottom_left)
-        
+
     def save(self):
-        with open(os.path.join(MODIS_PATH, self.year, f"AerosolImage.{self.day.zfill(3)}.pickle"), "w") as fp:
+        with open(self.path(self.year, self.day), "w") as fp:
             pickle.dump(self, fp)
