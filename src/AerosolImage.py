@@ -1,13 +1,15 @@
+import gzip
 import os
 import pickle
-import gzip
+from glob import glob
+
 import matplotlib.pyplot as plt
 import numpy as np
 from netCDF4 import Dataset
 from pyresample import geometry
 from pyresample.kd_tree import resample_nearest
-from glob import glob
-MODIS_PATH = os.environ.get("MODIS_PATH",os.getcwd())
+
+MODIS_PATH = os.environ.get("MODIS_PATH", os.getcwd())
 
 
 class AerosolImageMODIS:
@@ -20,10 +22,10 @@ class AerosolImageMODIS:
     @classmethod
     def generate_pickles(cls):
         for year in os.listdir(MODIS_PATH):
-            files = glob(os.path.join(MODIS_PATH,year,"new.***.c6.nc"))
+            files = glob(os.path.join(MODIS_PATH, year, "new.***.c6.nc"))
             for file in files:
                 day = file[-9:-6]
-                AerosolImageMODIS(int(year),int(day)).save()
+                AerosolImageMODIS(int(year), int(day)).save()
 
     @classmethod
     def get_aerosol(cls, year, day) -> "AerosolImageMODIS":
@@ -34,7 +36,7 @@ class AerosolImageMODIS:
 
     @staticmethod
     def path(year, day) -> str:
-        return os.path.join(MODIS_PATH, str(year), f"AerosolImage.{str(day).zfill(3)}.pickle")
+        return os.path.join(MODIS_PATH, str(year), f"AerosolImage.{str(day).zfill(3)}.gzp")
 
     @staticmethod
     def get_modis_file(year, day) -> str:
@@ -73,6 +75,7 @@ class AerosolImageMODIS:
     def save(self):
         with gzip.GzipFile(self.path(self.year, self.day), "w") as fp:
             pickle.dump(self, fp)
+
 
 if __name__ == "__main__":
     AerosolImageMODIS.generate_pickles()
