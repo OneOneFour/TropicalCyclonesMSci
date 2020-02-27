@@ -298,6 +298,7 @@ class CycloneImage:
         gt_alt, gt_alt_err, r2_alt = self.eye.gt_piece_all(save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
                                                            show=False)
         gd.set_eye_gt(gt, gt_err)
+        gd.histogram_from_eye()
         gd.piecewise_glaciation_temperature(show=False, save=True)
         gd.histogram_from_eye(show=False, save=True)
 
