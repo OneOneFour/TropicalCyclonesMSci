@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats as sps
 
-outdir = glob.glob("D:\out_new\**\out.json", recursive=True)
+outdir = glob.glob("D:\out-240220\**\out.json", recursive=True)
 
 
 def exp_dist(x, l, b):
@@ -55,7 +55,7 @@ for file in outdir:
             diff_eye_exp_mean.append(1/l -b - obj["EYE"])
             diff_eye_mean.append(np.mean(np.array(obj["GT_GRID"]) - obj["EYE"]))
             gt_grid.extend(obj["GT_GRID"])
-        delta.append(obj["DELTA_SPEED_12HR"])
+        delta.append(obj["DELTA_SPEED_-24HR"])
         print(f"Loaded:{file}")
 print(f"Loaded {len(outdir)} files")
 # lb = np.array(lb)

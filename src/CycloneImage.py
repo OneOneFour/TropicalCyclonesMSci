@@ -156,6 +156,7 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
     except FileNotFoundError:
         return None
 
+
     scene = Scene(filenames=files, reader="viirs_l1b")
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)

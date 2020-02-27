@@ -1,5 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import requests
 
@@ -7,9 +8,10 @@ WEBSERVER_QUERY_URL = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MO
 
 SEARCH_FOR_FILES = "/searchForFiles"
 GET_FILE_URLS = "/getFileUrls"
+MODIS_DOWNLOAD_URL = "http://www.sp.ph.ic.ac.uk/~erg10/safe/subset"
 
 
-def download_files_from_server(root_dir, file_urls):
+def download_files_from_server(root_dir, file_urls, ignore_errors=False, include_headers=True):
     fpath = [os.path.join(root_dir, os.path.split(f)[1]) for f in file_urls]
     for i, file in enumerate(fpath):
         if os.path.isfile(file):
@@ -19,7 +21,11 @@ def download_files_from_server(root_dir, file_urls):
         # Begin downloading from the content server
         # Use wget for large files
         # headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-        download = requests.get(file_urls[i], headers={"Authorization": f"Bearer {os.environ['LAADS_API_KEY']}"},
+        if include_headers:
+            headers = {"Authorization": f"Bearer {os.environ['LAADS_API_KEY']}"}
+        else:
+            headers = None
+        download = requests.get(file_urls[i], headers=headers,
                                 stream=True)
         if download.status_code == 200:
             import sys
@@ -38,14 +44,53 @@ def download_files_from_server(root_dir, file_urls):
                         sys.stdout.flush()
             print("\n")
         else:
-            raise ConnectionError()
+            if ignore_errors:
+                continue
+            else:
+                raise ConnectionError()
         if not os.path.isfile(file):
             raise ConnectionError(
                 f"File {file_urls[i]} could not be downloaded to {file}. Please check your internet connection and try again!")
     return fpath
 
 
-def get_data(root_dir, start_time, end_time,include_mod = False, north=90, south=-90, west=-180, east=180, collection="5110",
+def get_all_modis_data(root_dir, year_range=(2012, 2017)):
+    for i in range(*year_range):
+        dir = os.path.join(root_dir, str(i))
+        Path(dir).mkdir(parents=True)
+        files = [f"{MODIS_DOWNLOAD_URL}/{i}/new.{str(j).zfill(3)}.c6.nc" for j in range(1, 366)]
+        download_files_from_server(dir, files, include_headers=False, ignore_errors=True)
+
+
+def get_aerosol_data(root_dir, start_time, end_time, north, south, east, west):
+    assert "LAADS_API_KEY" in os.environ
+    query_response = requests.get(WEBSERVER_QUERY_URL + SEARCH_FOR_FILES, params={
+        "collection": "5110",
+        "products": "AERDT_L2_VIIRS_SNPP",
+        "startTime": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+        "endTime": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+        "north": north,
+        "south": south,
+        "east": east,
+        "west": west,
+        "coordsOrTiles": "coords",
+        "dayNightBoth": "D"
+    })
+    fileIdStr = ""
+    root_fids = ET.fromstring(query_response.content)
+    for child in root_fids:
+        if child.text == "No results":
+            raise FileNotFoundError
+        fileIdStr += child.text + ","
+    file_name_response = requests.get(WEBSERVER_QUERY_URL + GET_FILE_URLS, params={"fileIds": fileIdStr})
+    if file_name_response.status_code != 200:
+        raise ConnectionError(file_name_response.content)
+    files = [f.text for f in ET.fromstring(file_name_response.content)]
+    return download_files_from_server(root_dir, files)
+
+
+def get_data(root_dir, start_time, end_time, include_mod=False, north=90, south=-90, west=-180, east=180,
+             collection="5110",
              dayOrNight="DNB", ):
     '''
     Use SatPy to check if data exists already in root dir. If not contact the NASA LAADS DAC server to download the required data.
@@ -55,7 +100,6 @@ def get_data(root_dir, start_time, end_time,include_mod = False, north=90, south
     products = "VNP02IMG,VNP03IMG"
     if include_mod:
         products += ",VNP02MOD,VNP03MOD"
-
 
     assert 'LAADS_API_KEY' in os.environ
     query_response = requests.get(WEBSERVER_QUERY_URL + SEARCH_FOR_FILES, params={
