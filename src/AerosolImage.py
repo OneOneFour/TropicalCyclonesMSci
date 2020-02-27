@@ -1,6 +1,6 @@
 import os
 import pickle
-
+import gzip
 import matplotlib.pyplot as plt
 import numpy as np
 from netCDF4 import Dataset
@@ -27,7 +27,7 @@ class AerosolImageMODIS:
 
     @classmethod
     def get_aerosol(cls, year, day) -> "AerosolImageMODIS":
-        with open(cls.path(year, day)) as fp:
+        with gzip.GzipFile(cls.path(year, day)) as fp:
             inst__ = pickle.load(fp)
         assert isinstance(inst__, cls)
         return inst__
@@ -44,13 +44,13 @@ class AerosolImageMODIS:
         self.day = day
         self.year = year
         with Dataset(self.get_modis_file(year, day)) as rootgrp:
-            self.__raw_aod = rootgrp[self.AEROSOL_VARIABLE][0]
+            __raw_aod = rootgrp[self.AEROSOL_VARIABLE][0]
             lat = rootgrp[self.LATITUDE]
             lon = rootgrp[self.LONGITUDE]
             self.lat, self.lon = np.meshgrid(lat, lon)
             self.__swath = geometry.SwathDefinition(lats=self.lat, lons=self.lon)
             self.bb_area = self.__swath.compute_optimal_bb_area(self.DEFAULT_PROJECTION)
-            self.aod = resample_nearest(self.__swath, self.__raw_aod, self.bb_area, radius_of_influence=self.DEGREE_TO_M)
+            self.aod = resample_nearest(self.__swath, __raw_aod, self.bb_area, radius_of_influence=self.DEGREE_TO_M)
 
     @property
     def crs(self):
@@ -71,7 +71,7 @@ class AerosolImageMODIS:
         print(bottom_left)
 
     def save(self):
-        with open(self.path(self.year, self.day), "wb") as fp:
+        with gzip.GzipFile(self.path(self.year, self.day), "w") as fp:
             pickle.dump(self, fp)
 
 if __name__ == "__main__":
