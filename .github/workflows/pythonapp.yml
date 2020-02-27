@@ -13,9 +13,9 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: 3.8
-    - name: Initalize Conda
-      run: |
-        source activate
+    - name: setup-conda
+      uses: s-weigand/setup-conda@v1.0.2
+
     - name: Install dependencies
       run: |
         conda env create -f environment.yml
