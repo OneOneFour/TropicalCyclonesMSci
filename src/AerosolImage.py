@@ -22,7 +22,7 @@ class AerosolImageMODIS:
         for year in os.listdir(MODIS_PATH):
             files = glob(os.path.join(MODIS_PATH,year,"new.***.c6.nc"))
             for file in files:
-                day = file[-9:-7]
+                day = file[-9:-6]
                 AerosolImageMODIS(int(year),int(day)).save()
 
     @classmethod
@@ -73,3 +73,6 @@ class AerosolImageMODIS:
     def save(self):
         with open(self.path(self.year, self.day), "w") as fp:
             pickle.dump(self, fp)
+
+if __name__ == "__main__":
+    AerosolImageMODIS.generate_pickles()
