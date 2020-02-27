@@ -15,8 +15,8 @@ jobs:
         python-version: 3.8
     - name: Install dependencies
       run: |
-        conda create -n venv -f=environment.yml
-        source activate venv
+        conda env create -f environment.yml
+        source activate msciproject
     - name: Lint with flake8
       run: |
         pip install flake8
