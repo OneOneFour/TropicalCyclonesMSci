@@ -7,7 +7,7 @@ from netCDF4 import Dataset
 from pyresample import geometry
 from pyresample.kd_tree import resample_nearest
 
-MODIS_PATH = os.environ.get("MODIS_PATH")
+MODIS_PATH = os.environ.get("MODIS_PATH",os.getcwd())
 
 
 class AerosolImageMODIS:
@@ -25,12 +25,12 @@ class AerosolImageMODIS:
         return inst__
 
     @staticmethod
-    def path(year, day):
-        return os.path.join(MODIS_PATH, year, f"AerosolImage.{day.zfill(3)}.pickle")
+    def path(year, day) -> str:
+        return os.path.join(MODIS_PATH, str(year), f"AerosolImage.{str(day).zfill(3)}.pickle")
 
     @staticmethod
     def get_modis_file(year, day) -> str:
-        return os.path.join(MODIS_PATH, year, f"new.{day.zfill(3)}.c6.nc")
+        return os.path.join(MODIS_PATH, str(year), f"new.{str(day).zfill(3)}.c6.nc")
 
     def __init__(self, year, day):
         self.day = day
@@ -53,7 +53,7 @@ class AerosolImageMODIS:
         ax.coastlines()
         ax.gridlines()
         ax.set_global()
-        ax.imshow(self.aod, transform=self.crs, extent=self.crs.bounds, origin="upepr")
+        ax.imshow(self.aod, transform=self.crs, extent=self.crs.bounds, origin="upper")
         plt.show()
 
     def get_mean_in_region(self, lat, lon, width, height):

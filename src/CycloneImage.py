@@ -11,7 +11,7 @@ from shapely import geometry
 from CycloneSnapshot import CycloneSnapshot, SnapshotGrid
 from fetch_file import get_data
 
-DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", "C:/Users/tpklo/Documents/MSciNonCloud/Data")
+DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", os.getcwd())
 DEFAULT_MARGIN = 0.2
 RESOLUTION_DEF = (3.75 / 6371) * 2 * np.pi
 NM_TO_M = 1852
@@ -77,16 +77,15 @@ def interpolate(start, end, t):
     for k in start.keys():
         if k == "ISO_TIME":
             continue
-        if isna(start[k]) and isna(end[k]):
+        if isna(start[k]) or isna(end[k]):
+            if not isna(start[k]):
+                int_dict[k] = start[k]
+            elif not isna(end[k]):
+                int_dict[k] = end[k]
             continue
-        if isna(start[k]):
-            int_dict[k] = end[k]
-            continue
-        else:
-            int_dict[k] = start[k]
 
         try:
-            int_dict[k] += (end[k] - start[k]) * frac
+            int_dict[k] = (end[k] - start[k]) * frac
         except TypeError:
             continue
     return int_dict
