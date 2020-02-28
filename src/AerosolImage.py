@@ -67,10 +67,10 @@ class AerosolImageMODIS:
         plt.show()
 
     def get_mean_in_region(self, lat, lon, width, height):
-        top_right = self.bb_area.get_xy_from_lonlat(lon + width // 2, lat + height // 2)
-        bottom_left = self.bb_area.get_xy_from_lonlat(lon - width // 2, lat - height // 2)
-        print(top_right)
-        print(bottom_left)
+        top_right_y, top_right_x = self.bb_area.get_xy_from_lonlat(lon + width / 2, lat + height / 2)
+        bottom_left_y, bottom_left_x = self.bb_area.get_xy_from_lonlat(lon - width / 2, lat - height / 2)
+        box = self.aod[ top_right_x:bottom_left_x,bottom_left_y:top_right_y:]
+        return np.mean(box)
 
     def save(self):
         with gzip.GzipFile(self.path(self.year, self.day), "w") as fp:
@@ -78,4 +78,5 @@ class AerosolImageMODIS:
 
 
 if __name__ == "__main__":
-    AerosolImageMODIS.generate_pickles()
+    i = AerosolImageMODIS.get_aerosol(2012, 2)
+    i.plot()

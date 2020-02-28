@@ -8,6 +8,7 @@ from pyresample.utils import proj4_dict_to_str
 from satpy import Scene
 from shapely import geometry
 
+from AerosolImage import AerosolImageMODIS
 from CycloneSnapshot import CycloneSnapshot, SnapshotGrid
 from fetch_file import get_data
 
@@ -155,7 +156,6 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
     except FileNotFoundError:
         return None
 
-
     scene = Scene(filenames=files, reader="viirs_l1b")
     t = scene.start_time - start_point["ISO_TIME"].to_pydatetime()
     metadata = interpolate(start_point, end_point, t)
@@ -163,6 +163,8 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
         metadata[f"DELTA_SPEED_-{(len(history) - i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
     for i, f in enumerate(future):
         metadata[f"DELTA_SPEED_+{(i + 1) * 3}HR"] = f["USA_WIND"] - metadata["USA_WIND"]
+        metadata["24_HRS_LAT"] = f["USA_LAT"]
+        metadata["24_HRS_LON"] = f["USA_LON"]
 
     # checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
     #                         metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
@@ -199,6 +201,10 @@ class CycloneImage:
         self.bounding_snapshot()
         self.draw_eye()
         self.mask(self.eye)
+
+    @property
+    def day_of_year(self):
+        return self.metadata["ISO_TIME"].time_tuple().tm_yday
 
     def mask(self, instance: CycloneSnapshot):
         # instance.mask_using_I01(30)
@@ -300,7 +306,7 @@ class CycloneImage:
         gd.histogram_from_eye()
         gd.piecewise_glaciation_temperature(show=False, save=True)
         gd.histogram_from_eye(show=False, save=True)
-
+        gd.vals["24HR_AOD"] = self.get_future_aerosol()
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
         print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)
@@ -413,18 +419,9 @@ class CycloneImage:
         return self.get_rect(self.metadata["USA_LAT"], self.metadata["USA_LON"],
                              4 * self.metadata["USA_RMW"] / 60, self.metadata["USA_RMW"] * 4 / 60)
 
-    def draw_rectangle_rosenfeld(self, center, p_width=96, p_height=96) -> CycloneSnapshot:
-        area = create_area_def(f"({center[0]},{center[1]})",
-                               {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
-                                "lon_0": center[1]}, width=p_width, height=p_height,
-                               resolution=self.scene["I05"].attrs["resolution"], center=(center[1], center[0]))
-        sub_scene = self.scene.resample(area)
-        cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
-                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
-                             area.get_lonlat(p_height - 1, 0)[0], area.get_lonlat(p_height - 1, 0)[1],
-                             M09=sub_scene["M09"].values, I01=sub_scene["I01"].values)
-        self.rects.append(cs)
-        return cs
+    def get_future_aerosol(self):
+        ai = AerosolImageMODIS.get_aerosol(self.metadata["ISO_TIME"].year, self.day_of_year)
+        return ai.get_mean_in_region(self.metadata["24_HRS_LAT"], self.metadata["24_HRS_LON"], 2, 2)
 
     def get_rect(self, lat, lon, width, height):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
@@ -434,23 +431,5 @@ class CycloneImage:
         top_right = area.get_xy_from_lonlat(lon + width / 2, lat + height / 2)
         cs = self.bb.add_sub_snap_edge(bottom_left[0], top_right[0], top_right[1], bottom_left[1]
                                        , b_lat=lat - height / 2, b_lon=lon - width / 2)
-        self.rects.append(cs)
-        return cs
-
-    def draw_rectangle(self, center, width, height) -> CycloneSnapshot:
-        latitude_circle = (height / R_E) * (180 / np.pi)
-        longitude_circle = (width / R_E) * (180 / np.pi)
-        area = create_area_def(f"({center[0]},{center[1]})",
-                               {"proj": "lcc", "ellps": "WGS84", "lat_0": center[0], "lat_1": center[0],
-                                "lon_0": center[1]}, units="degrees", resolution=RESOLUTION_DEF,
-                               area_extent=[
-                                   center[1] - longitude_circle / 2, center[0] - latitude_circle / 2,
-                                   center[1] + longitude_circle / 2, center[0] + latitude_circle / 2
-                               ])
-        sub_scene = self.scene.resample(area)
-        cs = CycloneSnapshot(sub_scene["I04"].values, sub_scene["I05"].values, area.pixel_size_x, area.pixel_size_y,
-                             sub_scene["i_satellite_azimuth_angle"].values.mean(), self.metadata,
-                             center[1] - longitude_circle / 2, center[0] - latitude_circle / 2,
-                             M09=sub_scene["M09"].values, I01=sub_scene["I01"].values)
         self.rects.append(cs)
         return cs

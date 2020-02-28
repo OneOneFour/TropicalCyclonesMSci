@@ -519,42 +519,6 @@ class SnapshotGrid:
         if show:
             plt.show()
 
-    # def gt_radial_step_distr(self, radial_step, eye_gt=0, eye_gt_err=0, plot=True, save=False, show=True):
-    #     # Check each corner for maximum radial distance to the eye
-    #     max_r = np.inf
-    #     for c in self.corners:
-    #         dist = c.distance_to_snap(self.imageInstance.eye)
-    #         if dist < max_r:
-    #             max_r = dist
-    #
-    #     radial_steps = np.arange(0, max_r, radial_step)
-    #     bins = [[] for i in range(len(radial_steps) - 1)]
-    #     for i, row in enumerate(self.grid):
-    #         for j, snap in enumerate(row):
-    #             if np.isnan(self.gt_grid[i][j]):
-    #                 continue
-    #             distance = snap.distance_to_snap(self.imageInstance.eye)
-    #             bins[distance // radial_step].append(self.gt_grid[i][j])
-    #
-    #     for i, r in enumerate(radial_steps[1:]):
-    #         self.vals[f"{radial_steps[i - 1]}-{r}"] = np.nanmean(bins[i - 1])
-    #         self.vals[f"{radial_steps[i - 1]}-{r}_ERR"] = sem(bins[i - 1])
-    #
-    #     if plot:
-    #         fig, ax = plt.subplots()
-    #         rects = ax.errorbar(radial_steps,
-    #                             [self.vals[f"{radial_steps[i - 1]}-{radial_steps[i]}"] for i in
-    #                              range(1, len(radial_steps))].insert(0, self.vals["EYE"]),
-    #                             capsize=5,
-    #                             yerr=[self.vals[f"{radial_steps[i - 1]}-{radial_steps[i]}_ERR"] for i in
-    #                                   range(1, len(radial_steps))].insert(0, self.vals["EYE_ERR"]))
-    #         # ax.set_xticklabels() TODO: Get the labels working
-    #         ax.set_ylabel("Glaciation Temperature (C)")
-    #         ax.invert_yaxis()
-    #         ax.set_ylim(bottom=0, top=-45)
-    #         ax.set_title(
-    #             f"{self.imageInstance.metadata['NAME']} on {self.imageInstance.metadata['ISO_TIME']}\nGlaciation Temperature over radius")
-
     @property
     def valid_cells(self):
         return [ci for row in self.grid for ci in row if not np.isnan(ci.gt_piece_percentile(plot=False)[0])]

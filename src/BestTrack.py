@@ -133,13 +133,17 @@ def get_cyclone_by_name_date(name, start, end, per_cyclone=None):
 def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=False):
     df_cyclone = best_track_df.loc[
         (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
-    dict_cy = df_cyclone.to_dict(orient="records")
+    dict_cy = df_cyclone.to_dict(orient="index")
     vals_series = []
-    for i, cyclone_point in enumerate(dict_cy[:-1]):
+    for index in list(dict_cy.keys())[:-1]:
         if len(vals_series) >= max_len:
             break
-        start_point = cyclone_point
-        end_point = dict_cy[i + 1]
+        if index in NAUGHTY_LIST:
+            continue
+        start_point = dict_cy[index]
+        if index + 1 not in dict_cy.keys():
+            continue
+        end_point = dict_cy[index + 1]
         history = best_track_df.loc[(best_track_df["NAME"] == name) &
                                     (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"]) & (
                                             best_track_df["ISO_TIME"] > start_point["ISO_TIME"] - timedelta(
@@ -161,6 +165,8 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
                 if not (shading and cy.is_eyewall_shaded):
                     vals = per_cyclone(cy)
                     vals_series.append(vals)
+            else:
+                NAUGHTY_LIST.add(index)
         except Exception:
             import traceback
             traceback.print_exc()

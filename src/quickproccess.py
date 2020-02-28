@@ -3,6 +3,7 @@ import json
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import scipy.stats as sps
 
 outdir = glob.glob("D:\out-240220\**\out.json", recursive=True)
@@ -12,24 +13,17 @@ def exp_dist(x, l, b):
     return l * np.exp(-(x + b) * l)
 
 
-var = []
-avg = []
-exp_avg = []
-var_avg = []
-delta = []
-eye = []
-gt_grid = []
+df = pd.DataFrame(columns=["EYE", "GT_GRID_MEAN", "GT_GRID_VAR", "GT_GRID_EXP_MEAN", "GT_GRID_EXP_VAR",
+                           "DIFF_EYE_MEDIAN", "DIFF_EYE_EXP_MEAN", "DIFF_EYE_MEAN",
+                           "DELTA_SPEED_-24HR", "DELTA_SPEED_+24HR"])
+
 diff_eye_agg = np.array([])
-diff_eye_median = []
-diff_eye_mean = []
-diff_eye_exp_mean = []
+gt_grid = []
 for file in outdir:
     with open(file) as f:
         obj = json.load(f)
-        if obj["BASIN"] != "WP":
-            continue
+        entry = obj
         if "GT_GRID" in obj and not np.isnan(obj["EYE"]):
-
             try:
                 gt_i = np.array(obj["GT_GRID"])
                 gt_i = gt_i[np.where(gt_i > -40)]
@@ -41,49 +35,38 @@ for file in outdir:
 
                 (l, b), coveff = curve_fit(exp_dist, edges, pdf)
 
-                exp_avg.append(1 / l - b)
-                var_avg.append((1 / l - b) ** 2)
+                entry["GT_GRID_EXP_MEAN"] = 1 / l - b
+                entry["GT_GRID_EXP_VAR"] = (1 / l - b) ** 2
             except RuntimeError:
                 continue
-            eye.append(obj["EYE"])
-            avg.append(np.mean(obj["GT_GRID"]))
-            var.append(np.var(obj["GT_GRID"]))
+
+            entry["GT_GRID_MEAN"] = np.mean(obj["GT_GRID"])
+            entry["GT_GRID_VAR"] = np.var(obj["GT_GRID"])
 
             diff_eye_agg = np.append(diff_eye_agg, np.array(obj["GT_GRID"]) - obj["EYE"])
 
-            diff_eye_median.append(np.median(np.array(obj["GT_GRID"]) - obj["EYE"]))
-            diff_eye_exp_mean.append(1/l -b - obj["EYE"])
-            diff_eye_mean.append(np.mean(np.array(obj["GT_GRID"]) - obj["EYE"]))
+            entry["DIFF_EYE_MEDIAN"] = np.median(np.array(obj["GT_GRID"]) - obj["EYE"])
+            entry["DIFF_EYE_EXP_MEAN"] = (1 / l - b - obj["EYE"])
+            entry["DIFF_EYE_MEAN"] = (np.mean(np.array(obj["GT_GRID"]) - obj["EYE"]))
             gt_grid.extend(obj["GT_GRID"])
-        delta.append(obj["DELTA_SPEED_-24HR"])
+        entry["DELTA_SPEED_-24HR"] = obj["DELTA_SPEED_-24HR"]
+        entry["DELTA_SPEED_+24HR"] = obj["DELTA_SPEED_+24HR"]
+        df = df.append(entry, ignore_index=True)
         print(f"Loaded:{file}")
+
 print(f"Loaded {len(outdir)} files")
-# lb = np.array(lb)
-# rb = np.array(rb)
-# rf = np.array(rf)
-# lf = np.array(lf)
-eye = np.array(eye)
-var = np.array(var)
-avg = np.array(avg)
-gt_grid = np.array(gt_grid)
-diff_eye_mean = np.array(diff_eye_mean)
-diff_eye_median = np.array(diff_eye_median)
-diff_eye_exp_mean = np.array( diff_eye_exp_mean)
-print(f"Average deviation from eye:{np.nanmean(eye - avg)}")
-print(f"Average stderror : {np.nanstd(eye - avg) / np.sqrt(len(eye))}")
 
+print(f"Average deviation from eye:{np.nanmean(df['EYE'] - df['GT_GRID_MEAN'])}")
+print(f"Average stderror : {np.nanstd(df['EYE'] - df['GT_GRID_MEAN']) / np.sqrt(len(df['EYE']))}")
 
-# print(f"Mean LF:{np.nanmean(lf)} std:{sem(lf)}")
-# print(f"Mean RF:{np.nanmean(rf)} std:{sem(rf)}")
-# print(f"Mean LB:{np.nanmean(lb)} std:{sem(lb)}")
-# print(f"Mean  RB:{np.nanmean(rb)} std:{sem(rb)}")
-#
-# print(f"Avg std:{np.nanmean(var)}")
+df = df[df["BASIN"] == "WP"]
+ri_df = df[df["DELTA_SPEED_-24HR"] >= 30]
+no_ri_df = df[df["DELTA_SPEED_-24HR"] < 30]
 
 
 def plot_eye_distr():
     fig, ax = plt.subplots()
-    ax.hist(eye, bins=6)
+    ax.hist(df["EYE"], bins=6)
     ax.set_ylabel("Frequency")
     ax.set_xlabel("Eye Glaciation Temperature (C)")
 
@@ -114,54 +97,54 @@ def plot_external_distribution(bins=30):
 
 def diff_against_ds():
     fig, ax = plt.subplots()
-    ax.scatter(delta, diff_eye_median)
+    ax.scatter(df["DELTA_SPEED_-24HR"], df["DIFF_EYE_MEDIAN"])
     ax.set_xlabel("Median cell difference to eye")
-    ax.set_ylabel("12 hour Wind Speed change")
+    ax.set_ylabel("Previous 24 hour wind speed change (kts)")
 
 
-def plot_distr_of_mean(class_by_eye_gt=True):
-    fig, ax = plt.subplots()
-    if class_by_eye_gt:
-        diff_eye_warm = diff_eye_mean[np.argwhere(eye > -30)]
-        diff_eye_cold = diff_eye_mean[np.argwhere(eye <= -30)]
-        bins = np.linspace(-10, 10, 20)
-        ax.hist(diff_eye_warm, bins, label="Warm eyes")
-        ax.hist(diff_eye_cold, bins, label="Cool eyes")
-        plt.legend()
-    else:
-        ax.hist(diff_eye_mean)
-    ax.set_ylabel("Frequency")
-    ax.set_xlabel("Mean cell temperature minus eye temperature")
+# def plot_distr_of_mean(class_by_eye_gt=True):
+#     fig, ax = plt.subplots()
+#     if class_by_eye_gt:
+#         diff_eye_warm_df =
+#         diff_eye_cold = df["DIFF_EYE_MEAN"][np.argwhere(df["EYE"] <= -30)]
+#         bins = np.linspace(-10, 10, 20)
+#         ax.hist(diff_eye_warm, bins, label="Warm eyes")
+#         ax.hist(diff_eye_cold, bins, label="Cool eyes")
+#         plt.legend()
+#     else:
+#         ax.hist(diff_eye_mean)
+#     ax.set_ylabel("Frequency")
+#     ax.set_xlabel("Mean cell temperature minus eye temperature")
 
 
-def plot_distr_of_median(class_by_eye_gt=True):
-    fig, ax = plt.subplots()
-    if class_by_eye_gt:
-        diff_eye_warm = diff_eye_median[np.argwhere(eye > -30)]
-        diff_eye_cold = diff_eye_median[np.argwhere(eye <= -30)]
-        bins = np.linspace(-10, 10, 20)
-        ax.hist(diff_eye_warm, bins, label="Warm eyes")
-        ax.hist(diff_eye_cold, bins, label="Cool eyes")
-        plt.legend()
-    else:
-        ax.hist(diff_eye_median)
-    ax.set_ylabel("Frequency")
-    ax.set_xlabel("Median cell temperature minus eye temperature")
+# def plot_distr_of_median(class_by_eye_gt=True):
+#     fig, ax = plt.subplots()
+#     if class_by_eye_gt:
+#         diff_eye_warm = diff_eye_median[np.argwhere(eye > -30)]
+#         diff_eye_cold = diff_eye_median[np.argwhere(eye <= -30)]
+#         bins = np.linspace(-10, 10, 20)
+#         ax.hist(diff_eye_warm, bins, label="Warm eyes")
+#         ax.hist(diff_eye_cold, bins, label="Cool eyes")
+#         plt.legend()
+#     else:
+#         ax.hist(diff_eye_median)
+#     ax.set_ylabel("Frequency")
+#     ax.set_xlabel("Median cell temperature minus eye temperature")
 
 
 def plot_windspeed_avg():
     fig, ax = plt.subplots()
-    ax.scatter(diff_eye_exp_mean, delta)
-    print(f"DIFF:{sps.pearsonr(diff_eye_mean,delta)}")
-    ax.set_ylabel("12 hours change in wind speed (kts)")
+    ax.scatter(df["DIFF_EYE_EXP_MEAN"], df["DELTA_SPEED_-24HR"])
+    print(f"DIFF:{sps.pearsonr(df['DIFF_EYE_EXP_MEAN'], df['DELTA_SPEED_-24HR'])}")
+    ax.set_ylabel("Past 24 hours change in wind speed (kts)")
     ax.set_xlabel("Mean difference in glaciation temperature (C)")
 
 
 def plot_windspeed_eye():
     fig, ax = plt.subplots()
-    ax.scatter(eye, delta)
-    print(f"EYE:{sps.pearsonr(eye,delta)}")
-    ax.set_ylabel("12 hours change in wind speed (kts)")
+    ax.scatter(df["EYE"], df["DELTA_SPEED_-24HR"])
+    print(f"EYE:{sps.pearsonr(df['EYE'], df['DELTA_SPEED_-24HR'])}")
+    ax.set_ylabel("Past 24 hours change in wind speed (kts)")
     ax.set_xlabel("Eye glaciation temperature (C)")
 
 
@@ -169,4 +152,4 @@ plot_external_distribution()
 plot_distribution_of_temp_total(50)
 plot_windspeed_avg()
 plot_windspeed_eye()
-
+plt.show()
