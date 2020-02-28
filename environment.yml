@@ -8,6 +8,7 @@ dependencies:
   - pandas=0.25.3
   - pyresample=1.13.2
   - python=3.7.6
+  - shapely
   - requests=2.22.0
   - satpy=0.17.1
   - scipy=1.3.2
