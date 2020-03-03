@@ -9,6 +9,8 @@ from netCDF4 import Dataset
 from pyresample import geometry
 from pyresample.kd_tree import resample_nearest
 
+from fetch_file import get_all_modis_data
+
 MODIS_PATH = os.environ.get("MODIS_PATH", os.getcwd())
 
 
@@ -22,9 +24,9 @@ class AerosolImageMODIS:
     @classmethod
     def generate_pickles(cls):
         for year in os.listdir(MODIS_PATH):
-            files = glob(os.path.join(MODIS_PATH, year, "new.***.c6.nc"))
+            files = glob(os.path.join(MODIS_PATH, year, "new.***.c61.nc"))
             for file in files:
-                day = file[-9:-6]
+                day = file[-10:-7]
                 AerosolImageMODIS(int(year), int(day)).save()
 
     @classmethod
@@ -40,7 +42,7 @@ class AerosolImageMODIS:
 
     @staticmethod
     def get_modis_file(year, day) -> str:
-        return os.path.join(MODIS_PATH, str(year), f"new.{str(day).zfill(3)}.c6.nc")
+        return os.path.join(MODIS_PATH, str(year), f"new.{str(day).zfill(3)}.c61.nc")
 
     def __init__(self, year, day):
         self.day = day
@@ -69,7 +71,7 @@ class AerosolImageMODIS:
     def get_mean_in_region(self, lat, lon, width, height):
         top_right_y, top_right_x = self.bb_area.get_xy_from_lonlat(lon + width / 2, lat + height / 2)
         bottom_left_y, bottom_left_x = self.bb_area.get_xy_from_lonlat(lon - width / 2, lat - height / 2)
-        box = self.aod[ top_right_x:bottom_left_x,bottom_left_y:top_right_y:]
+        box = self.aod[top_right_x:bottom_left_x, bottom_left_y:top_right_y:]
         return np.mean(box)
 
     def save(self):
@@ -78,5 +80,4 @@ class AerosolImageMODIS:
 
 
 if __name__ == "__main__":
-    i = AerosolImageMODIS.get_aerosol(2012, 2)
-    i.plot()
+    AerosolImageMODIS.generate_pickles()

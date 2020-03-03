@@ -52,6 +52,7 @@ def all_cyclones_since(year, month, day, cat_min=4, per_cyclone=None):
             except Exception:
                 import traceback
                 traceback.print_exc()
+                NAUGHTY_LIST.add(index)
 
 
 # TODO: Move to using exclusion list
@@ -129,7 +130,6 @@ def get_cyclone_by_name_date(name, start, end, per_cyclone=None):
             traceback.print_exc()
 
 
-# TODO: Move to using exclusion list
 def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=False):
     df_cyclone = best_track_df.loc[
         (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
@@ -181,4 +181,4 @@ import atexit
 @atexit.register
 def save_the_file():
     with open(os.environ.get("NAUGHTY_LIST"), 'w') as naughty_file:
-        naughty_file.write(NAUGHTY_LIST)
+        naughty_file.write(str(NAUGHTY_LIST))

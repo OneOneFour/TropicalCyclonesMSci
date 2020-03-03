@@ -58,7 +58,7 @@ def get_all_modis_data(root_dir, year_range=(2012, 2017)):
     for i in range(*year_range):
         dir = os.path.join(root_dir, str(i))
         Path(dir).mkdir(parents=True)
-        files = [f"{MODIS_DOWNLOAD_URL}/{i}/new.{str(j).zfill(3)}.c6.nc" for j in range(1, 366)]
+        files = [f"{MODIS_DOWNLOAD_URL}/{i}/new.{str(j).zfill(3)}.c61.nc" for j in range(1, 366)]
         download_files_from_server(dir, files, include_headers=False, ignore_errors=True)
 
 

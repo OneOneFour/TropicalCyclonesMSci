@@ -86,9 +86,9 @@ def interpolate(start, end, t):
             continue
 
         try:
-            int_dict[k] = (end[k] - start[k]) * frac
+            int_dict[k] = (end[k] - start[k]) * frac + start[k]
         except TypeError:
-            continue
+            int_dict[k] = start[k]
     return int_dict
 
 
