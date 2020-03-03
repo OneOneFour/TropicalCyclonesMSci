@@ -13,6 +13,7 @@ from CycloneSnapshot import CycloneSnapshot, SnapshotGrid
 from fetch_file import get_data
 
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", os.getcwd())
+CACHE_DIRECTORY = os.environ.get("CACHE_DIRECTORY")
 DEFAULT_MARGIN = 0.2
 RESOLUTION_DEF = (3.75 / 6371) * 2 * np.pi
 NM_TO_M = 1852
@@ -163,12 +164,14 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
         metadata[f"DELTA_SPEED_-{(len(history) - i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
     for i, f in enumerate(future):
         metadata[f"DELTA_SPEED_+{(i + 1) * 3}HR"] = f["USA_WIND"] - metadata["USA_WIND"]
-        metadata["24_HRS_LAT"] = f["USA_LAT"]
-        metadata["24_HRS_LON"] = f["USA_LON"]
+        if (i+1)*3 == 24:
+            metadata["24_HRS_LAT"] = f["USA_LAT"]
+            metadata["24_HRS_LON"] = f["USA_LON"]
 
-    # checkpath = os.path.join(os.environ.get("OUTPUT_DIRECTORY"), metadata["NAME"],
-    #                         metadata["ISO_TIME"].strftime("%Y-%m-%d %H-%M"))
-
+    checkpath = os.path.join(CACHE_DIRECTORY,
+                             f"{metadata['NAME']}.{metadata['ISO_TIME'].strftime('%Y-%m-%d %H-%M')}.gpz")
+    if os.path.isfile(checkpath):
+        return CycloneImage.load(checkpath)
     return CycloneImage(scene, metadata, load_mod=True)
 
 
@@ -180,8 +183,8 @@ class CycloneImage:
 
     @staticmethod
     def load(fpath):
-        with open(fpath, "rb") as f_pickle:
-            import pickle
+        import pickle, gzip
+        with gzip.GzipFile(fpath, "r") as f_pickle:
             obj = pickle.load(f_pickle)
         assert isinstance(obj, CycloneImage)
         return obj
@@ -214,9 +217,11 @@ class CycloneImage:
 
     def save(self):
         # Grid is not saved, dump all others
-        self.rects = self.rects[:3]
-        with open(os.path.join(self.get_dir(), "img_pickle.pickle"), 'wb') as f_pickle:
-            import pickle
+        self.rects = self.rects[:2]
+        import pickle, gzip
+        with gzip.GzipFile(os.path.join(CACHE_DIRECTORY,
+                                        f"{self.metadata['NAME']}.{self.metadata['ISO_TIME'].strfime('%Y%m%D%H%M%S')}.gpz"),
+                           'w') as f_pickle:
             pickle.dump(self, f_pickle)
 
     @property

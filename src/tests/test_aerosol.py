@@ -11,6 +11,6 @@ def test_aerosol_image():
     assert AerosolImageMODIS.path(2012, 1) == checkpath
 
 def test_aerosol_file():
-    checkpath = os.path.join(MODIS_PATH, str(2012), f"new.001.c6.nc")
+    checkpath = os.path.join(MODIS_PATH, str(2012), f"new.001.c61.nc")
     assert AerosolImageMODIS.get_modis_file(2012,1) == checkpath
 
