@@ -5,7 +5,6 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.ma as npma
-from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
 from scipy.stats import sem
 
@@ -62,7 +61,6 @@ class CycloneSnapshot:
         self.metadata = dict(metadata)
         self.solar_zenith = solar
         self.satellite_azimuth = sat_pos
-
 
     @property
     def shape(self):
@@ -227,6 +225,21 @@ class CycloneSnapshot:
             self.I04_mask = npma.array(self.I04, mask=self.I01 <= reflectance_cutoff)
             self.I05_mask = npma.array(self.I05, mask=self.I01 <= reflectance_cutoff)
 
+    def mask_using_I01_percentile(self, percentile=10):
+        if self.I01 is None:
+            raise ValueError("No I1 data present")
+        I01_percentile = np.percentile(self.I01, 100 - percentile)
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+            new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                        npma.array(self.I04, mask=self.I01 <= I01_percentile))
+            new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                        npma.array(self.I05, mask=self.I01 <= I01_percentile))
+            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+        else:
+            self.I04_mask = npma.array(self.I04, mask=self.I01 <= I01_percentile)
+            self.I05_mask = npma.array(self.I05, mask=self.I01 <= I01_percentile)
+
     def mask_thin_cirrus(self, reflectance_cutoff=50):
         """
         Use M9 band (if present) as a mask for the I04,I05 band above a given threshold.
@@ -374,7 +387,8 @@ class CycloneSnapshot:
             if plot:
                 fig, ax = plt.subplots(1, 2, figsize=(9, 6))
                 self.img_plot(fig, ax[1])
-                (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
+                (gt, gt_err), (gt_i4, gt_i4_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile,
+                                                                                                fig=fig, ax=ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
                     plt.close("all")

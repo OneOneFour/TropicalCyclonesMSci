@@ -169,7 +169,7 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
             metadata["24_HRS_LON"] = f["USA_LON"]
 
     checkpath = os.path.join(CACHE_DIRECTORY,
-                             f"{metadata['NAME']}.{metadata['ISO_TIME'].strftime('%Y-%m-%d %H-%M')}.gpz")
+                             f"{metadata['NAME']}.{metadata['ISO_TIME'].strftime('%Y%m%d%H%M%S')}.gpz")
     if os.path.isfile(checkpath):
         return CycloneImage.load(checkpath)
     return CycloneImage(scene, metadata, load_mod=True)
@@ -220,7 +220,7 @@ class CycloneImage:
         self.rects = self.rects[:2]
         import pickle, gzip
         with gzip.GzipFile(os.path.join(CACHE_DIRECTORY,
-                                        f"{self.metadata['NAME']}.{self.metadata['ISO_TIME'].strfime('%Y%m%D%H%M%S')}.gpz"),
+                                        f"{self.metadata['NAME']}.{self.metadata['ISO_TIME'].strfime('%Y%m%d%H%M%S')}.gpz"),
                            'w') as f_pickle:
             pickle.dump(self, f_pickle)
 
@@ -308,8 +308,9 @@ class CycloneImage:
         gt_alt, gt_alt_err, r2_alt = self.eye.gt_piece_all(save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
                                                            show=False)
         gd.set_eye_gt(gt, gt_err)
-        gd.histogram_from_eye()
+
         gd.piecewise_glaciation_temperature(show=False, save=True)
+        gd.histogram_from_eye()
         gd.histogram_from_eye(show=False, save=True)
         gd.vals["24HR_AOD"] = self.get_future_aerosol()
         print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")

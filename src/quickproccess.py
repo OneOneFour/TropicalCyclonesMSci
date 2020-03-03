@@ -15,7 +15,7 @@ def exp_dist(x, l, b):
 
 df = pd.DataFrame(columns=["EYE", "GT_GRID_MEAN", "GT_GRID_VAR", "GT_GRID_EXP_MEAN", "GT_GRID_EXP_VAR",
                            "DIFF_EYE_MEDIAN", "DIFF_EYE_EXP_MEAN", "DIFF_EYE_MEAN",
-                           "DELTA_SPEED_-24HR", "DELTA_SPEED_+24HR"])
+                           "DELTA_SPEED_-24HR", "DELTA_SPEED_+24HR", "GT"])
 
 diff_eye_agg = np.array([])
 gt_grid = []
@@ -49,6 +49,7 @@ for file in outdir:
             entry["DIFF_EYE_EXP_MEAN"] = (1 / l - b - obj["EYE"])
             entry["DIFF_EYE_MEAN"] = (np.mean(np.array(obj["GT_GRID"]) - obj["EYE"]))
             gt_grid.extend(obj["GT_GRID"])
+
         entry["DELTA_SPEED_-24HR"] = obj["DELTA_SPEED_-24HR"]
         entry["DELTA_SPEED_+24HR"] = obj["DELTA_SPEED_+24HR"]
         df = df.append(entry, ignore_index=True)
@@ -102,6 +103,13 @@ def diff_against_ds():
     ax.set_ylabel("Previous 24 hour wind speed change (kts)")
 
 
+def gt_histogram(bins=20):
+    fig, ax = plt.subplots()
+    ax.hist(df["EYE"], bins=bins)
+    ax.set_ylabel("Frequency")
+    ax.set_xlabel("Glaciation Temperature (C)")
+
+
 # def plot_distr_of_mean(class_by_eye_gt=True):
 #     fig, ax = plt.subplots()
 #     if class_by_eye_gt:
@@ -148,8 +156,10 @@ def plot_windspeed_eye():
     ax.set_xlabel("Eye glaciation temperature (C)")
 
 
-plot_external_distribution()
-plot_distribution_of_temp_total(50)
-plot_windspeed_avg()
-plot_windspeed_eye()
+# plot_external_distribution()
+# plot_distribution_of_temp_total(50)
+# plot_windspeed_avg()
+# plot_windspeed_eye()
+# plt.show()
+gt_histogram(15)
 plt.show()
