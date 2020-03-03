@@ -75,32 +75,32 @@ def all_cyclone_eyes_since(year, month, day, cat_min=4):
                     snapshot.save("test.snap")
 
 
-# TODO: Move to using exclusion list
-def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
-    df_cyclone = best_track_df.loc[(best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year)]
-    dict_cy = df_cyclone.to_dict(orient="records")
-    snap_list = []
-    for i, cyclone_point in enumerate(dict_cy[:-1]):
-        if len(snap_list) >= max_len:
-            return snap_list
-        start_point = cyclone_point
-
-        end_point = dict_cy[i + 1]
-        with ProgressBar():
-            # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
-            #                    cat=start_point["USA_SSHS"], dayOrNight="D")
-            # if ci is not None:
-            #     ci.draw_eye()
-            #     return ci
-
-            eye = get_eye(start_point, end_point)
-            if eye:
-                eye.mask_array_I05(275, 225)
-                # eye.mask_thin_cirrus(80)
-
-                if not np.isnan(eye.gt_piece_percentile(plot=False)).any():
-                    return eye
-    return snap_list
+# # TODO: Move to using exclusion list
+# def get_cyclone_eye_name_image(name, year, max_len=np.inf, pickle=False):
+#     df_cyclone = best_track_df.loc[(best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year)]
+#     dict_cy = df_cyclone.to_dict(orient="records")
+#     snap_list = []
+#     for i, cyclone_point in enumerate(dict_cy[:-1]):
+#         if len(snap_list) >= max_len:
+#             return snap_list
+#         start_point = cyclone_point
+#
+#         end_point = dict_cy[i + 1]
+#         with ProgressBar():
+#             # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
+#             #                    cat=start_point["USA_SSHS"], dayOrNight="D")
+#             # if ci is not None:
+#             #     ci.draw_eye()
+#             #     return ci
+#
+#             eye = get_eye(start_point, end_point)
+#             if eye:
+#                 eye.mask_array_I05(275, 225)
+#                 # eye.mask_thin_cirrus(80)
+#
+#                 if not np.isnan(eye.gt_piece_percentile(plot=False)).any():
+#                     return eye
+#     return snap_list
 
 
 # TODO: Move to using exclusion list

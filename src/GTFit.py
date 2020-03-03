@@ -1,5 +1,10 @@
+from _collections import namedtuple
+
 import numpy as np
 import scipy.optimize as sp
+
+GT = namedtuple("GT", ("value", "error"))
+I4 = namedtuple("I4", ("value", "error"))
 
 cubic = lambda x, a, b, c, d: a * x ** 3 + b * x ** 2 + c * x + d
 quadratic = lambda x, a, b, c: a * x ** 2 + b * x + c
@@ -58,17 +63,19 @@ class GTFit:
             raise ValueError("Problem underconstrained.")
         if not self.i01 is None:
             params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
-                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280,1,1),
-                                       sigma=(100 / (self.i01**2)))
+                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280, 1, 1),
+                                       sigma=(100 / (self.i01 ** 2)))
         else:
             params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
-                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280,1,1) )
+                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280, 1, 1))
         r2 = 1 - (np.sum((self.y_i04 - func(self.x_i05, *params)) ** 2)) / np.sum((self.y_i04 - self.y_i04.mean()) ** 2)
         gt_err = np.sqrt(np.diag(cov))[0]
         self.gt = params[0]
         if fig and ax:
             self.plot(fig, ax, func=func, params=params)
-        return (self.gt, gt_err), (r2, params)
+        i4 = func(self.gt, *params)
+        i4_err_appx = abs(gt_err * (i4 / self.gt))
+        return GT(self.gt, gt_err), I4(i4, i4_err_appx), r2
 
     def piecewise_percentile(self, percentile=50, fig=None, ax=None):
         if len(self.i05) < 1:
@@ -97,8 +104,11 @@ class GTFit:
         r2 = 1 - (np.sum((self.y_i04 - simple_piecewise(self.x_i05, *params)) ** 2)) / np.sum(
             (self.y_i04 - self.y_i04.mean()) ** 2)
         if fig and ax:
-            self.plot(fig, ax, func=simple_piecewise, params=params)
-        return (self.gt, self.gt_err), (r2, params)
+            self.plot(fig, ax, func=simple_piecewise, params=params)  #
+        i4 = simple_piecewise(self.gt, *params)
+        i4_err_appx = abs(self.gt_err * (i4 / self.gt))
+
+        return GT(self.gt, self.gt_err), I4(i4, i4_err_appx), r2
 
     def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)

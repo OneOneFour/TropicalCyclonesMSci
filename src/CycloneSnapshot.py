@@ -8,7 +8,7 @@ import numpy.ma as npma
 from matplotlib.widgets import RectangleSelector
 from scipy.stats import sem
 
-from GTFit import GTFit
+from GTFit import GTFit, I4, GT
 
 ABSOLUTE_ZERO = 273.15
 NM_TO_M = 1852
@@ -231,9 +231,9 @@ class CycloneSnapshot:
         I01_percentile = np.percentile(self.I01, 100 - percentile)
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
             new_I04_mask = npma.mask_or(self.I04_mask.mask,
-                                        npma.array(self.I04, mask=self.I01 <= I01_percentile))
+                                        npma.array(self.I04, mask=self.I01 <= I01_percentile).mask)
             new_I05_mask = npma.mask_or(self.I05_mask.mask,
-                                        npma.array(self.I05, mask=self.I01 <= I01_percentile))
+                                        npma.array(self.I05, mask=self.I01 <= I01_percentile).mask)
             self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
             self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
         else:
@@ -349,58 +349,67 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.__I05, mask=blank_mask)
             self.I04_mask = npma.array(self.__I04, mask=blank_mask)
 
-    def gt_piece_all(self, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True, overlap=None):
-        if overlap:
-            if self.check_overlap(overlap):
-                return np.nan, np.nan, np.nan
-        if isinstance(self.I04, npma.MaskedArray):
-            i01 = np.ma.array(self.I01, mask=self.I04.mask)
-        else:
-            i01 = self.I01
-
-        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)), self.flat(i01))
+    def gt_piece_all(self, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True, overlap=None,
+                     returnnan=False):
         try:
+            if overlap:
+                if self.check_overlap(overlap):
+                    raise ValueError("Overlap present")
+            if isinstance(self.I04, npma.MaskedArray):
+                i01 = np.ma.array(self.I01, mask=self.I04.mask)
+            else:
+                i01 = self.I01
+
+            gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)), self.flat(i01))
+
             if plot:
                 fig, ax = plt.subplots(1, 2, figsize=(9, 6))
                 self.img_plot(fig, ax[1])
-                (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit(fig, ax[0])
+                gt, i4, r2 = gt_fitter.piecewise_fit(fig, ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
                     plt.close("all")
                 if show:
                     plt.show()
             else:
-                (gt, gt_err), (r2, params) = gt_fitter.piecewise_fit()
-            if raise_up < gt or gt + gt_err < raise_lower or r2 < 0.85:
+                gt, i4, r2 = gt_fitter.piecewise_fit()
+            if raise_up < gt or gt + gt.error < raise_lower or r2 < 0.85:
                 raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
-            return gt, gt_err, r2
-        except (RuntimeError, ValueError):
-            return np.nan, np.nan, np.nan
+            return gt, i4, r2
+
+        except (ValueError, RuntimeError) as e:
+            if returnnan:
+                return GT(np.nan, np.nan), I4(np.nan, np.nan), np.nan
+            else:
+                raise e
 
     def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-38, save_fig=None, show=True,
-                            overlap=None):
+                            overlap=None, returnnan=False):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
-        if overlap:
-            if self.check_overlap(overlap):
-                return np.nan, np.nan, np.nan
         try:
+            if overlap:
+                if self.check_overlap(overlap):
+                    raise ValueError("Overlap with eye region")
             if plot:
                 fig, ax = plt.subplots(1, 2, figsize=(9, 6))
                 self.img_plot(fig, ax[1])
-                (gt, gt_err), (gt_i4, gt_i4_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile,
-                                                                                                fig=fig, ax=ax[0])
+                gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile,
+                                                            fig=fig, ax=ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
                     plt.close("all")
                 if show:
                     plt.show()
             else:
-                (gt, gt_err), (r2, params) = gt_fitter.piecewise_percentile(percentile=percentile)
-            if raise_up + gt_err * 2 < gt or gt - gt_err * 2 < raise_lower or r2 < 0.85:  # Sanity check
+                gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
+            if raise_up + gt.error * 2 < gt or gt - gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
                 raise ValueError("Outside predefined range")
-            return gt, gt_err, r2
-        except (RuntimeError, ValueError):
-            return np.nan, np.nan, np.nan
+            return gt, i4, r2
+        except (ValueError, RuntimeError) as e:
+            if returnnan:
+                return GT(np.nan, np.nan), I4(np.nan, np.nan), np.nan
+            else:
+                raise e
 
     def unmask_array(self):
         if np.isnan(self.__I04).any():
@@ -478,8 +487,10 @@ class SnapshotGrid:
             json.dump(self.vals, f)
 
     def piecewise_glaciation_temperature(self, plot=True, show=True, save=False):
-        gd = [[list(snap.gt_piece_percentile(plot=False, overlap=self.imageInstance.eye)) for snap in row] for row in
-              self.grid]
+        gd = [
+            [list(snap.gt_piece_percentile(plot=False, overlap=self.imageInstance.eye, returnnan=True)) for snap in row]
+            for row in
+            self.grid]
 
         self.gt_grid, self.gt_err, self.r2 = np.squeeze(np.split(np.array(gd), 3, 2))
         if plot:

@@ -164,7 +164,7 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
         metadata[f"DELTA_SPEED_-{(len(history) - i) * 3}HR"] = metadata["USA_WIND"] - h["USA_WIND"]
     for i, f in enumerate(future):
         metadata[f"DELTA_SPEED_+{(i + 1) * 3}HR"] = f["USA_WIND"] - metadata["USA_WIND"]
-        if (i+1)*3 == 24:
+        if (i + 1) * 3 == 24:
             metadata["24_HRS_LAT"] = f["USA_LAT"]
             metadata["24_HRS_LON"] = f["USA_LON"]
 
@@ -212,7 +212,7 @@ class CycloneImage:
     def mask(self, instance: CycloneSnapshot):
         # instance.mask_using_I01(30)
         instance.mask_array_I05(HIGH=273, LOW=220)
-        instance.mask_using_I01(30)
+        instance.mask_using_I01_percentile(5)
         instance.mask_thin_cirrus(50)
 
     def save(self):
@@ -279,6 +279,7 @@ class CycloneImage:
 
     def manual_gt_cycle(self):
         self.plot_globe()
+        self.eye.plot()
         while True:
             try:
                 lat_offset = float(input("Enter latitude offset (in degrees): "))
@@ -292,7 +293,11 @@ class CycloneImage:
             finally:
                 self.plot_globe()
         gd.piecewise_glaciation_temperature()
-        gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
+        try:
+            gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"),
+                                                          show=False)
+        except (ValueError, RuntimeError):
+            return
         val, val_errs = gd.gt_quadrant_distribution(gt, gt_err)
         return val, val_errs
 
@@ -303,18 +308,21 @@ class CycloneImage:
         self.bb.plot(band="I01", save_dir=os.path.join(self.get_dir(), "whole_i1_plot.png"), show=False)
         self.mask(self.bb)
         self.bb.plot(band="I05", save_dir=os.path.join(self.get_dir(), "whole_masked_plot.png"), show=False)
+        try:
+            gt, i4, r2_alt = self.eye.gt_piece_all(
+                save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
+                show=False)
+        except (ValueError, RuntimeError):
+            return
 
-        gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"), show=False)
-        gt_alt, gt_alt_err, r2_alt = self.eye.gt_piece_all(save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
-                                                           show=False)
-        gd.set_eye_gt(gt, gt_err)
+        gd.set_eye_gt(gt.value, gt.error)
 
         gd.piecewise_glaciation_temperature(show=False, save=True)
         gd.histogram_from_eye()
         gd.histogram_from_eye(show=False, save=True)
         gd.vals["24HR_AOD"] = self.get_future_aerosol()
-        print(f"Eye Glaciation temperature:{gt}pm{gt_err} with a goodness of fit of {r2}")
-        print(f"Alternate Glaciation temperature:{gt_alt}pm{gt_alt_err} with a goodness of fit of {r2}")
+        print(f"Eye Glaciation temperature:{gt.value}pm{gt.error} with a goodness of fit of {r2}")
+        print(f"Alternate Glaciation temperature:{gt.value}pm{gt.error} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)
         gd.radial_distribution(show=False, save=True)
         gd.save()
@@ -362,7 +370,12 @@ class CycloneImage:
 
     @property
     def is_eyewall_gt_good(self):
-        return not np.isnan(self.eye.gt_piece_percentile(plot=False, show=False)[0])
+        try:
+            self.eye.gt_piece_percentile(plot=False, show=False)
+        except (ValueError, RuntimeError):
+            return False
+        else:
+            return True
 
     @property
     def eye(self) -> CycloneSnapshot:
