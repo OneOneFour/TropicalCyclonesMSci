@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import os
 import scipy.optimize as sp
+from scipy import stats
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 from CycloneSnapshot import CycloneSnapshot
@@ -285,19 +286,6 @@ if __name__ == "__main__":
                                        "name": c.meta_data["NAME"]})
         except:
             continue
-
-    plt.figure()
-    im = plt.imshow(avg_cyc_img_lower/number_lower)
-    plt.colorbar(im)
-    plt.title("Lower")
-    plt.figure()
-    im = plt.imshow(avg_cyc_img_upper/number_upper)
-    plt.colorbar(im)
-    plt.title("Upper")
-    plt.figure()
-    im = plt.imshow(avg_cyc_img_upper/number_upper - avg_cyc_img_lower/number_lower)
-    plt.colorbar(im)
-    plt.title("Difference (Upper-Lower)")
 
     all_gts = {"all": []}
     all_winds = []
