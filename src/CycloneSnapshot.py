@@ -63,6 +63,10 @@ class CycloneSnapshot:
         self.satellite_azimuth = sat_pos
 
     @property
+    def is_valid(self):
+        return len(self.I04) != 0 and len(self.I05) != 0
+
+    @property
     def shape(self):
         return self.I04.shape
 
@@ -226,19 +230,20 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.I05, mask=self.I01 <= reflectance_cutoff)
 
     def mask_using_I01_percentile(self, percentile=10):
-        if self.I01 is None:
-            raise ValueError("No I1 data present")
-        I01_percentile = np.percentile(self.I01, 100 - percentile)
-        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
-            new_I04_mask = npma.mask_or(self.I04_mask.mask,
-                                        npma.array(self.I04, mask=self.I01 <= I01_percentile).mask)
-            new_I05_mask = npma.mask_or(self.I05_mask.mask,
-                                        npma.array(self.I05, mask=self.I01 <= I01_percentile).mask)
-            self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
-            self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
-        else:
-            self.I04_mask = npma.array(self.I04, mask=self.I01 <= I01_percentile)
-            self.I05_mask = npma.array(self.I05, mask=self.I01 <= I01_percentile)
+        if self.is_valid:
+            if self.I01 is None:
+                raise ValueError("No I1 data present")
+            I01_percentile = np.percentile(self.I01, 100 - percentile)
+            if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+                new_I04_mask = npma.mask_or(self.I04_mask.mask,
+                                            npma.array(self.I04, mask=self.I01 <= I01_percentile).mask)
+                new_I05_mask = npma.mask_or(self.I05_mask.mask,
+                                            npma.array(self.I05, mask=self.I01 <= I01_percentile).mask)
+                self.I04_mask = npma.array(self.__I04, mask=new_I04_mask)
+                self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
+            else:
+                self.I04_mask = npma.array(self.I04, mask=self.I01 <= I01_percentile)
+                self.I05_mask = npma.array(self.I05, mask=self.I01 <= I01_percentile)
 
     def mask_thin_cirrus(self, reflectance_cutoff=50):
         """
@@ -316,7 +321,7 @@ class CycloneSnapshot:
             self.I05_mask = npma.array(self.__I05, mask=self.I04_mask.mask)
 
     def mask_array_I05(self, HIGH=273, LOW=230):
-        if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
+        if hasattr(self, "I04_mask") or hasattr(self, "I05_msk"):
             new_I05_mask = npma.mask_or(self.I05_mask.mask, npma.masked_outside(self.__I05, LOW, HIGH).mask)
             new_I04_mask = npma.mask_or(self.I04_mask.mask, npma.masked_outside(self.__I05, LOW, HIGH).mask)
             self.I05_mask = npma.array(self.__I05, mask=new_I05_mask)
@@ -486,13 +491,14 @@ class SnapshotGrid:
         with open(os.path.join(self.imageInstance.get_dir(), "out.json"), "w") as f:
             json.dump(self.vals, f)
 
-    def piecewise_glaciation_temperature(self, plot=True, show=True, save=False):
-        gd = [
-            [list(snap.gt_piece_percentile(plot=False, overlap=self.imageInstance.eye, returnnan=True)) for snap in row]
-            for row in
-            self.grid]
+    def glaciation_temperature_grid(self, plot=True, show=True, save=False):
+        gd = np.zeros((len(self.grid), len(self.grid[0]), 5))
+        for i, row in enumerate(self.grid):
+            for j, snap in enumerate(row):
+                gt, i4, r2 = snap.gt_piece_all(plot=False, overlap=self.imageInstance.eye, returnnan=True)
+                gd[i, j] = np.array([gt.value, gt.error, i4.value, i4.error, r2])
 
-        self.gt_grid, self.gt_err, self.r2 = np.squeeze(np.split(np.array(gd), 3, 2))
+        self.gt_grid, self.gt_err, self.i4_grid, self.i4_error, self.r2 = np.squeeze(np.split(gd, 5, 2))
         if plot:
             fig, ax = plt.subplots()
             im = ax.imshow(self.gt_grid, origin="upper")
@@ -512,6 +518,7 @@ class SnapshotGrid:
                 plt.close()
             if show:
                 plt.show()
+        self.vals["I4_GRID"] = self.i4_grid[~np.isnan(self.i4_grid)].tolist()
         self.vals["GT_GRID"] = self.gt_grid[~np.isnan(self.gt_grid)].tolist()
         self.vals["GT_MEAN"] = np.nanmean(self.gt_grid)
         self.vals["GT_STD"] = np.nanstd(self.gt_grid)
@@ -520,14 +527,14 @@ class SnapshotGrid:
         try:
             return np.nanmean(self.r2)
         except AttributeError:
-            self.piecewise_glaciation_temperature(plot=False)
+            self.glaciation_temperature_grid(plot=False)
             self.get_mean_r2()
 
     def get_mean_gt(self):
         try:
             return np.nanmean(self.gt_grid)
         except AttributeError:
-            self.piecewise_glaciation_temperature(plot=False)
+            self.glaciation_temperature_grid(plot=False)
             self.get_mean_gt()
 
     def radial_distribution(self, show=True, save=False):

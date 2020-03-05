@@ -202,6 +202,8 @@ class CycloneImage:
         self.rects = []
         self.proj_dict = {"proj": "lcc", "lat_0": self.lat, "lon_0": self.lon, "lat_1": self.lat}
         self.bounding_snapshot()
+
+        print("Processing Eye")
         self.draw_eye()
         self.mask(self.eye)
 
@@ -210,9 +212,8 @@ class CycloneImage:
         return self.metadata["ISO_TIME"].time_tuple().tm_yday
 
     def mask(self, instance: CycloneSnapshot):
-        # instance.mask_using_I01(30)
+        instance.mask_using_I01_percentile(35)  # 1 sigma
         instance.mask_array_I05(HIGH=273, LOW=220)
-        instance.mask_using_I01_percentile(5)
         instance.mask_thin_cirrus(50)
 
     def save(self):
@@ -292,7 +293,7 @@ class CycloneImage:
                 print("Point outside of range, please enter different set of coords")
             finally:
                 self.plot_globe()
-        gd.piecewise_glaciation_temperature()
+        gd.glaciation_temperature_grid()
         try:
             gt, gt_err, r2 = self.eye.gt_piece_percentile(save_fig=os.path.join(self.get_dir(), "eye_plot.png"),
                                                           show=False)
@@ -302,30 +303,27 @@ class CycloneImage:
         return val, val_errs
 
     def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
+        print("Processing Grid")
         gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)
         # if not os.path.isfile(os.path.join(self.get_dir(), "image_grid.png")):
         #     self.plot_globe(band="I05", show_fig=False, save=True)
-        self.bb.plot(band="I01", save_dir=os.path.join(self.get_dir(), "whole_i1_plot.png"), show=False)
-        self.mask(self.bb)
         self.bb.plot(band="I05", save_dir=os.path.join(self.get_dir(), "whole_masked_plot.png"), show=False)
-        try:
-            gt, i4, r2_alt = self.eye.gt_piece_all(
-                save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
-                show=False)
-        except (ValueError, RuntimeError):
-            return
+        print("Calculating variables")
+
+        gt, i4, r2 = self.eye.gt_piece_percentile(plot=True,
+                                                  save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
+                                                  show=False)
 
         gd.set_eye_gt(gt.value, gt.error)
-
-        gd.piecewise_glaciation_temperature(show=False, save=True)
+        gd.glaciation_temperature_grid(show=False, save=True)
         gd.histogram_from_eye()
         gd.histogram_from_eye(show=False, save=True)
         gd.vals["24HR_AOD"] = self.get_future_aerosol()
         print(f"Eye Glaciation temperature:{gt.value}pm{gt.error} with a goodness of fit of {r2}")
-        print(f"Alternate Glaciation temperature:{gt.value}pm{gt.error} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)
         gd.radial_distribution(show=False, save=True)
         gd.save()
+        self.save()
         return gd.vals
 
     def plot_globe(self, band="I05", show=-1, show_fig=True, save=False):

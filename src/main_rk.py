@@ -26,7 +26,7 @@ def plt_time_series(series):
 
 if __name__ == "__main__":
     ## ALL
-    #all_cyclones_since(2012, 1, 1, per_cyclone=lambda x: x.auto_gt_cycle())
+    # all_cyclones_since(2012, 1, 1, per_cyclone=lambda x: x.auto_gt_cycle())
     # eyes = get_cyclone_eye_name_image("GENEVIEVE", 2014, max_len=5)
     # hato = get_cyclone_by_name("HATO",2017,per_cyclone=lambda x: x.auto_gt_cycle())
     get_cyclone_by_name("IRMA", 2017, per_cyclone=lambda x: x.auto_gt_cycle())

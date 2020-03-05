@@ -157,20 +157,18 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
         # if ci is not None:
         #     ci.draw_eye()
         #     return ci
-        try:
-            cy = get_entire_cyclone(start_point, end_point, history=history, future=future)
 
-            if cy and cy.is_eyewall_gt_good:
-                print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
-                if not (shading and cy.is_eyewall_shaded):
-                    vals = per_cyclone(cy)
-                    vals_series.append(vals)
-            else:
-                NAUGHTY_LIST.add(index)
-        except Exception:
-            import traceback
-            traceback.print_exc()
-            continue
+        cy = get_entire_cyclone(start_point, end_point, history=history, future=future)
+
+        if cy:
+            print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
+            if not (shading and cy.is_eyewall_shaded):
+                vals = per_cyclone(cy)
+                vals_series.append(vals)
+        else:
+            NAUGHTY_LIST.add(index)
+
+
 
     return vals_series
 
