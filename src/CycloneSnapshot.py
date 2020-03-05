@@ -29,8 +29,8 @@ class CycloneSnapshot:
     Uniformly gridded single snapshot of cyclone.
     """
 
-    __slots__ = ["__I04", "__I05", "I04_mask", "I05_mask", "I01", "M09", "pixel_x", "pixel_y", "b_lon", "b_lat",
-                 "metadata", "solar_zenith", "satellite_azimuth"]
+    # __slots__ = ["__I04", "__I05", "I04_mask", "I05_mask", "I01", "M09", "pixel_x", "pixel_y", "b_lon", "b_lat",
+    #              "metadata", "solar_zenith", "satellite_azimuth"]
 
     @staticmethod
     def load(fpath):
@@ -373,7 +373,7 @@ class CycloneSnapshot:
                     plt.show()
             else:
                 gt, i4, r2 = gt_fitter.piecewise_fit()
-            if raise_up < gt or gt + gt.error < raise_lower or r2 < 0.85:
+            if raise_up < gt.value or gt.value + gt.error < raise_lower or r2 < 0.85:
                 raise ValueError(f"Glaciation Temperature Outside of range: {gt}")
             return gt, i4, r2
 
@@ -383,7 +383,7 @@ class CycloneSnapshot:
             else:
                 raise e
 
-    def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-38, save_fig=None, show=True,
+    def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True,
                             overlap=None, returnnan=False):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
         try:
@@ -402,7 +402,7 @@ class CycloneSnapshot:
                     plt.show()
             else:
                 gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
-            if raise_up + gt.error * 2 < gt or gt - gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
+            if raise_up + gt.error * 2 < gt.value or gt.value - gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
                 raise ValueError("Outside predefined range")
             return gt, i4, r2
         except (ValueError, RuntimeError) as e:
