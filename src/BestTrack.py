@@ -1,7 +1,7 @@
 import ast
 import os
 from datetime import timedelta
-
+import atexit
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
@@ -16,10 +16,17 @@ if "NAUGHTY_LIST" in os.environ:
     except FileNotFoundError:
         NAUGHTY_LIST = set()
 
-BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\data\best_fit_csv\ibtracs.since1980.list.v04r00.csv")
+
+    @atexit.register
+    def save_the_file():
+        with open(os.environ.get("NAUGHTY_LIST"), 'w') as naughty_file:
+            naughty_file.write(str(NAUGHTY_LIST))
+
+BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV",
+                                r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\data\best_fit_csv\ibtracs.since1980.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
-best_track_df =  best_track_df[best_track_df.USA_RECORD != "L"]
+best_track_df = best_track_df[best_track_df.USA_RECORD != "L"]
 
 
 def all_cyclones_since(year, month, day, cat_min=4, per_cyclone=None):
@@ -175,12 +182,3 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
             NAUGHTY_LIST.add(index)
 
     return vals_series
-
-
-import atexit
-
-
-@atexit.register
-def save_the_file():
-    with open(os.environ.get("NAUGHTY_LIST"), 'w') as naughty_file:
-        naughty_file.write(str(NAUGHTY_LIST))

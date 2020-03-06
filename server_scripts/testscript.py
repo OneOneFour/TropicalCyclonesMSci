@@ -3,6 +3,7 @@ from netCDF4 import Dataset
 import glob
 import matplotlib.pyplot as plt
 
+
 def find_trmm_profile(time_in, lat_in, lon_in):
     YYYY = time_in[0: 4]
     MM = time_in[5: 7]
@@ -62,8 +63,8 @@ if __name__ == "__main__":
     timein = "2018-03-10-12"
     lat = 18.8
     lon = -169.7
-    profile = find_trmm_profile(timein,lat,lon)
-    radius = np.arange(0,10.25,0.25)
-    plt.plot(radius,profile)
+    profile = find_trmm_profile(timein, lat, lon)
+    radius = np.arange(0, 10.25, 0.25)
+    plt.plot(radius, profile)
     plt.savefig("./fig.png")
     print(profile)

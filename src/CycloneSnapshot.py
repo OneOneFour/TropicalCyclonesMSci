@@ -388,7 +388,7 @@ class CycloneSnapshot:
             else:
                 raise e
 
-    def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-40, save_fig=None, show=True,
+    def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-45, save_fig=None, show=True,
                             overlap=None, returnnan=False):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
         try:
@@ -402,12 +402,11 @@ class CycloneSnapshot:
                                                             fig=fig, ax=ax[0])
                 if save_fig:
                     plt.savefig(save_fig)
-                    plt.close("all")
                 if show:
                     plt.show()
             else:
                 gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
-            if raise_up - gt.error * 2 < gt.value or gt.value + gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
+            if raise_up + gt.error * 2 < gt.value or gt.value + gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
                 raise ValueError(f"{gt.value} is outside predefined range. R squared is {r2}")
             return gt, i4, r2
         except (ValueError, RuntimeError) as e:
@@ -415,6 +414,9 @@ class CycloneSnapshot:
                 return GT(np.nan, np.nan), I4(np.nan, np.nan), np.nan
             else:
                 raise e
+        finally:
+            if not show:
+                plt.close(fig)
 
     def unmask_array(self):
         if np.isnan(self.__I04).any():

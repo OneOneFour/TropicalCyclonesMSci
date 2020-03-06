@@ -81,7 +81,8 @@ class GTFit:
         if len(self.i05) < 1:
             raise ValueError("I5 data is empty. This could be due to masking or a bad input")
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        self.y_i04 = [0] * len(self.x_i05)
+        self.y_i04 = np.array([0] * len(self.x_i05))
+
         if len(self.x_i05) < 1:
             raise ValueError("I4 data is empty. This could be due to masking or a bad input")
         for i, x in enumerate(self.x_i05):

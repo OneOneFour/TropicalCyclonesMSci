@@ -20,6 +20,11 @@ if "CACHE_DIRECTORY" in os.environ:
         LAADS_CACHE = pd.DataFrame(columns=["request", "response", "files"])
 
 
+    @atexit.register
+    def save_cache():
+        LAADS_CACHE.to_csv(LAADS_CACHE_PATH)
+
+
 def download_files_from_server(root_dir, file_urls, ignore_errors=False, include_headers=True):
     fpath = [os.path.join(root_dir, os.path.split(f)[1]) for f in file_urls]
 
@@ -153,6 +158,3 @@ def get_data(root_dir, start_time, end_time, include_mod=False, north=90, south=
     return download_files_from_server(root_dir, files), files
 
 
-@atexit.register
-def save_cache():
-    LAADS_CACHE.to_csv(LAADS_CACHE_PATH)

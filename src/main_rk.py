@@ -3,9 +3,8 @@ from time import strptime
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from pandas.plotting import register_matplotlib_converters
-# Top level import required
+# Top level import required in order for pickle class to be loaded into the __main__ namespace
 from AerosolImage import AerosolImageMODIS
-
 from BestTrack import *
 
 register_matplotlib_converters()
