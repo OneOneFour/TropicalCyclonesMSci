@@ -1,9 +1,10 @@
+import atexit
 import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
 import pandas as pd
 import requests
-import atexit
 
 WEBSERVER_QUERY_URL = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
 
@@ -11,11 +12,12 @@ SEARCH_FOR_FILES = "/searchForFiles"
 GET_FILE_URLS = "/getFileUrls"
 MODIS_DOWNLOAD_URL = "http://www.sp.ph.ic.ac.uk/~erg10/safe/subset"
 
-LAADS_CACHE_PATH = os.path.join(os.environ["CACHE_DIRECTORY"], "laads_cache.csv")
-if os.path.isfile(LAADS_CACHE_PATH):
-    LAADS_CACHE = pd.read_csv(LAADS_CACHE_PATH)
-else:
-    LAADS_CACHE = pd.DataFrame()
+if "CACHE_DIRECTORY" in os.environ:
+    LAADS_CACHE_PATH = os.path.join(os.environ["CACHE_DIRECTORY"], "laads_cache.csv")
+    if os.path.isfile(LAADS_CACHE_PATH):
+        LAADS_CACHE = pd.read_csv(LAADS_CACHE_PATH)
+    else:
+        LAADS_CACHE = pd.DataFrame(columns=["request", "response", "files"])
 
 
 def download_files_from_server(root_dir, file_urls, ignore_errors=False, include_headers=True):
@@ -136,9 +138,11 @@ def get_data(root_dir, start_time, end_time, include_mod=False, north=90, south=
         if file_name_response.status_code != 200:
             raise ConnectionError(file_name_response.content)
         files = [f.text for f in ET.fromstring(file_name_response.content)]
-        if (LAADS_CACHE["request"] == params).any():
-            LAADS_CACHE.append({"request": params, "response": files,
-                                "local": [os.path.join(root_dir, os.path.split(f)[1]) for f in files]})
+        global LAADS_CACHE
+        if not (LAADS_CACHE["request"] == params).any():
+            LAADS_CACHE = LAADS_CACHE.append({"request": params, "response": files,
+                                "local": [os.path.join(root_dir, os.path.split(f)[1]) for f in files]},
+                               ignore_index=True)
         if len(files) > 8:
             raise RuntimeError("Too many files loaded to process efficiently")
     except ConnectionError as e:

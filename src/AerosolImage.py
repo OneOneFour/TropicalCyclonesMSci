@@ -9,7 +9,7 @@ from netCDF4 import Dataset
 from pyresample import geometry
 from pyresample.kd_tree import resample_nearest
 
-from fetch_file import get_all_modis_data
+
 
 MODIS_PATH = os.environ.get("MODIS_PATH", os.getcwd())
 
@@ -69,8 +69,11 @@ class AerosolImageMODIS:
         plt.show()
 
     def get_mean_in_region(self, lat, lon, width, height):
-        top_right_y, top_right_x = self.bb_area.get_xy_from_lonlat(lon + width / 2, lat + height / 2)
-        bottom_left_y, bottom_left_x = self.bb_area.get_xy_from_lonlat(lon - width / 2, lat - height / 2)
+        try:
+            top_right_y, top_right_x = self.bb_area.get_xy_from_lonlat(lon + width / 2, lat + height / 2)
+            bottom_left_y, bottom_left_x = self.bb_area.get_xy_from_lonlat(lon - width / 2, lat - height / 2)
+        except ValueError:
+            return np.nan
         box = self.aod[top_right_x:bottom_left_x, bottom_left_y:top_right_y:]
         return np.mean(box)
 
@@ -78,6 +81,3 @@ class AerosolImageMODIS:
         with gzip.GzipFile(self.path(self.year, self.day), "w") as fp:
             pickle.dump(self, fp)
 
-
-if __name__ == "__main__":
-    AerosolImageMODIS.generate_pickles()

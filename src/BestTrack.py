@@ -8,16 +8,18 @@ from dask.diagnostics.progress import ProgressBar
 
 from CycloneImage import get_eye, get_entire_cyclone
 
-try:
-    with open(os.environ.get("NAUGHTY_LIST")) as naughty_file:
-        NAUGHTY_LIST = ast.literal_eval(naughty_file.read())
-        assert isinstance(NAUGHTY_LIST, set)
-except FileNotFoundError:
-    NAUGHTY_LIST = set()
+if "NAUGHTY_LIST" in os.environ:
+    try:
+        with open(os.environ.get("NAUGHTY_LIST")) as naughty_file:
+            NAUGHTY_LIST = ast.literal_eval(naughty_file.read())
+            assert isinstance(NAUGHTY_LIST, set)
+    except FileNotFoundError:
+        NAUGHTY_LIST = set()
 
-BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.last3years.list.v04r00.csv")
+BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\data\best_fit_csv\ibtracs.since1980.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
+best_track_df =  best_track_df[best_track_df.USA_RECORD != "L"]
 
 
 def all_cyclones_since(year, month, day, cat_min=4, per_cyclone=None):
@@ -157,18 +159,20 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
         # if ci is not None:
         #     ci.draw_eye()
         #     return ci
+        try:
+            cy = get_entire_cyclone(start_point, end_point, history=history, future=future)
 
-        cy = get_entire_cyclone(start_point, end_point, history=history, future=future)
-
-        if cy:
-            print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
-            if not (shading and cy.is_eyewall_shaded):
-                vals = per_cyclone(cy)
-                vals_series.append(vals)
-        else:
+            if cy:
+                print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
+                if not (shading and cy.is_eyewall_shaded):
+                    vals = per_cyclone(cy)
+                    vals_series.append(vals)
+            else:
+                NAUGHTY_LIST.add(index)
+        except Exception:
+            import traceback
+            traceback.print_exc()
             NAUGHTY_LIST.add(index)
-
-
 
     return vals_series
 

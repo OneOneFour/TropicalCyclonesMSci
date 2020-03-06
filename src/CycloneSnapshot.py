@@ -33,7 +33,7 @@ class CycloneSnapshot:
     #              "metadata", "solar_zenith", "satellite_azimuth"]
 
     @staticmethod
-    def load(fpath):
+    def load(fpath) -> "CycloneSnapshot":
         with open(fpath, "rb") as file:
             cs = pickle.load(file)
         return cs
@@ -64,7 +64,7 @@ class CycloneSnapshot:
 
     @property
     def is_valid(self):
-        return len(self.I04) != 0 and len(self.I05) != 0
+        return self.I04.size != 0 and self.I05.size != 0
 
     @property
     def shape(self):
@@ -407,8 +407,8 @@ class CycloneSnapshot:
                     plt.show()
             else:
                 gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
-            if raise_up + gt.error * 2 < gt.value or gt.value - gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
-                raise ValueError("Outside predefined range")
+            if raise_up - gt.error * 2 < gt.value or gt.value + gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
+                raise ValueError(f"{gt.value} is outside predefined range. R squared is {r2}")
             return gt, i4, r2
         except (ValueError, RuntimeError) as e:
             if returnnan:

@@ -153,7 +153,7 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
                                south=lat_0 - south_extent,
                                west=lon_0 - west_extent,
                                east=lon_0 + east_extent,
-                               dayOrNight="D", include_mod=True)
+                               dayOrNight="D", include_mod=False)
     except FileNotFoundError:
         return None
 
@@ -172,7 +172,7 @@ def get_entire_cyclone(start_point, end_point, history=None, future=None):
                              f"{metadata['NAME']}.{metadata['ISO_TIME'].strftime('%Y%m%d%H%M%S')}.gpz")
     if os.path.isfile(checkpath):
         return CycloneImage.load(checkpath)
-    return CycloneImage(scene, metadata, load_mod=True)
+    return CycloneImage(scene, metadata, load_mod=False)
 
 
 import matplotlib.pyplot as plt
@@ -209,19 +209,19 @@ class CycloneImage:
 
     @property
     def day_of_year(self):
-        return self.metadata["ISO_TIME"].time_tuple().tm_yday
+        return self.metadata["ISO_TIME"].timetuple().tm_yday
 
     def mask(self, instance: CycloneSnapshot):
-        instance.mask_using_I01_percentile(35)  # 1 sigma
-        instance.mask_array_I05(HIGH=273, LOW=220)
-        instance.mask_thin_cirrus(50)
+        instance.mask_using_I01_percentile(30)  # 1 sigma
+        instance.mask_array_I05(HIGH=265, LOW=220)
+        # instance.mask_thin_cirrus(50)
 
     def save(self):
         # Grid is not saved, dump all others
         self.rects = self.rects[:2]
         import pickle, gzip
         with gzip.GzipFile(os.path.join(CACHE_DIRECTORY,
-                                        f"{self.metadata['NAME']}.{self.metadata['ISO_TIME'].strfime('%Y%m%d%H%M%S')}.gpz"),
+                                        f"{self.metadata['NAME']}.{self.metadata['ISO_TIME'].strftime('%Y%m%d%H%M%S')}.gpz"),
                            'w') as f_pickle:
             pickle.dump(self, f_pickle)
 
@@ -316,7 +316,6 @@ class CycloneImage:
 
         gd.set_eye_gt(gt.value, gt.error)
         gd.glaciation_temperature_grid(show=False, save=True)
-        gd.histogram_from_eye()
         gd.histogram_from_eye(show=False, save=True)
         gd.vals["24HR_AOD"] = self.get_future_aerosol()
         print(f"Eye Glaciation temperature:{gt.value}pm{gt.error} with a goodness of fit of {r2}")
@@ -438,7 +437,10 @@ class CycloneImage:
 
     def get_future_aerosol(self):
         ai = AerosolImageMODIS.get_aerosol(self.metadata["ISO_TIME"].year, self.day_of_year)
-        return ai.get_mean_in_region(self.metadata["24_HRS_LAT"], self.metadata["24_HRS_LON"], 2, 2)
+        try:
+            return ai.get_mean_in_region(self.metadata["24_HRS_LAT"], self.metadata["24_HRS_LON"], 5, 5)
+        except KeyError:
+            return np.nan
 
     def get_rect(self, lat, lon, width, height):
         area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
