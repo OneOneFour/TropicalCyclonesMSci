@@ -34,7 +34,7 @@ class CycloneSnapshot:
 
     def __init__(self, I04: np.ndarray, I05: np.ndarray, pixel_x: int, pixel_y: int, sat_pos: np.ndarray, metadata: dict,
                  M09: np.ndarray = None, I01: np.ndarray = None, I02: np.ndarray = None, I03: np.ndarray = None,
-                 solar: np.ndarray = None):
+                 solar: np.ndarray = None,):
         self.__I04 = I04
         self.__I05 = I05
         self.I01 = I01
@@ -175,10 +175,11 @@ class CycloneSnapshot:
             raise ValueError(
                 f"Value for azimuthal offset does not make sense. Expecting a value between 0 and 360 degrees, received {wrap(eye_azimuth - self.meta_data['STORM_DIR'])}")
 
-    def mask_using_I01(self, reflectance_cutoff=80):
+    def mask_using_I01(self, percentile_cutoff=80):
         """
         Use I01 band (if present) to mask dimmer pixels below a certain reflectance
         """
+        reflectance_cutoff = np.percentile(self.I01, percentile_cutoff)
         if self.I01 is None:
             raise ValueError("No I1 data present")
         if hasattr(self, "I04_mask") or hasattr(self, "I05_mask"):
@@ -298,17 +299,17 @@ class CycloneSnapshot:
         if plot:
             fig, ax = plt.subplots(1, 2)
             self.img_plot(fig, ax[1])
-            gt, gt_err, r2 = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
+            gt, gt_err, r2, avg_i04, avg_i04_nos = gt_fitter.piecewise_percentile(percentile=percentile, fig=fig, ax=ax[0])
             plt.show()
         else:
-            gt, gt_err, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
+            gt, gt_err, r2, avg_i04, avg_i04_nos = gt_fitter.piecewise_percentile(percentile=percentile)
 
         if 0 < gt or gt < -45:  # Sanity check
             return np.nan, np.nan
         if (gt < np.min(self.I05) - 273.15) or (gt > np.max(self.I05) - 273.15):
             return np.nan, np.nan
 
-        return gt, gt_err, r2
+        return gt, gt_err, r2, avg_i04, avg_i04_nos
 
     def unmask_array(self):
         del self.I04_mask

@@ -16,6 +16,7 @@ from scipy import stats
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 from CycloneSnapshot import CycloneSnapshot
+matplotlib.rcParams['agg.path.chunksize'] = 10000
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.since1980.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
@@ -244,12 +245,42 @@ def analyse_peak(data, key, which):
     print(which, np.mean(list), np.std(list)/np.sqrt(len(data)))
 
 
+def plot_avg_i04_i05(overall_avg_i04_lower, overall_avg_i04_nos_lower, overall_avg_i04_upper, overall_avg_i04_nos_upper):
+    avg_i05 = np.arange(200, 300, 1)
+    zero_Args = np.where(overall_avg_i04_nos == 0)
+    avg_i05 = np.delete(avg_i05, zero_Args)
+
+    zero_Args = np.where(overall_avg_i04_nos_lower == 0)
+    overall_avg_i04_lower = np.delete(overall_avg_i04_lower, zero_Args)
+    overall_avg_i04_nos_lower = np.delete(overall_avg_i04_nos_lower, zero_Args)
+
+    zero_Args = np.where(overall_avg_i04_nos_upper == 0)
+    overall_avg_i04_upper = np.delete(overall_avg_i04_upper, zero_Args)
+    overall_avg_i04_nos_upper = np.delete(overall_avg_i04_nos_upper, zero_Args)
+
+    fig, axs = plt.subplots()
+    axs.scatter(overall_avg_i04_lower/overall_avg_i04_nos_lower, avg_i05, label="Lower")
+    axs.scatter(overall_avg_i04_upper / overall_avg_i04_nos_upper, avg_i05, label="Upper")
+    axs.invert_xaxis()
+    axs.invert_yaxis()
+    plt.xlabel("I04")
+    plt.ylabel("I05")
+    plt.legend()
+    plt.show()
+
+
 if __name__ == "__main__":
     histogram_dict = []
-    avg_cyc_img_upper = np.zeros((200, 200))
-    avg_cyc_img_lower = np.zeros((200, 200))
-    number_upper = 0
-    number_lower = 0
+    overall_avg_i04_upper = np.zeros(100)
+    overall_avg_i04_nos_upper = np.zeros(100)
+    overall_avg_i04_lower = np.zeros(100)
+    overall_avg_i04_nos_lower = np.zeros(100)
+    overall_avg_i04_nos = np.zeros(100)
+
+    total_i04_upper = []
+    total_i05_upper = []
+    total_i04_lower = []
+    total_i05_lower = []
     best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
     for file in os.listdir("proc/eyes_since_2012"):
         filename = "proc/eyes_since_2012/" + file
@@ -258,21 +289,19 @@ if __name__ == "__main__":
             c.mask_thin_cirrus()
             c.mask_array_I05(LOW=220, HIGH=270)
             c.mask_using_I01(80)
-            gt, gt_err, r = c.gt_piece_percentile(percentile=5, plot=False)
+            gt, gt_err, r, avg_i04, avg_i04_nos = c.gt_piece_percentile(percentile=5, plot=False)
             if gt is not np.nan and r > 0.85:
+                overall_avg_i04_nos += avg_i04_nos
+                if gt > -33:
+                    overall_avg_i04_upper += avg_i04
+                    overall_avg_i04_nos_upper += avg_i04_nos
+                elif gt < - 33:
+                    overall_avg_i04_lower += avg_i04
+                    overall_avg_i04_nos_lower += avg_i04_nos
                 c.unmask_array()
                 max_I05 = c.I05.max()
                 min_I05 = c.I05.min()
                 middle = sum(np.argwhere(c.I05 > 260)) / len(np.argwhere(c.I05 > 260))
-                if gt < -33 and c.meta_data["BASIN"] != "WP":
-                    avg_cyc_img_lower += c.I04[int(middle[0])-100:int(middle[0])+100,
-                                               int(middle[1])-100:int(middle[1])+100]
-                    number_lower += 1
-
-                elif gt > -33 and c.meta_data["BASIN"] != "WP":
-                    avg_cyc_img_upper += c.I04[int(middle[0])-100:int(middle[0])+100,
-                                               int(middle[1])-100:int(middle[1])+100]
-                    number_upper += 1
                 cyc_date_minus_day = c.meta_data["ISO_TIME"] - timedelta(days=1)
                 cyc_time_minus_day = cyc_date_minus_day.strftime("%Y-%m-%d %H:%M:%S")
                 cyc_future = best_track_df.loc[(best_track_df["ISO_TIME"] > cyc_time_minus_day) &
@@ -380,7 +409,7 @@ if __name__ == "__main__":
     """Below function are for getting results, above is for getting dictionary with data needed."""
     # analyse_peak(lower_peak_cyclones_WP, "future_winds", "Lower")
     # analyse_peak(upper_peak_cyclones_WP, "future_winds", "Upper")
-    # analysing_x(intensifying_gts, "Change in next 24 hours (WP)", fit="bimodal")
+    analysing_x(basin_gts, "Basin", fit="bimodal")
     # analysing_basin(all_gts)
 
     plt.show()

@@ -47,6 +47,8 @@ class GTFit:
         return self.gt, r2
 
     def piecewise_percentile(self, percentile=50, fig=None, ax=None):
+        avg_i04 = np.zeros(100)
+        avg_i04_nos = np.zeros(100)
         if len(self.i05) < 1:
             return np.nan, np.nan
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
@@ -59,6 +61,9 @@ class GTFit:
             if len(vals) == 0:
                 continue
             self.y_i04[i] = np.percentile(vals, percentile)
+            if -73 < x < 26.5:
+                avg_i04[int(np.round(x, 0) + 73)] += np.percentile(vals, percentile)
+                avg_i04_nos[int(np.round(x, 0) + 73)] += 1
         zero_args = np.where(self.y_i04 == 0)
         self.x_i05 = np.delete(self.x_i05, zero_args)
         self.y_i04 = np.delete(self.y_i04, zero_args)
@@ -78,7 +83,7 @@ class GTFit:
         if fig and ax:
             ax.scatter(self.i04, self.i05, s=0.1, label="All Data")
             self.plot(fig, ax, func=simple_piecewise, params=params)
-        return self.gt, self.gt_err, r2
+        return self.gt, self.gt_err, r2, avg_i04, avg_i04_nos
 
     def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
         self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
