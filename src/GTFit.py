@@ -207,6 +207,25 @@ class GTFit:
         self.plot(fig, ax, func=cubic, params=params)
         return gt_ve, gt_err, params
 
+    # TODO: Move binning into standard function
+    # TODO: Using common x,y is kinda bad
+    def plot_binned(self, fig, ax, bin_width=1):
+        self.x_i05 = np.arange(min(self.i05), max(self.i05), bin_width)
+        self.y_i04 = np.array([0] * len(self.x_i05))
+
+        if len(self.i04) < 1:
+            raise ValueError("I4 data is empty. This might be due to masking")
+        for i, x in enumerate(self.x_i05):
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.x_i05 < (x + 0.5)))]
+            if len(vals) == 0:
+                continue
+            self.y_i04[i] = np.nanmean(vals)
+        zero_args = np.where(self.y_i04 == 0)
+        self.x_i05 = np.delete(self.x_i05, zero_args)
+        self.y_i04 = np.delete(self.y_i04, zero_args)
+
+        self.plot(fig, ax)
+
     def curve_fit_modes(self, mode="median", fig=None, ax=None):
         x_i05 = np.arange(min(self.i05), max(self.i05), 1)
         if len(x_i05) < 1:

@@ -155,11 +155,27 @@ def plot_windspeed_eye():
     ax.set_ylabel("Past 24 hours change in wind speed (kts)")
     ax.set_xlabel("Eye glaciation temperature (C)")
 
+def plot_windspeed_avg_ri():
+    fig, ax = plt.subplots()
+    ax.scatter(ri_df["DIFF_EYE_EXP_MEAN"], ri_df["DELTA_SPEED_-24HR"])
+    print(f"DIFF:{sps.pearsonr(ri_df['DIFF_EYE_EXP_MEAN'], ri_df['DELTA_SPEED_-24HR'])}")
+    ax.set_ylabel("Past 24 hours change in wind speed (kts)")
+    ax.set_xlabel("Mean difference in glaciation temperature (C)")
+
+
+def plot_windspeed_eye_ri():
+    fig, ax = plt.subplots()
+    ax.scatter(ri_df["EYE"], ri_df["DELTA_SPEED_-24HR"])
+    print(f"EYE:{sps.pearsonr(ri_df['EYE'], ri_df['DELTA_SPEED_-24HR'])}")
+    ax.set_ylabel("Past 24 hours change in wind speed (kts)")
+    ax.set_xlabel("Eye glaciation temperature (C)")
 
 # plot_external_distribution()
 # plot_distribution_of_temp_total(50)
 # plot_windspeed_avg()
 # plot_windspeed_eye()
 # plt.show()
-gt_histogram(15)
+# gt_histogram(15)
+plot_windspeed_avg()
+plot_windspeed_eye()
 plt.show()

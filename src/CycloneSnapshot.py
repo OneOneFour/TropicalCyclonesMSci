@@ -469,6 +469,17 @@ class SnapshotGrid:
                 self.vals[k] = v
 
     @property
+    def get_total_flat_i4_i5(self):
+        i5 = [snap.celcius(snap.flat(snap.I05)) for row in self.grid for snap in row]
+        i4 = [snap.flat(snap.I04) for row in self.grid for snap in row]
+        return i4, i5
+
+    def plot_composite(self):
+        gt_fit = GTFit(*self.get_total_flat_i4_i5,i01_flat=None)
+        fig,ax = plt.subplots()
+        gt_fit.
+
+    @property
     def corners(self) -> List[CycloneSnapshot]:
         return [self.grid[0][0], self.grid[0][-1], self.grid[-1][0], self.grid[-1][-1]]
 

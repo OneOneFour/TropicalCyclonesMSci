@@ -7,7 +7,7 @@ import pandas as pd
 import requests
 
 WEBSERVER_QUERY_URL = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
-
+FILE_LOAD_LIMIT = os.environ.get("FILE_LOAD_LIMIT", 6)
 SEARCH_FOR_FILES = "/searchForFiles"
 GET_FILE_URLS = "/getFileUrls"
 MODIS_DOWNLOAD_URL = "http://www.sp.ph.ic.ac.uk/~erg10/safe/subset"
@@ -62,7 +62,7 @@ def download_files_from_server(root_dir, file_urls, ignore_errors=False, include
             if ignore_errors:
                 continue
             else:
-                raise ConnectionError()
+                raise ConnectionError(f"Download failed with code:{download.statu_code}")
         if not os.path.isfile(file):
             raise ConnectionError(
                 f"File {file_urls[i]} could not be downloaded to {file}. Please check your internet connection and try again!")
@@ -146,9 +146,9 @@ def get_data(root_dir, start_time, end_time, include_mod=False, north=90, south=
         global LAADS_CACHE
         if not (LAADS_CACHE["request"] == params).any():
             LAADS_CACHE = LAADS_CACHE.append({"request": params, "response": files,
-                                "local": [os.path.join(root_dir, os.path.split(f)[1]) for f in files]},
-                               ignore_index=True)
-        if len(files) > 8:
+                                              "local": [os.path.join(root_dir, os.path.split(f)[1]) for f in files]},
+                                             ignore_index=True)
+        if len(files) > FILE_LOAD_LIMIT:
             raise RuntimeError("Too many files loaded to process efficiently")
     except ConnectionError as e:
         if (LAADS_CACHE["request"] == params).any():
