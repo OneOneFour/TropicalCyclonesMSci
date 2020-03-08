@@ -149,23 +149,25 @@ class GTFit:
             return
         if self.x_i05 is None:
             x = np.linspace(min(self.i05), max(self.i05))
-            ax.scatter(self.i04, self.i05, s=0.1)
+            ax.scatter(self.i04, self.i05, s=10, label="Fitted Points")
 
         else:
             x = np.linspace(min(self.x_i05), max(self.x_i05))
-            ax.scatter(self.y_i04, self.x_i05, s=0.1)
+            ax.scatter(self.y_i04, self.x_i05, s=10, label="Fitted Points")
 
         if func:
-            y = [func(x_i, *params) for x_i in x]
-            ax.plot(y, x, "y", label="Curve fit")
-        ax.axhline(-38, lw=1, color="g")  # homogenous ice freezing temperature:
-        if self.gt:
-            if min(x) < self.gt < max(x):
-                ax.axhline(self.gt, lw=1, color="r")
+            ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Line of Best Fit")
+            ax.legend()
+
+        ax.axhline(self.gt)
+        ax.axhline(self.gt + self.gt_err, c='b', linestyle='--')
+        ax.axhline(self.gt - self.gt_err, c='b', linestyle='--')
+        ax.axhline(-38)
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Top Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
+        plt.legend()
 
     def curve_fit_fraction_mean(self, low=0, high=1, fig=None, ax=None):
         """
