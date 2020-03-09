@@ -423,6 +423,23 @@ class CycloneSnapshot:
             if plot and not show:
                 plt.close(fig)
 
+    def gt_piece_percentile_multiple(self, percentiles=None, plot=True, save_fig=None, show=True, overlap=None):
+        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
+        if overlap:
+            if self.check_overlap(overlap):
+                raise ValueError("Overlap with eye region")
+        if plot:
+            fig, ax = plt.subplots(1, 2, figsize=(9, 6))
+            self.img_plot(fig, ax[1])
+            percentile_list = gt_fitter.piecewise_percentile_multiple(percentiles, fig, ax[0])
+            if save_fig:
+                plt.savefig(save_fig)
+            if show:
+                plt.show()
+        else:
+            percentile_list = gt_fitter.piecewise_percentile_multiple(percentiles)
+        return percentile_list
+
     def unmask_array(self):
         if np.isnan(self.__I04).any():
             self.I04_mask = npma.masked_invalid(self.__I04)

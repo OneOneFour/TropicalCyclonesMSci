@@ -37,8 +37,6 @@ class GTFit:
         self.i05 = i05_flat
         self.i01 = i01_flat
         self.gt = None
-        self.x_i05 = None
-        self.y_i04 = None
 
     def bin_data(self, per_bin_func=lambda x, a: x, bin_width=1, bin_func_args=None, delete_zeros=True,
                  custom_range=None):
@@ -61,89 +59,72 @@ class GTFit:
             y_i04 = np.delete(y_i04, zero_args)
         return x_i05, y_i04
 
-    def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
-        self.x_i05 = self.i05
-        self.y_i04 = self.i04
+    def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise, setup_axis=True):
+        x_i05 = self.i05
+        y_i04 = self.i04
         if len(self.i05) < 50 or len(self.i04) < 50:
             raise ValueError("Problem underconstrained.")
         if not self.i01 is None:
-            params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
+            params, cov = sp.curve_fit(func, x_i05, y_i04,
                                        p0=(HOMOGENEOUS_FREEZING_TEMP, 280, 1, 1),
                                        sigma=(100 / (self.i01 ** 2)))
         else:
-            params, cov = sp.curve_fit(func, self.x_i05, self.y_i04,
+            params, cov = sp.curve_fit(func, x_i05, y_i04,
                                        p0=(HOMOGENEOUS_FREEZING_TEMP, 280, 1, 1))
-        r2 = 1 - (np.sum((self.y_i04 - func(self.x_i05, *params)) ** 2)) / np.sum((self.y_i04 - self.y_i04.mean()) ** 2)
+        r2 = 1 - (np.sum((y_i04 - func(x_i05, *params)) ** 2)) / np.sum((y_i04 - y_i04.mean()) ** 2)
         gt_err = np.sqrt(np.diag(cov))[0]
-        self.gt = params[0]
+        gt = params[0]
         if fig and ax:
-            self.plot(fig, ax, func=func, params=params)
-        i4 = func(self.gt, *params)
-        i4_err_appx = abs(gt_err * (i4 / self.gt))
-        return GT(self.gt, gt_err), I4(i4, i4_err_appx), r2
+            self.plot(y_i04, x_i05, fig, ax, func=func, params=params, setup_axis=setup_axis)
+        i4 = func(gt, *params)
+        i4_err_appx = abs(gt_err * (i4 / gt))
+        return GT(gt, gt_err), I4(i4, i4_err_appx), r2
 
-    def piecewise_percentile(self, percentile=50, fig=None, ax=None):
-        if len(self.i05) < 1:
-            raise ValueError("I5 data is empty. This could be due to masking or a bad input")
-        self.x_i05, self.y_i04 = self.bin_data(per_bin_func=np.percentile, bin_width=1, bin_func_args=(percentile,))
-
-        params, cov = sp.curve_fit(simple_piecewise, self.x_i05, self.y_i04, absolute_sigma=True,
-                                   p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
-
-        err = np.sqrt(np.diag(cov))
-        self.gt_err = err[0]
-        self.gt = params[0]
-        r2 = 1 - (np.sum((self.y_i04 - simple_piecewise(self.x_i05, *params)) ** 2)) / np.sum(
-            (self.y_i04 - self.y_i04.mean()) ** 2)
-        if fig and ax:
-            self.plot(fig, ax, func=simple_piecewise, params=params)  #
-        i4 = simple_piecewise(self.gt, *params)
-        i4_err_appx = abs(self.gt_err * (i4 / self.gt))
-
-        return GT(self.gt, self.gt_err), I4(i4, i4_err_appx), r2
-
-    def plot(self, fig, ax, func=None, params=None):
-        if fig is None or ax is None:
-            return
-        if self.x_i05 is None:
-            x = np.linspace(min(self.i05), max(self.i05))
-            ax.scatter(self.i04, self.i05, s=1, label="Fitted Points")
-
-        else:
-            x = np.linspace(min(self.x_i05), max(self.x_i05))
-            ax.scatter(self.y_i04, self.x_i05, s=10, label="Fitted Points")
-
-        if func:
-            ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Line of Best Fit")
-            ax.legend()
-
-        ax.axhline(self.gt, label=f"Glaciation Temperature:{self.gt}±{self.gt_err}")
-        ax.axhline(self.gt + self.gt_err, c='b', linestyle='--')
-        ax.axhline(self.gt - self.gt_err, c='b', linestyle='--')
-        ax.axhline(-38,label="Homogeneous freezing temperature")
+    def piecewise_percentile_multiple(self, percentiles=None, fig=None, ax=None):
+        self.plot(self.i04, self.i05, fig, ax, s=0.1, c='b')
+        rtnLst = []
+        for p in percentiles:
+            rtnLst.append(self.piecewise_percentile(percentile=p, fig=fig, ax=ax, setup_axis=False))
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
         ax.legend()
 
-    def gt_via_minimum(self, fig=None, ax=None):
-        min_arg = np.argmin(self.i04)
-        self.gt = self.i05[min_arg]
-        self.x_i05 = self.i05
-        self.y_i04 = self.i04
-        self.plot(fig, ax)
-        return self.gt
+        return rtnLst
 
-    def gt_via_minimum_percentile(self, percentile, fig=None, ax=None):
-        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        self.y_i04 = [0] * len(self.x_i05)
-        if len(self.x_i05) < 1:
+    def piecewise_percentile(self, percentile=50, fig=None, ax=None, setup_axis=True):
+        if len(self.i05) < 1:
+            raise ValueError("I5 data is empty. This could be due to masking or a bad input")
+        x_i05, y_i04 = self.bin_data(per_bin_func=np.percentile, bin_width=1, bin_func_args=(percentile,))
+
+        params, cov = sp.curve_fit(simple_piecewise, x_i05, y_i04, absolute_sigma=True,
+                                   p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
+
+        err = np.sqrt(np.diag(cov))
+        gt_err = err[0]
+        gt = params[0]
+        r2 = 1 - (np.sum((y_i04 - simple_piecewise(x_i05, *params)) ** 2)) / np.sum(
+            (y_i04 - y_i04.mean()) ** 2)
+        if fig and ax:
+            self.plot(y_i04, x_i05, fig, ax ,gt,gt_err,func=simple_piecewise, params=params, setup_axis=setup_axis, s=10, c='r')
+        i4 = simple_piecewise(gt, *params)
+        i4_err_appx = abs(gt_err * (i4 / gt))
+
+        return GT(gt, gt_err), I4(i4, i4_err_appx), r2
+
+    def plot(self, x, y, fig, ax, gt=None, gt_err=None, func=None, params=None, setup_axis=True, s=1.0, c='b'):
+        if fig is None or ax is None:
             return
-        for i, x in enumerate(self.x_i05):
-            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
-            self.y_i04[i] = np.percentile(vals, percentile)
-        min_arg = np.argmin(self.y_i04)
-        self.gt = self.x_i05[min_arg]
-        self.plot(fig, ax)
-        return self.gt
+        ax.scatter(x, y, s=s, c=c)
+
+        if func:
+            x_samples = np.linspace(min(y), max(y), 100)
+            ax.plot([func(x_i, *params) for x_i in x_samples], x_samples, "y")
+            ax.legend()
+        if gt:
+            ax.axhline(gt, label=f"Glaciation Temperature:{round(gt, 2)}±{round(gt_err, 2)}")
+
+
+        if setup_axis:
+            ax.axhline(-38,c='g', label="Homogeneous freezing temperature")
