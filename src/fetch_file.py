@@ -62,7 +62,7 @@ def download_files_from_server(root_dir, file_urls, ignore_errors=False, include
             if ignore_errors:
                 continue
             else:
-                raise ConnectionError(f"Download failed with code:{download.statu_code}")
+                raise ConnectionError(f"Download failed with code:{download.status_code}")
         if not os.path.isfile(file):
             raise ConnectionError(
                 f"File {file_urls[i]} could not be downloaded to {file}. Please check your internet connection and try again!")

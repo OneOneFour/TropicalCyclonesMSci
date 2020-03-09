@@ -388,6 +388,11 @@ class CycloneSnapshot:
             else:
                 raise e
 
+    def get_binned_i4(self, percentile, delete_zeros=True, custom_range=None):
+        gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
+        return gt_fitter.bin_data(np.percentile, bin_width=1, bin_func_args=(percentile,), custom_range=custom_range,
+                                  delete_zeros=delete_zeros)[1]
+
     def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-45, save_fig=None, show=True,
                             overlap=None, returnnan=False):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
@@ -415,7 +420,7 @@ class CycloneSnapshot:
             else:
                 raise e
         finally:
-            if not show:
+            if plot and not show:
                 plt.close(fig)
 
     def unmask_array(self):
@@ -455,12 +460,12 @@ class CycloneSnapshot:
 
 
 class SnapshotGrid:
-    def __init__(self, gd: List[List[CycloneSnapshot]], imageInstance=None):
+    def __init__(self, gd: List[List[CycloneSnapshot]], image_instance=None):
         self.grid = gd
         self.height = len(gd)
         self.width = len(gd[0])
-        self.imageInstance = imageInstance
-        if imageInstance:
+        self.imageInstance = image_instance
+        if image_instance:
             self.vals = {}
             for k, v in self.imageInstance.metadata.items():
                 if k == "ISO_TIME":
@@ -468,24 +473,45 @@ class SnapshotGrid:
                     continue
                 self.vals[k] = v
 
-    @property
-    def get_total_flat_i4_i5(self):
-        i5 = [snap.celcius(snap.flat(snap.I05)) for row in self.grid for snap in row]
-        i4 = [snap.flat(snap.I04) for row in self.grid for snap in row]
+    def get_binned_i4_i5_avg(self):
+        i5 = np.arange(-45, 0, 1)
+        i4 = np.array([0] * len(i5))
+        for row in self.grid:
+            for i, snap in enumerate(row):
+                if snap.is_valid:
+                    for j, i4_i in enumerate(snap.get_binned_i4(5, custom_range=(-45, 0), delete_zeros=False)):
+                        i4[j] = (i4[j] * i + i4_i) / (i + 1)
+        zero_args = np.where(i4 == 0)
+        i5 = np.delete(i5, zero_args)
+        i4 = np.delete(i4, zero_args)
         return i4, i5
 
-    def plot_composite(self):
-        gt_fit = GTFit(*self.get_total_flat_i4_i5,i01_flat=None)
-        fig,ax = plt.subplots()
-        gt_fit.
+    def plot_composite(self, show=True, save_dir=None):
+        fig, ax = plt.subplots()
+        i4, i5 = self.get_binned_i4_i5_avg()
+        ax.plot(i4, i5, label="Composite fit")
+        ax.invert_yaxis()
+        ax.set_ylabel("Cloud tempe"
+                      "rature (C)")
+        ax.set_xlabel("I4 band reflectance (K)")
+        ax.invert_xaxis()
+        ax.legend()
+        if save_dir:
+            plt.savefig(save_dir)
+        if show:
+            plt.show()
+        else:
+            plt.close(fig)
 
     @property
     def corners(self) -> List[CycloneSnapshot]:
         return [self.grid[0][0], self.grid[0][-1], self.grid[-1][0], self.grid[-1][-1]]
 
-    def set_eye_gt(self, gt, gt_err):
+    def set_eye_gt(self, gt, gt_err, i4, i4_err):
         self.vals["EYE"] = gt
         self.vals["EYE_ERR"] = gt_err
+        self.vals["EYE_I4"] = i4
+        self.vals["EYE_I4_ERR"] = i4_err
 
     def plot_all(self, band):
         fig, axs = plt.subplots(self.width, self.height)

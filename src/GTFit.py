@@ -40,21 +40,26 @@ class GTFit:
         self.x_i05 = None
         self.y_i04 = None
 
-    # def curve_fit_funcs(self, fitting_function=cubic):
-    #     (a, b, c, d), cov = sp.curve_fit(fitting_function, self.i05, self.i04, absolute_sigma=True)
-    #
-    #     a_err, b_err, c_err, d_err = np.sqrt(np.diag(cov))
-    #
-    #     gt_ve = (-b + np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
-    #     # gt = -params[1] / (2 * params[0])
-    #     # gt_err = np.sqrt((perr[1] / (2 * params[0])) ** 2 + (perr[0] * params[1] / (2 * params[0] ** 2)) ** 2)
-    #     if np.iscomplex(gt_ve) or (min(self.i05) > gt_ve > max(self.i05)):
-    #         return
-    #
-    #     curve_fit_err = np.sqrt(((b_err * c) / (2 * b * b)) ** 2 + (c_err / 2 * b) ** 2)
-    #     gt_err = curve_fit_err
-    #     self.gt = [gt_ve, gt_err]
-    #     return gt_ve, gt_err, (a, b, c, d)
+    def bin_data(self, per_bin_func=lambda x, a: x, bin_width=1, bin_func_args=None, delete_zeros=True,
+                 custom_range=None):
+        if custom_range:
+            assert len(custom_range) == 2
+            x_i05 = np.arange(custom_range[0], custom_range[1], bin_width)
+        else:
+            x_i05 = np.arange(min(self.i05), max(self.i05), bin_width)
+        y_i04 = np.array([0] * len(x_i05))
+        if len(x_i05) < 1:
+            raise ValueError("I4 data is empty. This could be due to masking or a bad input")
+        for i, x in enumerate(x_i05):
+            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
+            if len(vals) == 0:
+                continue
+            y_i04[i] = per_bin_func(vals, *bin_func_args)
+        if delete_zeros:
+            zero_args = np.where(y_i04 == 0)
+            x_i05 = np.delete(x_i05, zero_args)
+            y_i04 = np.delete(y_i04, zero_args)
+        return x_i05, y_i04
 
     def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise):
         self.x_i05 = self.i05
@@ -80,21 +85,7 @@ class GTFit:
     def piecewise_percentile(self, percentile=50, fig=None, ax=None):
         if len(self.i05) < 1:
             raise ValueError("I5 data is empty. This could be due to masking or a bad input")
-        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        self.y_i04 = np.array([0] * len(self.x_i05))
-
-        if len(self.x_i05) < 1:
-            raise ValueError("I4 data is empty. This could be due to masking or a bad input")
-        for i, x in enumerate(self.x_i05):
-            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
-            if len(vals) == 0:
-                continue
-            self.y_i04[i] = np.percentile(vals, percentile)
-        zero_args = np.where(self.y_i04 == 0)
-        self.x_i05 = np.delete(self.x_i05, zero_args)
-        self.y_i04 = np.delete(self.y_i04, zero_args)
-        if len(self.x_i05) < 4:
-            raise ValueError("Problem is under-constrained, less than 4 free parameters")
+        self.x_i05, self.y_i04 = self.bin_data(per_bin_func=np.percentile, bin_width=1, bin_func_args=(percentile,))
 
         params, cov = sp.curve_fit(simple_piecewise, self.x_i05, self.y_i04, absolute_sigma=True,
                                    p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
@@ -165,9 +156,9 @@ class GTFit:
         ax.axhline(-38)
         ax.invert_yaxis()
         ax.invert_xaxis()
-        ax.set_ylabel("Cloud Top Temperature (C)")
+        ax.set_ylabel("Cloud Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
-        plt.legend()
+        ax.legend()
 
     def curve_fit_fraction_mean(self, low=0, high=1, fig=None, ax=None):
         """
@@ -212,19 +203,7 @@ class GTFit:
     # TODO: Move binning into standard function
     # TODO: Using common x,y is kinda bad
     def plot_binned(self, fig, ax, bin_width=1):
-        self.x_i05 = np.arange(min(self.i05), max(self.i05), bin_width)
-        self.y_i04 = np.array([0] * len(self.x_i05))
-
-        if len(self.i04) < 1:
-            raise ValueError("I4 data is empty. This might be due to masking")
-        for i, x in enumerate(self.x_i05):
-            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.x_i05 < (x + 0.5)))]
-            if len(vals) == 0:
-                continue
-            self.y_i04[i] = np.nanmean(vals)
-        zero_args = np.where(self.y_i04 == 0)
-        self.x_i05 = np.delete(self.x_i05, zero_args)
-        self.y_i04 = np.delete(self.y_i04, zero_args)
+        self.x_i05, self.y_i04 = self.bin_data(per_bin_func=np.mean, )
 
         self.plot(fig, ax)
 

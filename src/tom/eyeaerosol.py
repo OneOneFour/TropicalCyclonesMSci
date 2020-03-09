@@ -2,24 +2,30 @@ import glob
 from datetime import timedelta
 
 import matplotlib.pyplot as plt
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from AerosolImage import AerosolImageMODIS
 from BestTrack import best_track_df
 from CycloneSnapshot import CycloneSnapshot
+
 plt.ioff()
-files = glob.glob("C:\\Users\\Robert\\PycharmProjects\\TropicalCyclonesMSci\\tom_pickles\\**")
+files = glob.glob("D:\eye_pickles\\**")
 processed_df = pd.DataFrame()
 print(len(files))
 for file in files:
     cs = CycloneSnapshot.load(file)
     cs.metadata = cs.meta_data
     cs.mask_array_I05(LOW=220, HIGH=270)
-    cs.mask_using_I01_percentile(30)
+    # cs.mask_using_I01_percentile(30)
     # cs.mask_thin_cirrus(50)
     try:
-        gt, i4, r2 = cs.gt_piece_percentile(plot=True, show=False,
-                                        save_fig=f"{cs.metadata['NAME']}_{cs.metadata['ISO_TIME'].strftime('%Y%m%d%H')}_IMAGE.png")
+        gt, i4, r2 = cs.gt_piece_percentile(5, plot=True, show=False,
+                                            save_fig=f"{cs.metadata['NAME']}_{cs.metadata['ISO_TIME'].strftime('%Y%m%d%H')}_5th_IMAGE.png")
+        gt_m, i4_m, r2_m = cs.gt_piece_percentile(50, plot=True, show=False,
+                                                  save_fig=f"{cs.metadata['NAME']}_{cs.metadata['ISO_TIME'].strftime('%Y%m%d%H')}_median_IMAGE.png")
+        gt_nf, i4_nf, r2_nf = cs.gt_piece_percentile(95, plot=True, show=False,
+                                                     save_fig=f"{cs.metadata['NAME']}_{cs.metadata['ISO_TIME'].strftime('%Y%m%d%H')}_95th_IMAGE.png")
     except Exception:
         continue
     # fetch future aerosol
@@ -38,8 +44,6 @@ for file in files:
         aerosol = modis.get_mean_in_region(LAT_PAST, LON_PAST, 6, 6)
     except FileNotFoundError:
         aerosol = np.nan
-
-
 
     processed_df = processed_df.append(
         {"gt": gt.value, "i4": i4.value, "r2": r2, "aod": aerosol, "basin": point_past["BASIN"].item()},

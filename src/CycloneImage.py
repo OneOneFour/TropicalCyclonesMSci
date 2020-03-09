@@ -314,13 +314,14 @@ class CycloneImage:
                                                   save_fig=os.path.join(self.get_dir(), "eye_plot_all.png"),
                                                   show=False)
 
-        gd.set_eye_gt(gt.value, gt.error)
+        gd.set_eye_gt(gt.value, gt.error, i4.value, i4.error)
         gd.glaciation_temperature_grid(show=False, save=True)
         gd.histogram_from_eye(show=False, save=True)
         gd.vals["24HR_AOD"] = self.get_future_aerosol()
         print(f"Eye Glaciation temperature:{gt.value}pm{gt.error} with a goodness of fit of {r2}")
         gd.gt_quadrant_distribution(show=False, save=True)
         gd.radial_distribution(show=False, save=True)
+        gd.plot_composite()
         gd.save()
         self.save()
         return gd.vals
