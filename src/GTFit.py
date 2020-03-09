@@ -102,45 +102,12 @@ class GTFit:
 
         return GT(self.gt, self.gt_err), I4(i4, i4_err_appx), r2
 
-    def curve_fit_percentile(self, percentile=50, fig=None, ax=None):
-        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        self.y_i04 = [0] * len(self.x_i05)
-        if len(self.x_i05) < 1:
-            return
-        for i, x in enumerate(self.x_i05):
-            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
-            if len(vals) == 0:
-                continue
-            self.y_i04[i] = np.percentile(vals, percentile)
-        zero_args = np.where(self.y_i04 == 0)
-        self.x_i05 = np.delete(self.x_i05, zero_args)
-        self.y_i04 = np.delete(self.y_i04, zero_args)
-
-        params, cov = sp.curve_fit(cubic, self.x_i05, self.y_i04, absolute_sigma=True)
-        perr = np.sqrt(np.diag(cov))
-
-        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
-        if np.iscomplex(gt_ve) or min(self.x_i05) > gt_ve > max(self.x_i05):
-            return
-        # satellite_data_error = ??
-        curve_fit_err = np.sqrt(
-            (d_gt_d_a(*params[:-1]) * perr[0]) ** 2 +
-            (d_gt_d_b(*params[:-1]) * perr[1]) ** 2 +
-            (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
-        )
-        gt_err = curve_fit_err
-        self.gt = gt_ve
-
-        if fig and ax:
-            self.plot(fig, ax, func=cubic, params=params)
-        return gt_ve, gt_err, params
-
     def plot(self, fig, ax, func=None, params=None):
         if fig is None or ax is None:
             return
         if self.x_i05 is None:
             x = np.linspace(min(self.i05), max(self.i05))
-            ax.scatter(self.i04, self.i05, s=10, label="Fitted Points")
+            ax.scatter(self.i04, self.i05, s=1, label="Fitted Points")
 
         else:
             x = np.linspace(min(self.x_i05), max(self.x_i05))
@@ -150,132 +117,15 @@ class GTFit:
             ax.plot([func(x_i, *params) for x_i in x], x, "y", label="Line of Best Fit")
             ax.legend()
 
-        ax.axhline(self.gt)
+        ax.axhline(self.gt, label=f"Glaciation Temperature:{self.gt}±{self.gt_err}")
         ax.axhline(self.gt + self.gt_err, c='b', linestyle='--')
         ax.axhline(self.gt - self.gt_err, c='b', linestyle='--')
-        ax.axhline(-38)
+        ax.axhline(-38,label="Homogeneous freezing temperature")
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
         ax.legend()
-
-    def curve_fit_fraction_mean(self, low=0, high=1, fig=None, ax=None):
-        """
-
-        :param low: nth percentile to start from
-        :param high: nth percentile to go to
-        :return: Glaciation temperature associated error and fitting parameters
-        """
-        self.x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        self.y_i04 = [0] * len(self.x_i05)
-        if len(self.x_i05) < 1:
-            return
-        num_vals_bin = []
-        point_errs = np.array([0] * len(self.x_i05))
-        for i, x in enumerate(self.x_i05):
-            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))].flatten()
-            self.y_i04[i] = vals[int(low * len(vals)):int(high * len(vals))].mean()
-            point_errs[i] = vals[int(low * len(vals)):int(high * len(vals))].std()
-
-        zero_args = np.where(self.y_i04 == 0)
-        self.x_i05 = np.delete(self.x_i05, zero_args)
-        self.y_i04 = np.delete(self.y_i04, zero_args)
-        point_errs = np.delete(point_errs, zero_args)
-
-        params, cov = sp.curve_fit(cubic, self.x_i05, self.y_i04, absolute_sigma=True)
-        perr = np.sqrt(np.diag(cov))
-
-        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
-        if np.iscomplex(gt_ve) or min(self.x_i05) > gt_ve > max(self.x_i05):
-            return
-        # satellite_data_error = ??
-        curve_fit_err = np.sqrt(
-            (d_gt_d_a(*params[:-1]) * perr[0]) ** 2 +
-            (d_gt_d_b(*params[:-1]) * perr[1]) ** 2 +
-            (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
-        )
-        gt_err = curve_fit_err
-        self.gt = gt_ve
-        self.plot(fig, ax, func=cubic, params=params)
-        return gt_ve, gt_err, params
-
-    # TODO: Move binning into standard function
-    # TODO: Using common x,y is kinda bad
-    def plot_binned(self, fig, ax, bin_width=1):
-        self.x_i05, self.y_i04 = self.bin_data(per_bin_func=np.mean, )
-
-        self.plot(fig, ax)
-
-    def curve_fit_modes(self, mode="median", fig=None, ax=None):
-        x_i05 = np.arange(min(self.i05), max(self.i05), 1)
-        if len(x_i05) < 1:
-            return
-        y_i04 = np.array([0] * len(x_i05))
-        num_vals_bins = []
-        point_errs = np.array([0] * len(x_i05))
-        for i, x in enumerate(x_i05):
-            vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
-            if len(vals) < 1:
-                continue
-            if mode == "mean":
-                y_i04[i] = np.mean(vals)
-                mean_std = np.std(vals) / np.sqrt(len(vals))
-                point_errs[i] = mean_std
-            elif mode == "min":
-                y_i04[i] = min(vals)
-                point_errs[i] = 0.5 ** 2
-            elif mode == "median":
-                y_i04[i] = np.median(vals)
-                median_std = 1.253 * np.std(vals) / np.sqrt(len(vals))
-                point_errs[i] = median_std ** 2
-            elif mode == "eyewall":
-                vals_5_min = []
-                vals_5_min_i05val = []
-                if len(vals) < 1:
-                    continue
-                if x > 235:  # Takes minimum values lower than theoretical min gt and v.v.
-                    for j in range(int(np.ceil(len(vals) / 20))):
-                        if len(vals) == 0:  # Not all values of i05 will have 5 i04 values
-                            break
-                        vals_5_min.append(min(vals))
-                else:
-                    percent_range = int(np.ceil(len(vals) / 20))
-                    for j in range(percent_range):
-                        if len(vals) == 0:  # Not all values of i05 will have 5 i04 values
-                            break
-                        vals.sort()
-                        idx = int((235 - x) * 0.025 * len(vals) + j)
-                        vals_5_min.append(vals[idx])
-
-                y_i04[i] = np.median(vals_5_min)
-                point_errs[i] = 0.5 ** 2  # TODO: Fix errors
-
-            num_vals_bins.append(len(vals))  # list of number of I04 values that were in each I05 increment (for errors)
-
-        zero_args = np.where(y_i04 == 0)
-        x_i05 = np.delete(x_i05, zero_args)
-        y_i04 = np.delete(y_i04, zero_args)
-        point_errs = np.delete(point_errs, zero_args)
-
-        params, cov = sp.curve_fit(cubic, x_i05, y_i04, absolute_sigma=True)
-        perr = np.sqrt(np.diag(cov))
-
-        xvalues = np.arange(min(x_i05), max(x_i05), 1)
-        yvalues = cubic(xvalues, *params)
-        gt_ve = (-params[1] + np.sqrt(params[1] ** 2 - 3 * params[0] * params[2])) / (3 * params[0])
-        if np.iscomplex(gt_ve) or min(x_i05) > gt_ve > max(x_i05):
-            return
-        # satellite_data_error = ??
-        curve_fit_err = np.sqrt(
-            (d_gt_d_a(*params[:-1]) * perr[0]) ** 2 +
-            (d_gt_d_b(*params[:-1]) * perr[1]) ** 2 +
-            (d_gt_d_c(*params[:-1]) * perr[2]) ** 2
-        )
-        gt_err = curve_fit_err
-        self.gt = gt_ve
-        self.plot(fig, ax, func=cubic, params=params)
-        return gt_ve, gt_err, params
 
     def gt_via_minimum(self, fig=None, ax=None):
         min_arg = np.argmin(self.i04)
