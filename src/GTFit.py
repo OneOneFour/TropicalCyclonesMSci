@@ -14,6 +14,7 @@ d_gt_d_b = lambda a, b, c: (-1 + b / np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
 d_gt_d_c = lambda a, b, c: -1 / (2 * np.sqrt(b ** 2 - 3 * a * c))
 
 HOMOGENEOUS_FREEZING_TEMP = -38
+COLOR_LIST = ["firebrick", "gold", "darkorange"]
 
 
 def piecewise_step(t, t_g, t_m, t_b, r_e_0, a, r_e_g):
@@ -83,8 +84,8 @@ class GTFit:
     def piecewise_percentile_multiple(self, percentiles=None, fig=None, ax=None):
         self.plot(self.i04, self.i05, fig, ax, s=0.1, c='b')
         rtnLst = []
-        for p in percentiles:
-            rtnLst.append(self.piecewise_percentile(percentile=p, fig=fig, ax=ax, setup_axis=False))
+        for i, p in enumerate(percentiles):
+            rtnLst.append(self.piecewise_percentile(percentile=p, fig=fig, ax=ax, setup_axis=False, c=COLOR_LIST[i]))
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Temperature (C)")
@@ -93,7 +94,7 @@ class GTFit:
 
         return rtnLst
 
-    def piecewise_percentile(self, percentile=50, fig=None, ax=None, setup_axis=True):
+    def piecewise_percentile(self, percentile=50, fig=None, ax=None, setup_axis=True, c='r'):
         if len(self.i05) < 1:
             raise ValueError("I5 data is empty. This could be due to masking or a bad input")
         x_i05, y_i04 = self.bin_data(per_bin_func=np.percentile, bin_width=1, bin_func_args=(percentile,))
@@ -107,13 +108,15 @@ class GTFit:
         r2 = 1 - (np.sum((y_i04 - simple_piecewise(x_i05, *params)) ** 2)) / np.sum(
             (y_i04 - y_i04.mean()) ** 2)
         if fig and ax:
-            self.plot(y_i04, x_i05, fig, ax ,gt,gt_err,func=simple_piecewise, params=params, setup_axis=setup_axis, s=10, c='r')
+            self.plot(y_i04, x_i05, fig, ax, gt, gt_err, func=simple_piecewise, params=params, setup_axis=setup_axis,
+                      s=10, c=c,label=str(percentile)+"th")
         i4 = simple_piecewise(gt, *params)
         i4_err_appx = abs(gt_err * (i4 / gt))
 
         return GT(gt, gt_err), I4(i4, i4_err_appx), r2
 
-    def plot(self, x, y, fig, ax, gt=None, gt_err=None, func=None, params=None, setup_axis=True, s=1.0, c='b'):
+    def plot(self, x, y, fig, ax, gt=None, gt_err=None, func=None, params=None, setup_axis=True, s=1.0, c='b',
+             label=None):
         if fig is None or ax is None:
             return
         ax.scatter(x, y, s=s, c=c)
@@ -123,8 +126,7 @@ class GTFit:
             ax.plot([func(x_i, *params) for x_i in x_samples], x_samples, "y")
             ax.legend()
         if gt:
-            ax.axhline(gt, label=f"Glaciation Temperature:{round(gt, 2)}±{round(gt_err, 2)}")
-
+            ax.axhline(gt, label=f"$T_{{g,{label}}}$:{round(gt, 1)}±{round(gt_err, 1)} C", c=c)
 
         if setup_axis:
-            ax.axhline(-38,c='g', label="Homogeneous freezing temperature")
+            ax.axhline(-38, c='g', label="$T_{g,homo}$")
