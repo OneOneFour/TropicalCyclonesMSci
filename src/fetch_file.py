@@ -7,7 +7,7 @@ import pandas as pd
 import requests
 
 WEBSERVER_QUERY_URL = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
-FILE_LOAD_LIMIT = os.environ.get("FILE_LOAD_LIMIT", 6)
+FILE_LOAD_LIMIT = os.environ.get("FILE_LOAD_LIMIT", 4)
 SEARCH_FOR_FILES = "/searchForFiles"
 GET_FILE_URLS = "/getFileUrls"
 MODIS_DOWNLOAD_URL = "http://www.sp.ph.ic.ac.uk/~erg10/safe/subset"

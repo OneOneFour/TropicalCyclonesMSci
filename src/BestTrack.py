@@ -1,7 +1,8 @@
 import ast
+import atexit
 import os
 from datetime import timedelta
-import atexit
+
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
@@ -148,6 +149,7 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
         if len(vals_series) >= max_len:
             break
         if index in NAUGHTY_LIST:
+            print(f"SKIPPING:{index}")
             continue
         start_point = dict_cy[index]
         if index + 1 not in dict_cy.keys():
@@ -169,7 +171,7 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
         try:
             cy = get_entire_cyclone(start_point, end_point, history=history, future=future)
 
-            if cy:
+            if cy and cy.is_eyewall_gt_good:
                 print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
                 if not (shading and cy.is_eyewall_shaded):
                     vals = per_cyclone(cy)

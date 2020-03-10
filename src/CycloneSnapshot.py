@@ -83,6 +83,15 @@ class CycloneSnapshot:
         return self.image_mean_azimuth < 180
 
     @property
+    def good_gt(self):
+        try:
+            self.gt_piece_percentile(plot=False)
+        except (ValueError, RuntimeError):
+            return False
+        else:
+            return True
+
+    @property
     def image_mean_azimuth(self):
         from CycloneImage import wrap
         return wrap(self.satellite_azimuth.mean())
@@ -388,10 +397,10 @@ class CycloneSnapshot:
             else:
                 raise e
 
-    def get_binned_i4(self, percentile, delete_zeros=True, custom_range=None):
+    def get_binned_i4_i5(self, percentile, delete_zeros=True, custom_range=None):
         gt_fitter = GTFit(self.flat(self.I04), self.celcius(self.flat(self.I05)))
         return gt_fitter.bin_data(np.percentile, bin_width=1, bin_func_args=(percentile,), custom_range=custom_range,
-                                  delete_zeros=delete_zeros)[1]
+                                  delete_zeros=delete_zeros)
 
     def gt_piece_percentile(self, percentile=5, plot=True, raise_up=0, raise_lower=-45, save_fig=None, show=True,
                             overlap=None, returnnan=False):
@@ -490,22 +499,33 @@ class SnapshotGrid:
                     continue
                 self.vals[k] = v
 
-    def get_binned_i4_i5_avg(self):
-        i5 = np.arange(-45, 0, 1)
-        i4 = np.array([0] * len(i5))
+    def add_bins(self, percentile=(5, 50, 95)):
+        for p in percentile:
+            self.vals[f"EYE_{p}_PERCENTILE_I5"], self.vals[
+                f"EYE_{p}_PERCENTILE_I4"] = self.imageInstance.eye.get_binned_i4_i5(p)
+            self.vals[f"EYE_{p}_PERCENTILE_I5"] = self.vals[f"EYE_{p}_PERCENTILE_I5"].tolist()
+            self.vals[f"EYE_{p}_PERCENTILE_I4"] = self.vals[f"EYE_{p}_PERCENTILE_I4"].tolist()
+            self.vals[f"EXTERNAL_{p}_PERCENTILE_I4"], self.vals[f"EXTERNAL_{p}_PERCENTILE_I5"] = self.get_binned_i4_i5(
+                p)
+
+    def get_binned_i4_i5(self, percentile):
+        i5 = list(range(-45, 0, 1))
+        i4 = [[] for i in range(len(i5))]
         for row in self.grid:
             for i, snap in enumerate(row):
-                if snap.is_valid:
-                    for j, i4_i in enumerate(snap.get_binned_i4(5, custom_range=(-45, 0), delete_zeros=False)):
-                        i4[j] = (i4[j] * i + i4_i) / (i + 1)
-        zero_args = np.where(i4 == 0)
-        i5 = np.delete(i5, zero_args)
-        i4 = np.delete(i4, zero_args)
+                if snap.good_gt:
+                    for j, i4_i in enumerate(
+                            snap.get_binned_i4_i5(percentile, custom_range=(-45, 0), delete_zeros=False)[1]):
+                        if i4_i != 0:
+                            i4[j].append(i4_i)
+        i5 = [k for k_i, k in enumerate(i5) if len(i4[k_i]) != 0]
+        i4 = [k for k in i4 if len(k) != 0]
+
         return i4, i5
 
     def plot_composite(self, show=True, save_dir=None):
         fig, ax = plt.subplots()
-        i4, i5 = self.get_binned_i4_i5_avg()
+        i4, i5 = self.get_binned_i4_i5()
         ax.plot(i4, i5, label="Composite fit")
         ax.invert_yaxis()
         ax.set_ylabel("Cloud tempe"
@@ -525,10 +545,10 @@ class SnapshotGrid:
         return [self.grid[0][0], self.grid[0][-1], self.grid[-1][0], self.grid[-1][-1]]
 
     def set_eye_gt(self, gt, gt_err, i4, i4_err):
-        self.vals["EYE"] = gt
-        self.vals["EYE_ERR"] = gt_err
-        self.vals["EYE_I4"] = i4
-        self.vals["EYE_I4_ERR"] = i4_err
+        self.vals["EYE"] = float(gt)
+        self.vals["EYE_ERR"] = float(gt_err)
+        self.vals["EYE_I4"] = float(i4)
+        self.vals["EYE_I4_ERR"] = float(i4_err)
 
     def plot_all(self, band):
         fig, axs = plt.subplots(self.width, self.height)
@@ -542,16 +562,21 @@ class SnapshotGrid:
             for snap in row:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
 
+    def __convert(self,a):
+        if isinstance(a,np.int32): return int(a)
+        elif isinstance(a,np.int64): return int(a)
+        raise TypeError
+
     def save(self):
         import json
         with open(os.path.join(self.imageInstance.get_dir(), "out.json"), "w") as f:
-            json.dump(self.vals, f)
+            json.dump(self.vals, f,default=self.__convert)
 
     def glaciation_temperature_grid(self, plot=True, show=True, save=False):
         gd = np.zeros((len(self.grid), len(self.grid[0]), 5))
         for i, row in enumerate(self.grid):
             for j, snap in enumerate(row):
-                gt, i4, r2 = snap.gt_piece_all(plot=False, overlap=self.imageInstance.eye, returnnan=True)
+                gt, i4, r2 = snap.gt_piece_percentile(plot=False, overlap=self.imageInstance.eye, returnnan=True)
                 gd[i, j] = np.array([gt.value, gt.error, i4.value, i4.error, r2])
 
         self.gt_grid, self.gt_err, self.i4_grid, self.i4_error, self.r2 = np.squeeze(np.split(gd, 5, 2))

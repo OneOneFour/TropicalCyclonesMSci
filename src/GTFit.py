@@ -77,7 +77,7 @@ class GTFit:
         gt = params[0]
         if fig and ax:
             self.plot(y_i04, x_i05, fig, ax, func=func, params=params, setup_axis=setup_axis)
-        i4 = func(gt, *params)
+        i4 = float(func(gt, *params))
         i4_err_appx = abs(gt_err * (i4 / gt))
         return GT(gt, gt_err), I4(i4, i4_err_appx), r2
 
@@ -98,7 +98,8 @@ class GTFit:
         if len(self.i05) < 1:
             raise ValueError("I5 data is empty. This could be due to masking or a bad input")
         x_i05, y_i04 = self.bin_data(per_bin_func=np.percentile, bin_width=1, bin_func_args=(percentile,))
-
+        if len(x_i05) < 4 or len(y_i04) <4:
+            raise ValueError("Problem underconstrained")
         params, cov = sp.curve_fit(simple_piecewise, x_i05, y_i04, absolute_sigma=True,
                                    p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
 
@@ -109,8 +110,8 @@ class GTFit:
             (y_i04 - y_i04.mean()) ** 2)
         if fig and ax:
             self.plot(y_i04, x_i05, fig, ax, gt, gt_err, func=simple_piecewise, params=params, setup_axis=setup_axis,
-                      s=10, c=c,label=str(percentile)+"th")
-        i4 = simple_piecewise(gt, *params)
+                      s=10, c=c, label=str(percentile) + "th")
+        i4 = float(simple_piecewise(gt, *params))
         i4_err_appx = abs(gt_err * (i4 / gt))
 
         return GT(gt, gt_err), I4(i4, i4_err_appx), r2

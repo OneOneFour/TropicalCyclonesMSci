@@ -213,7 +213,7 @@ class CycloneImage:
 
     def mask(self, instance: CycloneSnapshot):
         instance.mask_using_I01_percentile(30)  # 1 sigma
-        instance.mask_array_I05(HIGH=265, LOW=220)
+        instance.mask_array_I05(HIGH=270, LOW=220)
         # instance.mask_thin_cirrus(50)
 
     def save(self):
@@ -319,9 +319,7 @@ class CycloneImage:
         gd.histogram_from_eye(show=False, save=True)
         gd.vals["24HR_AOD"] = self.get_future_aerosol()
         print(f"Eye Glaciation temperature:{gt.value}pm{gt.error} with a goodness of fit of {r2}")
-        gd.gt_quadrant_distribution(show=False, save=True)
-        gd.radial_distribution(show=False, save=True)
-        gd.plot_composite()
+        gd.add_bins()
         gd.save()
         self.save()
         return gd.vals
