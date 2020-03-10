@@ -420,7 +420,9 @@ class CycloneSnapshot:
                     plt.show()
             else:
                 gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
-            if raise_up + gt.error * 2 < gt.value or gt.value + gt.error * 2 < raise_lower or r2 < 0.85:  # Sanity check
+
+            if raise_up + gt.error * 2 < gt.value or gt.value + gt.error * 2 < raise_lower or r2 < 0.85 or np.isinf(
+                    gt.error) or np.isnan(gt.error):  # Sanity check
                 raise ValueError(f"{gt.value} is outside predefined range. R squared is {r2}")
             return gt, i4, r2
         except (ValueError, RuntimeError) as e:
@@ -562,15 +564,17 @@ class SnapshotGrid:
             for snap in row:
                 snap.mask_array_I04(LOW=LOW, HIGH=HIGH)
 
-    def __convert(self,a):
-        if isinstance(a,np.int32): return int(a)
-        elif isinstance(a,np.int64): return int(a)
+    def __convert(self, a):
+        if isinstance(a, np.int32):
+            return int(a)
+        elif isinstance(a, np.int64):
+            return int(a)
         raise TypeError
 
     def save(self):
         import json
         with open(os.path.join(self.imageInstance.get_dir(), "out.json"), "w") as f:
-            json.dump(self.vals, f,default=self.__convert)
+            json.dump(self.vals, f, default=self.__convert)
 
     def glaciation_temperature_grid(self, plot=True, show=True, save=False):
         gd = np.zeros((len(self.grid), len(self.grid[0]), 5))
