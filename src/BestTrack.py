@@ -4,6 +4,7 @@ from typing import List
 from shapely.geometry import Point
 import geopandas as gpd
 from geopandas import GeoDataFrame
+from netCDF4 import Dataset
 
 import numpy as np
 import pandas as pd
@@ -269,6 +270,43 @@ def plot_avg_i04_i05(overall_avg_i04_lower, overall_avg_i04_nos_lower, overall_a
     plt.show()
 
 
+def get_LIS_data(lat, long, cyc_time, plot=False):
+    t1 = datetime(1993, 1, 1, 0, 0)
+    lats = []
+    longs = []
+    total_radiance = 0
+    day_of_year = cyc_time.timetuple().tm_yday
+    for file in os.listdir("C:/Users/tpklo/Documents/MSciNonCloud/LISdata"):
+        filename = "C:/Users/tpklo/Documents/MSciNonCloud/LISdata/" + file
+        if int(file[17:21]) ==  cyc_time.year and day_of_year == int(file[22:25]):
+            with Dataset(filename) as rootgroup:
+                try:
+                    for i in range(len(rootgroup.variables["lightning_flash_TAI93_time"])):
+                        secs = rootgroup.variables["lightning_flash_TAI93_time"][i]
+                        deltat = timedelta(seconds=float(secs))
+                        time = t1 + deltat
+                        if lat - 5 < rootgroup.variables["lightning_flash_location"][i][0] < lat + 5:
+                             if long - 5 < rootgroup.variables["lightning_flash_location"][i][1] < long + 5:
+                                 # if cyc_time - timedelta(hours=6) < time < cyc_time + timedelta(hours=6):
+                                lats.append(rootgroup.variables["lightning_flash_location"][i][0])
+                                longs.append(rootgroup.variables["lightning_flash_location"][i][1])
+                                total_radiance += rootgroup.variables["lightning_flash_radiance"][i]
+                except:
+                    print(file)
+
+    if plot:
+        loc_dict = {"latitude": lats, "longitude": longs}
+        loc_df = pd.DataFrame(data=loc_dict)
+        world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+
+        geometry = [Point(xy) for xy in zip(loc_df['longitude'], loc_df['latitude'])]
+        gdf = GeoDataFrame(loc_df, geometry=geometry)
+        gdf.plot(ax=world.plot(figsize=(10, 6)), marker='o', color='red', markersize=10)
+        plt.show()
+
+    return total_radiance
+
+
 if __name__ == "__main__":
     histogram_dict = []
     overall_avg_i04_upper = np.zeros(100)
@@ -291,6 +329,8 @@ if __name__ == "__main__":
             c.mask_using_I01(80)
             gt, gt_err, r, avg_i04, avg_i04_nos = c.gt_piece_percentile(percentile=5, plot=False)
             if gt is not np.nan and r > 0.85:
+                lightning = get_LIS_data(c.meta_data["LAT"], c.meta_data["LON"], c.meta_data["ISO_TIME"])
+                print(lightning)
                 overall_avg_i04_nos += avg_i04_nos
                 if gt > -33:
                     overall_avg_i04_upper += avg_i04
@@ -312,7 +352,7 @@ if __name__ == "__main__":
                                        "future_winds": cyc_future["USA_WIND"].values[:16],
                                        "position": [c.meta_data["LAT"], c.meta_data["LON"]],
                                        "time": c.meta_data["ISO_TIME"], "SST": max_I05, "CTT": min_I05,
-                                       "name": c.meta_data["NAME"]})
+                                       "name": c.meta_data["NAME"], "lightning": lightning})
         except:
             continue
 
@@ -337,9 +377,15 @@ if __name__ == "__main__":
     non_WP_gts = {"NonWP": []}
     upper_peak_cyclones_WP = []
     lower_peak_cyclones_WP = []
+    lightnings = []
+    gts = []
     intensifying_gts = {"RapidIncrease": [], "Increase": [], "Decrease": [], "RapidDecrease": []}
 
     for cyclone in histogram_dict:
+        if cyclone["time"] < datetime(2015, 4, 15, 0, 0):
+            lightnings.append(cyclone["lightning"])
+            gts.append(cyclone["gt"])
+
         if cyclone["basin"] == "WP":
             if any(f > cyclone["wind"] + 30 for f in cyclone["future_winds"][8:-1]):
                 intensifying_gts["RapidIncrease"].append(cyclone["gt"])
@@ -409,7 +455,9 @@ if __name__ == "__main__":
     """Below function are for getting results, above is for getting dictionary with data needed."""
     # analyse_peak(lower_peak_cyclones_WP, "future_winds", "Lower")
     # analyse_peak(upper_peak_cyclones_WP, "future_winds", "Upper")
-    analysing_x(basin_gts, "Basin", fit="bimodal")
+    # analysing_x(basin_gts, "Basin", fit="bimodal")
     # analysing_basin(all_gts)
-
+    plt.scatter(gts, lightnings)
+    plt.xlabel("Glaciation Temperature")
+    plt.ylabel("Total Radiance (Lightning)")
     plt.show()
