@@ -89,12 +89,13 @@ class GTFit:
         rtnLst = []
         for i, p in enumerate(percentiles):
             rtnLst.append(self.piecewise_percentile(percentile=p, fig=fig, ax=ax, setup_axis=False, c=COLOR_LIST[i]))
-        ax.axhline(-38, c='g', label="$T_{g,homo}$")
-        ax.invert_yaxis()
-        ax.invert_xaxis()
-        ax.set_ylabel("Cloud Temperature (C)")
-        ax.set_xlabel("I4 band reflectance (K)")
-        ax.legend()
+        if ax is not None:
+            ax.axhline(-38, c='g', label="$T_{g,homo}$")
+            ax.invert_yaxis()
+            ax.invert_xaxis()
+            ax.set_ylabel("Cloud Temperature (C)")
+            ax.set_xlabel("I4 band reflectance (K)")
+            ax.legend()
         return rtnLst
 
     def piecewise_percentile(self, percentile=50, fig=None, ax=None, setup_axis=True, c='r'):

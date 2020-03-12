@@ -9,7 +9,7 @@ import scipy.stats as sps
 
 from GTFit import GTFit
 
-outdir = glob.glob("/home/robert/TropicalCyclonesMSci/out-composites/**/**/out.json", recursive=True)
+outdir = glob.glob("/home/robert/TropicalCyclonesMSci/out_composites/**/**/out.json", recursive=True)
 
 
 def exp_dist(x, l, b):
@@ -81,12 +81,38 @@ def plot_percentiles(fig, ax):
     cold_df = df[df["EYE"] <= -32]
     for p in (5, 50, 95):
         i5, i4 = bin_percentile(warm_df, p)
-        ax.plot(i4, i5, label=f"warm at {p}th percentile")
+        ax[0].plot(i4, i5, label=f"warm eyewall {p}th percentile")
         i5, i4 = bin_percentile(cold_df, p)
-        ax.plot(i4, i5, label=f"cold at {p}th percentile")
-    ax.invert_yaxis()
-    ax.invert_xaxis()
-    ax.legend()
+        ax[1].plot(i4, i5, label=f"cold eyewall {p}th percentile")
+    for a in ax:
+        a.invert_yaxis()
+        a.invert_xaxis()
+        a.legend()
+
+
+def plot_environment(fig, ax):
+    warm_df = df[df["EYE"] > -32]
+    cold_df = df[df["EYE"] <= -32]
+    for p in (5, 50, 95):
+        i5, i4 = percentiles_environmental(warm_df, p)
+        ax[0].plot(i4, i5, label=f"warm environmental {p}th percentile")
+        i5, i4 = percentiles_environmental(cold_df, p)
+        ax[1].plot(i4, i5, label=f"cool environmental {p}th percentile")
+    for a in ax:
+        a.invert_xaxis()
+        a.invert_yaxis()
+        a.legend()
+
+
+def percentiles_environmental(df, percentile):
+    i5_raw = list(chain.from_iterable(df[f"EXTERNAL_{percentile}_PERCENTILE_I5"]))
+    i4_raw = [np.mean(x) for x in list(chain.from_iterable(df[f"EXTERNAL_{percentile}_PERCENTILE_I4"]))]
+    plt.scatter(i4_raw,i5_raw)
+    plt.gca().invert_yaxis()
+    plt.gca().invert_xaxis()
+    plt.show()
+    gt_fitter = GTFit(i4_raw, i5_raw)
+    return gt_fitter.bin_data(np.mean, 1)
 
 
 def plot_eye_distr():
@@ -196,6 +222,9 @@ def plot_windspeed_eye_ri():
     ax.set_xlabel("Eye glaciation temperature (C)")
 
 
-fig, ax = plt.subplots()
-plot_percentiles(fig, ax)
+plot_external_distribution()
+fig, ax = plt.subplots(2, 2,figsize=(9,9))
+plot_environment(fig, ax[0])
+plot_percentiles(fig, ax[1])
 plt.show()
+# percentiles_environmental(df, 5)

@@ -22,5 +22,5 @@ if __name__ == "__main__":
     # eyes = get_cyclone_eye_name_image("GENEVIEVE", 2014, max_len=5)
     # hato = get_cyclone_by_name("HATO",2017,per_cyclone=lambda x: x.auto_gt_cycle())
     get_cyclone_by_name_date("IRMA", datetime(2017, 9, 8, 0, 0, 0), datetime(2017, 9, 8, 23, 59, 59),
-                             per_cyclone=lambda x: x.get_environmental_gt())
+                             per_cyclone=lambda x: x.auto_gt_cycle())
     # get_cyclone_by_name("IRMA", 2017, per_cyclone=lambda x: x.get_environmental_gt())
