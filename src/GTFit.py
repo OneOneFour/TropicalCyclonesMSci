@@ -34,12 +34,12 @@ def simple_piecewise(t, t_g, r_e, a, b):
 
 class GTFit:
     def __init__(self, i04_flat, i05_flat, i01_flat=None):
-        self.i04 = i04_flat
-        self.i05 = i05_flat
+        self.i04 = np.array(i04_flat)
+        self.i05 = np.array(i05_flat)
         self.i01 = i01_flat
         self.gt = None
 
-    def bin_data(self, per_bin_func=lambda x, a: x, bin_width=1, bin_func_args=None, delete_zeros=True,
+    def bin_data(self, per_bin_func=lambda x: x, bin_width=1, bin_func_args=None, delete_zeros=True,
                  custom_range=None):
         if custom_range:
             assert len(custom_range) == 2
@@ -53,7 +53,10 @@ class GTFit:
             vals = self.i04[np.where(np.logical_and(self.i05 > (x - 0.5), self.i05 < (x + 0.5)))]
             if len(vals) == 0:
                 continue
-            y_i04[i] = per_bin_func(vals, *bin_func_args)
+            if bin_func_args:
+                y_i04[i] = per_bin_func(vals, *bin_func_args)
+            else:
+                y_i04[i] = per_bin_func(vals)
         if delete_zeros:
             zero_args = np.where(y_i04 == 0)
             x_i05 = np.delete(x_i05, zero_args)
@@ -82,23 +85,23 @@ class GTFit:
         return GT(gt, gt_err), I4(i4, i4_err_appx), r2
 
     def piecewise_percentile_multiple(self, percentiles=None, fig=None, ax=None):
-        self.plot(self.i04, self.i05, fig, ax, s=0.1, c='b')
+        self.plot(self.i04, self.i05, fig, ax, s=0.05, c='g', setup_axis=False)
         rtnLst = []
         for i, p in enumerate(percentiles):
             rtnLst.append(self.piecewise_percentile(percentile=p, fig=fig, ax=ax, setup_axis=False, c=COLOR_LIST[i]))
+        ax.axhline(-38, c='g', label="$T_{g,homo}$")
         ax.invert_yaxis()
         ax.invert_xaxis()
         ax.set_ylabel("Cloud Temperature (C)")
         ax.set_xlabel("I4 band reflectance (K)")
         ax.legend()
-
         return rtnLst
 
     def piecewise_percentile(self, percentile=50, fig=None, ax=None, setup_axis=True, c='r'):
         if len(self.i05) < 1:
             raise ValueError("I5 data is empty. This could be due to masking or a bad input")
         x_i05, y_i04 = self.bin_data(per_bin_func=np.percentile, bin_width=1, bin_func_args=(percentile,))
-        if len(x_i05) < 4 or len(y_i04) <4:
+        if len(x_i05) < 4 or len(y_i04) < 4:
             raise ValueError("Problem underconstrained")
         params, cov = sp.curve_fit(simple_piecewise, x_i05, y_i04, absolute_sigma=True,
                                    p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
@@ -131,3 +134,8 @@ class GTFit:
 
         if setup_axis:
             ax.axhline(-38, c='g', label="$T_{g,homo}$")
+            ax.invert_yaxis()
+            ax.invert_xaxis()
+            ax.set_ylabel("Cloud Temperature (C)")
+            ax.set_xlabel("I4 band reflectance (K)")
+            ax.legend()

@@ -504,7 +504,7 @@ class SnapshotGrid:
     def add_bins(self, percentile=(5, 50, 95)):
         for p in percentile:
             self.vals[f"EYE_{p}_PERCENTILE_I5"], self.vals[
-                f"EYE_{p}_PERCENTILE_I4"] = self.imageInstance.eye.get_binned_i4_i5(p)
+                f"EYE_{p}_PERCENTILE_I4"] = self.imageInstance.eye.get_binned_i4_i5(p, custom_range=(-45, 0))
             self.vals[f"EYE_{p}_PERCENTILE_I5"] = self.vals[f"EYE_{p}_PERCENTILE_I5"].tolist()
             self.vals[f"EYE_{p}_PERCENTILE_I4"] = self.vals[f"EYE_{p}_PERCENTILE_I4"].tolist()
             self.vals[f"EXTERNAL_{p}_PERCENTILE_I4"], self.vals[f"EXTERNAL_{p}_PERCENTILE_I5"] = self.get_binned_i4_i5(

@@ -302,6 +302,28 @@ class CycloneImage:
         val, val_errs = gd.gt_quadrant_distribution(gt, gt_err)
         return val, val_errs
 
+    def get_environmental_gt(self):
+        area = self.scene["I05"].attrs["area"].compute_optimal_bb_area(
+            self.proj_dict
+        )
+        left = wrap(self.lon - 10)
+        right = wrap(self.lon + 10)
+        top = self.lat + 10
+        bottom = self.lat - 10
+        upper_left_x, upper_left_y = get_xy_from_lon_lat(left, top, area)
+
+        lower_right_x, lower_right_y = get_xy_from_lon_lat(right, bottom, area)
+        environment = self.bb.add_sub_snap_edge(upper_left_x, lower_right_x, upper_left_y, lower_right_y, left, bottom)
+        self.mask(environment)
+        gt_env, i4_env, r2_env = environment.gt_piece_percentile(plot=True, show=True)
+        self.eye.gt_piece_percentile(plot=True,show=True)
+
+        print("LOOKING AT TOTAL DISTR")
+
+        environment.gt_piece_percentile_multiple(percentiles=(5,50,95))
+        self.eye.gt_piece_percentile_multiple(percentiles=(5,50,95))
+        print(f"GT:{gt_env}\nI4:{i4_env}\nr2:{r2_env}")
+
     def auto_gt_cycle(self, w=25, h=25, p_w=96, p_h=96):
         print("Processing Grid")
         gd = self.grid_data_edges(self.lon - w / 2, self.lon + w / 2, self.lat + h / 2, self.lat - h / 2, p_w, p_h)

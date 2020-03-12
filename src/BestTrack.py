@@ -21,6 +21,7 @@ if "NAUGHTY_LIST" in os.environ:
     @atexit.register
     def save_the_file():
         with open(os.environ.get("NAUGHTY_LIST"), 'w') as naughty_file:
+            
             naughty_file.write(str(NAUGHTY_LIST))
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV",
