@@ -17,11 +17,13 @@ from scipy import stats
 
 from CycloneImage import get_eye, get_entire_cyclone, CycloneImage
 from CycloneSnapshot import CycloneSnapshot
+from AerosolImage import AerosolImageMODIS
 matplotlib.rcParams['agg.path.chunksize'] = 10000
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV", "Data/ibtracs.since1980.list.v04r00.csv")
 best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
 best_track_df["ISO_TIME"] = pd.to_datetime(best_track_df["ISO_TIME"])
+MODIS_PATH = os.environ.get("MODIS_PATH", os.getcwd())
 
 font = {'family': 'normal',
             'weight': 'bold',
@@ -229,7 +231,7 @@ def analyse_peak(data, key, which):
     list = []
     for cyclone in data:
         if key == "future_winds":
-            intensity_after_24 = cyclone[key][-5] - cyclone["wind"]
+            intensity_after_24 = cyclone["wind"] - cyclone[key][-1]
             list.append(intensity_after_24)
         elif key == "deltaT":
             deltaT = cyclone["SST"] - cyclone["CTT"]
@@ -287,10 +289,10 @@ def get_LIS_data(lat, long, cyc_time, plot=False):
                         time = t1 + deltat
                         if lat - 5 < rootgroup.variables["lightning_flash_location"][i][0] < lat + 5:
                              if long - 5 < rootgroup.variables["lightning_flash_location"][i][1] < long + 5:
-                                 # if cyc_time - timedelta(hours=6) < time < cyc_time + timedelta(hours=6):
-                                lats.append(rootgroup.variables["lightning_flash_location"][i][0])
-                                longs.append(rootgroup.variables["lightning_flash_location"][i][1])
-                                total_radiance += rootgroup.variables["lightning_flash_radiance"][i]
+                                if cyc_time - timedelta(hours=6) < time < cyc_time + timedelta(hours=6):
+                                    lats.append(rootgroup.variables["lightning_flash_location"][i][0])
+                                    longs.append(rootgroup.variables["lightning_flash_location"][i][1])
+                                    total_radiance += rootgroup.variables["lightning_flash_radiance"][i]
                 except:
                     print(file)
 
@@ -319,6 +321,9 @@ if __name__ == "__main__":
     total_i05_upper = []
     total_i04_lower = []
     total_i05_lower = []
+
+    lightning = 0
+    total_aero = 0
     best_track_df = pd.read_csv(BEST_TRACK_CSV, skiprows=[1], na_values=" ", keep_default_na=False)
     for file in os.listdir("proc/eyes_since_2012"):
         filename = "proc/eyes_since_2012/" + file
@@ -329,8 +334,13 @@ if __name__ == "__main__":
             c.mask_using_I01(80)
             gt, gt_err, r, avg_i04, avg_i04_nos = c.gt_piece_percentile(percentile=5, plot=False)
             if gt is not np.nan and r > 0.85:
-                lightning = get_LIS_data(c.meta_data["LAT"], c.meta_data["LON"], c.meta_data["ISO_TIME"])
-                print(lightning)
+                # lightning = get_LIS_data(c.meta_data["LAT"], c.meta_data["LON"], c.meta_data["ISO_TIME"])
+                # day = c.meta_data["ISO_TIME"].timetuple().tm_yday
+                # aero = AerosolImageMODIS.get_aerosol(c.meta_data["ISO_TIME"].year, day)
+                # total_aero = aero.get_mean_in_region(c.meta_data["LAT"], c.meta_data["LON"], 5, 5)
+                # if type(total_aero) == np.ma.core.MaskedConstant:
+                #     print("AOD masked")
+                #     total_aero = 0
                 overall_avg_i04_nos += avg_i04_nos
                 if gt > -33:
                     overall_avg_i04_upper += avg_i04
@@ -352,8 +362,8 @@ if __name__ == "__main__":
                                        "future_winds": cyc_future["USA_WIND"].values[:16],
                                        "position": [c.meta_data["LAT"], c.meta_data["LON"]],
                                        "time": c.meta_data["ISO_TIME"], "SST": max_I05, "CTT": min_I05,
-                                       "name": c.meta_data["NAME"], "lightning": lightning})
-        except:
+                                       "name": c.meta_data["NAME"], "lightning": lightning, "AOD": total_aero})
+        except Exception as e:
             continue
 
     all_gts = {"all": []}
@@ -378,13 +388,27 @@ if __name__ == "__main__":
     upper_peak_cyclones_WP = []
     lower_peak_cyclones_WP = []
     lightnings = []
-    gts = []
+    lightning_gts = []
+    AOD_gts = []
+    AODs = []
+    wind_gts_list = []
+    winds = []
+    lower_average_test = []
+    upper_average_test = []
     intensifying_gts = {"RapidIncrease": [], "Increase": [], "Decrease": [], "RapidDecrease": []}
 
     for cyclone in histogram_dict:
-        if cyclone["time"] < datetime(2015, 4, 15, 0, 0):
+        if cyclone["time"] < datetime(2015, 4, 15, 0, 0) and cyclone["lightning"] != 0:
             lightnings.append(cyclone["lightning"])
-            gts.append(cyclone["gt"])
+            lightning_gts.append(cyclone["gt"])
+
+        if cyclone["gt"] < -33:
+            lower_average_test.append(cyclone["wind"] - cyclone["future_winds"][-1])
+        elif cyclone["gt"] > - 33:
+            upper_average_test.append(cyclone["wind"] - cyclone["future_winds"][-1])
+
+        winds.append(cyclone["wind"] - cyclone["future_winds"][-1])
+        wind_gts_list.append(cyclone["gt"])
 
         if cyclone["basin"] == "WP":
             if any(f > cyclone["wind"] + 30 for f in cyclone["future_winds"][8:-1]):
@@ -453,11 +477,13 @@ if __name__ == "__main__":
         all_gts["all"].append(cyclone["gt"])
 
     """Below function are for getting results, above is for getting dictionary with data needed."""
-    # analyse_peak(lower_peak_cyclones_WP, "future_winds", "Lower")
-    # analyse_peak(upper_peak_cyclones_WP, "future_winds", "Upper")
+    analyse_peak(lower_peak_cyclones_WP, "future_winds", "Lower")
+    analyse_peak(upper_peak_cyclones_WP, "future_winds", "Upper")
     # analysing_x(basin_gts, "Basin", fit="bimodal")
     # analysing_basin(all_gts)
-    plt.scatter(gts, lightnings)
-    plt.xlabel("Glaciation Temperature")
-    plt.ylabel("Total Radiance (Lightning)")
+    print(stats.pearsonr(wind_gts_list, winds))
+    print(stats.ttest_ind(upper_average_test, lower_average_test))
+    plt.scatter(wind_gts_list, winds)
+    plt.xlabel("Glaciation Temperature (Celcius)")
+    plt.ylabel("Change in wind speed (kts)")
     plt.show()
