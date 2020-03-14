@@ -421,8 +421,7 @@ class CycloneSnapshot:
             else:
                 gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
 
-            if raise_up + gt.error * 2 < gt.value or gt.value + gt.error * 2 < raise_lower or r2 < 0.85 or np.isinf(
-                    gt.error) or np.isnan(gt.error):  # Sanity check
+            if raise_up < gt.value or gt.value < raise_lower or r2 < 0.85:  # Sanity check
                 raise ValueError(f"{gt.value} is outside predefined range. R squared is {r2}")
             return gt, i4, r2
         except (ValueError, RuntimeError) as e:

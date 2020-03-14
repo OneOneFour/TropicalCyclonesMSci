@@ -1,29 +1,49 @@
+import gzip
+import os
+import pickle
 from datetime import datetime
 
-from pyresample import create_area_def
-from xarray import DataArray
 import matplotlib.pyplot as plt
 import numpy as np
+from pyresample import create_area_def
+from satpy import Scene
+from xarray import DataArray
+
 from GTFit import GTFit
 from fetch_file import get_data
-import os
-from satpy import Scene
 
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", './')
+CACHE_DIRECTORY = os.environ.get("CACHE_DIRECTORY")
+
+
+def clamp(x, min_v, max_v):
+    return max(min(x, max_v), min_v)
 
 
 class CycloneCellFast:
+    __slots__ = ["i4", "i5", "gts"]
+
     def __init__(self, i4, i5):
         self.i4 = i4
         self.i5 = i5
-        self.gts = []
+        assert not np.isnan(self.i4).all() and not np.isnan(self.i5).all()
+        self.gts = self.glaciation_temperature_percentile()
 
     @property
     def good_gt(self):
-        return (-45 < self.gt.value < 0) and self.gt.error < 5 and self.r2 > 0.85
+        return (-45 < self.gt.value < 10) and self.gt.error < 5 and self.r2 > 0.85
+
+    def bin_data_percentiles(self, percentiles):
+        i4_list, i5_list = [], []
+        gt_fit = GTFit(self.i4.flatten(), self.i5.flatten())
+        for p in percentiles:
+            i5, i4 = gt_fit.bin_data(np.percentile, 1, (p,))
+            i4_list.append(i4)
+            i5_list.append(i5)
+        return i4_list, i5_list
 
     def plot(self):
-        plt.imshow(self.i4)
+        plt.imshow(self.i5)
         plt.show()
 
     @property
@@ -38,10 +58,9 @@ class CycloneCellFast:
     def r2(self):
         return self.gts[0][2]
 
-    def glaciation_temperature_percentile(self, percentiles=(5,)):
+    def glaciation_temperature_percentile(self, percentiles=(5, 50, 95)):
         gt_fit = GTFit(self.i4.flatten(), self.i5.flatten())
-
-        self.gts = gt_fit.piecewise_percentile_multiple((5, 50, 95))
+        return gt_fit.piecewise_percentile_multiple(percentiles)
 
 
 class CycloneImageFast:
@@ -54,14 +73,11 @@ class CycloneImageFast:
     DEFAULT_CROP = 16  # 20 deg x 20 deg
 
     @classmethod
-    def from_nc(cls, ncfile):
-        inst__ = cls()
-        inst__.scene = Scene([ncfile], reader="viirs_l1b")
+    def from_gzp(cls, gzp_file):
+        with gzip.GzipFile(gzp_file, "r") as f:
+            inst__ = pickle.load(f)
+        assert isinstance(inst__, cls)
         return inst__
-
-    @staticmethod
-    def from_cyclone_image(ci):
-        pass
 
     @classmethod
     def from_points(cls, start_idx, start_point, end_point):
@@ -76,8 +92,8 @@ class CycloneImageFast:
                                end_point["ISO_TIME"].to_pydatetime(),
                                north=lat_0 + north_extent,
                                south=lat_0 - south_extent,
-                               west=lon_0 - west_extent,
-                               east=lon_0 + east_extent,
+                               west=clamp(lon_0 - west_extent, -180, 180),
+                               east=clamp(lon_0 + east_extent, -180, 180),
                                dayOrNight="D", include_mod=False)
         inst__ = cls()
         inst__.scene = Scene(files, reader="viirs_l1b")
@@ -88,20 +104,24 @@ class CycloneImageFast:
         assert (inst__.eye_lon, inst__.eye_lat) in inst__.bb_area()
         inst__.mask()
         inst__.crop()
+        inst__.eye()
         return inst__
 
     @property
     def eye_lat(self):
+        assert "USA_LAT" in self.metadata
         return self.metadata["USA_LAT"]
 
     @property
     def eye_lon(self):
+        assert "USA_LON" in self.metadata
         return self.metadata["USA_LON"]
 
     def eye(self):
         if hasattr(self, "eye_gd"):
             return self.eye_gd
         else:
+            assert "USA_RMW" in self.metadata
             xmin, ymin = self.scene.max_area().get_xy_from_lonlat(self.eye_lon - 2 * self.metadata["USA_RMW"] / 60,
                                                                   self.eye_lat - 2 * self.metadata["USA_RMW"] / 60)
             xmax, ymax = self.scene.max_area().get_xy_from_lonlat(self.eye_lon + 2 * self.metadata["USA_RMW"] / 60,
@@ -114,9 +134,31 @@ class CycloneImageFast:
         return self.scene.max_area().compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.eye_lat, "lat_1": self.eye_lat, "lon_0": self.eye_lon})
 
-    def mask(self):
-        self.scene["I05_mask"] = self.scene["I05"].where((self.scene["I05"] < 0) & (self.scene["I05"] > -50))
-        self.scene["I04_mask"] = self.scene["I04"].where((self.scene["I05"] < 0) & (self.scene["I05"] > -50))
+    def mask(self, calculate=False):
+        self.scene["I05_mask"] = self.scene["I05"].where((self.scene["I05"] < 0) & (self.scene["I05"] > -50) & (
+                self.scene["I01"] > self.scene["I01"].mean() + self.scene["I01"].std()))
+        self.scene["I04_mask"] = self.scene["I04"].where((self.scene["I05"] < 0) & (self.scene["I05"] > -50) & (
+                self.scene["I01"] > self.scene["I01"].mean() + self.scene["I01"].std()))
+
+        if calculate:
+            self.raw_grid_I4 = self.scene["I04_mask"].values
+            self.raw_grid_I5 = self.scene["I05_mask"].values
+
+    def unmask(self, recalculate=True):
+        """
+        Remove mask.
+        :param recalculate: Recalculate the raw_grid_I4/5 variables using the new mask
+        :return:
+        """
+        del self.raw_grid_I4
+        del self.raw_grid_I5
+        del self.scene["I05_mask"]
+        del self.scene["I04_mask"]
+        if recalculate:
+            self.raw_grid_I4 = self.scene["I04"].values
+            self.raw_grid_I5 = self.scene["I05"].values
+        else:
+            print("Not recalculating. raw_grid variable will be left unbound")
 
     def crop(self, w=DEFAULT_CROP, h=DEFAULT_CROP):
         cropped_area = create_area_def("ci_crop",
@@ -124,11 +166,13 @@ class CycloneImageFast:
                                         "lon_0": self.eye_lon}, center=(self.eye_lon, self.eye_lat),
                                        radius=(w / 2, h / 2), units="degrees",
                                        resolution=DataArray(400, attrs={"units": "meters"}))
+        print(cropped_area.overlap_rate(self.bb_area()) * (self.bb_area().get_area() / cropped_area.get_area()))
+        assert cropped_area.overlap_rate(self.bb_area()) * (self.bb_area().get_area() / cropped_area.get_area()) > 0.8
         self.scene = self.scene.resample(self.bb_area())
         self.scene = self.scene.crop(area=cropped_area)
         self.raw_grid_I5 = self.scene["I05_mask"].values
         self.raw_grid_I4 = self.scene["I04_mask"].values
-        self.raw_grid_I1 = self.scene["I01"].values
+        # self.raw_grid_I1 = self.scene["I01"].values
 
     def __interpolate(self, start: dict, end: dict):
         from pandas import isna
@@ -151,6 +195,17 @@ class CycloneImageFast:
                 int_dict[k] = start[k]
         self.metadata = int_dict
 
+    def environment_bin_percentiles(self, percentiles):
+        assert hasattr(self, "cells")
+        i4_list = [[] for p in percentiles]
+        i5_list = [[] for p in percentiles]
+        for c in self.cells:
+            i4, i5 = c.bin_data_percentiles(percentiles)
+            for i in range(len(percentiles)):
+                i4_list[i].extend(i4[i])
+                i5_list[i].extend(i5[i])
+        return i4_list, i5_list
+
     def generate_environmental(self, w=192, h=192):
         shape = self.raw_grid_I5.shape
         self.cells = []
@@ -158,7 +213,14 @@ class CycloneImageFast:
             for j in range(shape[1] // w):
                 environmental_I5 = self.raw_grid_I5[i * h:(i + 1) * h, j * w:(j + 1) * w]
                 environmental_I4 = self.raw_grid_I4[i * h:(i + 1) * h, j * w:(j + 1) * w]
-                self.cells.append(CycloneCellFast(environmental_I4, environmental_I5))
+                if len(environmental_I5[np.isnan(environmental_I5)]) > 0.8 * w * h:
+                    continue
+                try:
+                    ccf = CycloneCellFast(environmental_I4, environmental_I5)
+                    if ccf.good_gt:
+                        self.cells.append(ccf)
+                except (ValueError, RuntimeError, AssertionError):
+                    continue
         return self.cells
 
     def write(self):
@@ -169,6 +231,7 @@ class CycloneImageFast:
         self.scene.save_datasets(writer="cf", filename="IRMA.nc", header_attrs=nc_meta)
 
     def pickle(self):
-        import pickle
-        with open("IRMA.pickle", 'wb') as f:
+
+        filename = f"{self.metadata['NAME']}.{self.metadata['START_IDX']}.gzp"
+        with gzip.GzipFile(os.path.join(CACHE_DIRECTORY, filename), 'w') as f:
             pickle.dump(self, f)

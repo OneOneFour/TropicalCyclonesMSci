@@ -1,5 +1,5 @@
 from collections import namedtuple
-
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize as sp
 
@@ -36,6 +36,8 @@ class GTFit:
     def __init__(self, i04_flat, i05_flat, i01_flat=None):
         self.i04 = np.array(i04_flat)
         self.i05 = np.array(i05_flat)
+        self.i04 = self.i04[~np.isnan(self.i04)]
+        self.i05 = self.i05[~np.isnan(self.i05)]
         self.i01 = i01_flat
         self.gt = None
 
