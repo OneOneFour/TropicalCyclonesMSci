@@ -15,23 +15,73 @@ from fetch_file import get_data
 DATA_DIRECTORY = os.environ.get("DATA_DIRECTORY", './')
 CACHE_DIRECTORY = os.environ.get("CACHE_DIRECTORY")
 
+hc = 2E-7
+hcsq = 1.31E-34
+
+I4_wavelength = 11100
+I5_wavelength = 3400
+
+
+def planck(T, wavelength):
+    return ()
+
 
 def clamp(x, min_v, max_v):
     return max(min(x, max_v), min_v)
 
 
 class CycloneCellFast:
-    __slots__ = ["i4", "i5", "gts"]
+    __slots__ = ["i4", "i5", "gts", "xmin", "xmax", "ymin", "ymax"]
 
-    def __init__(self, i4, i5):
-        self.i4 = i4
-        self.i5 = i5
+    def __init__(self, i4_full, i5_full, xmin, xmax, ymin, ymax):
+        self.i4 = i4_full[ymin:ymax, xmin:xmax]
+        self.i5 = i5_full[ymin:ymax, xmin:xmax]
+        self.xmin = xmin
+        self.xmax = xmax
+        self.ymin = ymin
+        self.ymax = ymax
         assert not np.isnan(self.i4).all() and not np.isnan(self.i5).all()
         self.gts = self.glaciation_temperature_percentile()
 
     @property
+    def BTD(self):
+        return self.i4_flat - (self.i5_flat + 273.15)
+
+    @property
+    def BTD_ratio(self):
+        return (self.i4_flat - (self.i5_flat + 273.15)) / (self.i5_flat + 273.15)
+
+    @property
+    def i4i5ratio(self):
+        return (self.i4_flat) / (self.i5_flat + 273.15)
+
+    def plot_BTD_ratio(self):
+        BTD = self.BTD_ratio
+        i5_flat = self.i5_flat
+        plt.scatter(i5_flat, BTD)
+        plt.gca().set_xlabel("I5 temperature")
+        plt.gca().set_ylabel("I4 - I5 ratio to I5")
+        plt.show()
+
+    def plot_BTD_difference(self):
+        BTD = self.BTD
+        i5_flat = self.i5_flat
+        plt.scatter(i5_flat, BTD)
+        plt.gca().set_xlabel("I5 temperature")
+        plt.gca().set_ylabel("I4 - I5 difference")
+        plt.show()
+
+    def plot_i4_i5_ratio(self):
+        i4i5_ratio = self.i4i5ratio
+        i5_flat = self.i5_flat
+        plt.scatter(i5_flat, i4i5_ratio)
+        plt.gca().set_xlabel("I5 temperature")
+        plt.gca().set_ylabel("I4 / I5 ratio")
+        plt.show()
+
+    @property
     def good_gt(self):
-        return (-45 < self.gt.value < 10) and self.gt.error < 5 and self.r2 > 0.85
+        return (-45 < self.gt.value < 0) and self.gt.error < 5 and self.r2 > 0.85
 
     def bin_data_percentiles(self, percentiles):
         i4_list, i5_list = [], []
@@ -41,6 +91,11 @@ class CycloneCellFast:
             i4_list.append(i4)
             i5_list.append(i5)
         return i4_list, i5_list
+
+    def intersects(self, cell: "CycloneCellFast"):
+        if cell is self:
+            return True
+        return cell.xmax > self.xmin and self.xmax > cell.xmin and self.ymax > cell.ymin and cell.ymax > self.ymin
 
     def plot(self):
         plt.imshow(self.i5)
@@ -57,6 +112,14 @@ class CycloneCellFast:
     @property
     def r2(self):
         return self.gts[0][2]
+
+    @property
+    def i4_flat(self):
+        return self.i4[~np.isnan(self.i4)].flatten()
+
+    @property
+    def i5_flat(self):
+        return self.i5[~np.isnan(self.i5)].flatten()
 
     def glaciation_temperature_percentile(self, percentiles=(5, 50, 95)):
         gt_fit = GTFit(self.i4.flatten(), self.i5.flatten())
@@ -122,12 +185,12 @@ class CycloneImageFast:
             return self.eye_gd
         else:
             assert "USA_RMW" in self.metadata
-            xmin, ymin = self.scene.max_area().get_xy_from_lonlat(self.eye_lon - 2 * self.metadata["USA_RMW"] / 60,
+            xmin, ymax = self.scene.max_area().get_xy_from_lonlat(self.eye_lon - 2 * self.metadata["USA_RMW"] / 60,
                                                                   self.eye_lat - 2 * self.metadata["USA_RMW"] / 60)
-            xmax, ymax = self.scene.max_area().get_xy_from_lonlat(self.eye_lon + 2 * self.metadata["USA_RMW"] / 60,
+            xmax, ymin = self.scene.max_area().get_xy_from_lonlat(self.eye_lon + 2 * self.metadata["USA_RMW"] / 60,
                                                                   self.eye_lat + 2 * self.metadata["USA_RMW"] / 60)
-            self.eye_gd = CycloneCellFast(self.raw_grid_I4[ymax:ymin, xmin:xmax],
-                                          self.raw_grid_I5[ymax:ymin, xmin:xmax])
+            self.eye_gd = CycloneCellFast(self.raw_grid_I4,
+                                          self.raw_grid_I5, xmin, xmax, ymin, ymax)
             return self.eye_gd
 
     def bb_area(self):
@@ -143,6 +206,8 @@ class CycloneImageFast:
         if calculate:
             self.raw_grid_I4 = self.scene["I04_mask"].values
             self.raw_grid_I5 = self.scene["I05_mask"].values
+            self.eye()
+            self.generate_environmental()
 
     def unmask(self, recalculate=True):
         """
@@ -155,6 +220,8 @@ class CycloneImageFast:
         del self.scene["I05_mask"]
         del self.scene["I04_mask"]
         if recalculate:
+            del self.eye_gd
+            del self.cells
             self.raw_grid_I4 = self.scene["I04"].values
             self.raw_grid_I5 = self.scene["I05"].values
         else:
@@ -211,13 +278,9 @@ class CycloneImageFast:
         self.cells = []
         for i in range(shape[0] // h):
             for j in range(shape[1] // w):
-                environmental_I5 = self.raw_grid_I5[i * h:(i + 1) * h, j * w:(j + 1) * w]
-                environmental_I4 = self.raw_grid_I4[i * h:(i + 1) * h, j * w:(j + 1) * w]
-                if len(environmental_I5[np.isnan(environmental_I5)]) > 0.8 * w * h:
-                    continue
                 try:
-                    ccf = CycloneCellFast(environmental_I4, environmental_I5)
-                    if ccf.good_gt:
+                    ccf = CycloneCellFast(self.raw_grid_I4, self.raw_grid_I5, j * w, (j + 1) * w, i * h, (i + 1) * h)
+                    if ccf.good_gt and not ccf.intersects(self.eye()):
                         self.cells.append(ccf)
                 except (ValueError, RuntimeError, AssertionError):
                     continue
