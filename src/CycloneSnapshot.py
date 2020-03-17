@@ -421,8 +421,7 @@ class CycloneSnapshot:
             else:
                 gt, i4, r2 = gt_fitter.piecewise_percentile(percentile=percentile)
 
-            if raise_up + gt.error * 2 < gt.value or gt.value + gt.error * 2 < raise_lower or r2 < 0.85 or np.isinf(
-                    gt.error) or np.isnan(gt.error):  # Sanity check
+            if raise_up < gt.value or gt.value < raise_lower or r2 < 0.85:  # Sanity check
                 raise ValueError(f"{gt.value} is outside predefined range. R squared is {r2}")
             return gt, i4, r2
         except (ValueError, RuntimeError) as e:
@@ -504,7 +503,7 @@ class SnapshotGrid:
     def add_bins(self, percentile=(5, 50, 95)):
         for p in percentile:
             self.vals[f"EYE_{p}_PERCENTILE_I5"], self.vals[
-                f"EYE_{p}_PERCENTILE_I4"] = self.imageInstance.eye.get_binned_i4_i5(p)
+                f"EYE_{p}_PERCENTILE_I4"] = self.imageInstance.eye.get_binned_i4_i5(p, custom_range=(-45, 0))
             self.vals[f"EYE_{p}_PERCENTILE_I5"] = self.vals[f"EYE_{p}_PERCENTILE_I5"].tolist()
             self.vals[f"EYE_{p}_PERCENTILE_I4"] = self.vals[f"EYE_{p}_PERCENTILE_I4"].tolist()
             self.vals[f"EXTERNAL_{p}_PERCENTILE_I4"], self.vals[f"EXTERNAL_{p}_PERCENTILE_I5"] = self.get_binned_i4_i5(

@@ -7,7 +7,7 @@ import pandas as pd
 import requests
 
 WEBSERVER_QUERY_URL = "http://modwebsrv.modaps.eosdis.nasa.gov/axis2/services/MODAPSservices"
-FILE_LOAD_LIMIT = os.environ.get("FILE_LOAD_LIMIT", 4)
+FILE_LOAD_LIMIT = os.environ.get("FILE_LOAD_LIMIT", 6)
 SEARCH_FOR_FILES = "/searchForFiles"
 GET_FILE_URLS = "/getFileUrls"
 MODIS_DOWNLOAD_URL = "http://www.sp.ph.ic.ac.uk/~erg10/safe/subset"
@@ -22,7 +22,7 @@ if "CACHE_DIRECTORY" in os.environ:
 
     @atexit.register
     def save_cache():
-        LAADS_CACHE.to_csv(LAADS_CACHE_PATH)
+        LAADS_CACHE.to_csv(LAADS_CACHE_PATH,index=False)
 
 
 def download_files_from_server(root_dir, file_urls, ignore_errors=False, include_headers=True):

@@ -1,12 +1,15 @@
 import glob
 import json
+from itertools import chain
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as sps
 
-outdir = glob.glob("D:\out-240220\**\out.json", recursive=True)
+from GTFit import GTFit
+
+outdir = glob.glob("/home/robert/TropicalCyclonesMSci/out_composites/**/**/out.json", recursive=True)
 
 
 def exp_dist(x, l, b):
@@ -24,6 +27,7 @@ for file in outdir:
         obj = json.load(f)
         entry = obj
         if "GT_GRID" in obj and not np.isnan(obj["EYE"]):
+            obj["GT_GRID"] = [a for a in obj["GT_GRID"] if 0 > a > -45]
             try:
                 gt_i = np.array(obj["GT_GRID"])
                 gt_i = gt_i[np.where(gt_i > -40)]
@@ -48,21 +52,67 @@ for file in outdir:
             entry["DIFF_EYE_MEDIAN"] = np.median(np.array(obj["GT_GRID"]) - obj["EYE"])
             entry["DIFF_EYE_EXP_MEAN"] = (1 / l - b - obj["EYE"])
             entry["DIFF_EYE_MEAN"] = (np.mean(np.array(obj["GT_GRID"]) - obj["EYE"]))
+
             gt_grid.extend(obj["GT_GRID"])
 
-        entry["DELTA_SPEED_-24HR"] = obj["DELTA_SPEED_-24HR"]
-        entry["DELTA_SPEED_+24HR"] = obj["DELTA_SPEED_+24HR"]
+        entry["DELTA_SPEED_-24HR"] = obj["DELTA_SPEED_-24HR"] if "DELTA_SPEED_-24HR" in obj else np.nan
+        entry["DELTA_SPEED_+24HR"] = obj["DELTA_SPEED_+24HR"] if "DELTA_SPEED_+24HR" in obj else np.nan
         df = df.append(entry, ignore_index=True)
         print(f"Loaded:{file}")
 
-print(f"Loaded {len(outdir)} files")
+print(f"Loaded {len(df)} files")
 
 print(f"Average deviation from eye:{np.nanmean(df['EYE'] - df['GT_GRID_MEAN'])}")
 print(f"Average stderror : {np.nanstd(df['EYE'] - df['GT_GRID_MEAN']) / np.sqrt(len(df['EYE']))}")
 
-df = df[df["BASIN"] == "WP"]
 ri_df = df[df["DELTA_SPEED_-24HR"] >= 30]
 no_ri_df = df[df["DELTA_SPEED_-24HR"] < 30]
+
+
+def bin_percentile(df, percentile):
+    i5_raw = list(chain.from_iterable(df[f"EYE_{percentile}_PERCENTILE_I5"].tolist()))
+    i4_raw = list(chain.from_iterable(df[f"EYE_{percentile}_PERCENTILE_I4"].tolist()))
+    gt_fit = GTFit(i4_raw, i5_raw)
+    return gt_fit.bin_data(np.mean, 1)
+
+
+def plot_percentiles(fig, ax):
+    warm_df = df[df["EYE"] > -32]
+    cold_df = df[df["EYE"] <= -32]
+    for p in (5, 50, 95):
+        i5, i4 = bin_percentile(warm_df, p)
+        ax[0].plot(i4, i5, label=f"warm eyewall {p}th percentile")
+        i5, i4 = bin_percentile(cold_df, p)
+        ax[1].plot(i4, i5, label=f"cold eyewall {p}th percentile")
+    for a in ax:
+        a.invert_yaxis()
+        a.invert_xaxis()
+        a.legend()
+
+
+def plot_environment(fig, ax):
+    warm_df = df[df["EYE"] > -32]
+    cold_df = df[df["EYE"] <= -32]
+    for p in (5, 50, 95):
+        i5, i4 = percentiles_environmental(warm_df, p)
+        ax[0].plot(i4, i5, label=f"warm environmental {p}th percentile")
+        i5, i4 = percentiles_environmental(cold_df, p)
+        ax[1].plot(i4, i5, label=f"cool environmental {p}th percentile")
+    for a in ax:
+        a.invert_xaxis()
+        a.invert_yaxis()
+        a.legend()
+
+
+def percentiles_environmental(df, percentile):
+    i5_raw = list(chain.from_iterable(df[f"EXTERNAL_{percentile}_PERCENTILE_I5"]))
+    i4_raw = [np.mean(x) for x in list(chain.from_iterable(df[f"EXTERNAL_{percentile}_PERCENTILE_I4"]))]
+    plt.scatter(i4_raw,i5_raw)
+    plt.gca().invert_yaxis()
+    plt.gca().invert_xaxis()
+    plt.show()
+    gt_fitter = GTFit(i4_raw, i5_raw)
+    return gt_fitter.bin_data(np.mean, 1)
 
 
 def plot_eye_distr():
@@ -155,6 +205,7 @@ def plot_windspeed_eye():
     ax.set_ylabel("Past 24 hours change in wind speed (kts)")
     ax.set_xlabel("Eye glaciation temperature (C)")
 
+
 def plot_windspeed_avg_ri():
     fig, ax = plt.subplots()
     ax.scatter(ri_df["DIFF_EYE_EXP_MEAN"], ri_df["DELTA_SPEED_-24HR"])
@@ -170,12 +221,10 @@ def plot_windspeed_eye_ri():
     ax.set_ylabel("Past 24 hours change in wind speed (kts)")
     ax.set_xlabel("Eye glaciation temperature (C)")
 
-# plot_external_distribution()
-# plot_distribution_of_temp_total(50)
-# plot_windspeed_avg()
-# plot_windspeed_eye()
-# plt.show()
-# gt_histogram(15)
-plot_windspeed_avg()
-plot_windspeed_eye()
+
+plot_external_distribution()
+fig, ax = plt.subplots(2, 2,figsize=(9,9))
+plot_environment(fig, ax[0])
+plot_percentiles(fig, ax[1])
 plt.show()
+# percentiles_environmental(df, 5)

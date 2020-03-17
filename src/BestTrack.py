@@ -8,6 +8,7 @@ import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 
 from CycloneImage import get_eye, get_entire_cyclone
+from alt.CycloneMap import CycloneImageFast
 
 if "NAUGHTY_LIST" in os.environ:
     try:
@@ -38,30 +39,21 @@ def all_cyclones_since(year, month, day, cat_min=4, per_cyclone=None):
     for sid, cyclone in cat_4_5_all_basins_group:
         dict_cy = cyclone.to_dict(orient="index")
         for index in list(dict_cy.keys())[:-1]:
-            if index in NAUGHTY_LIST:
-                continue
             start_point = dict_cy[index]
             if index + 1 not in dict_cy.keys():
                 continue
             end_point = dict_cy[index + 1]
-            history = best_track_df.loc[(best_track_df["SID"] == sid) &
-                                        (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"]) &
-                                        (best_track_df["ISO_TIME"] > start_point["ISO_TIME"] - timedelta(
-                                            hours=24))].to_dict(orient="records")
-            future = best_track_df.loc[(best_track_df["SID"] == sid) &
-                                       (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"] + timedelta(hours=24)) & (
-                                               best_track_df["ISO_TIME"] > start_point["ISO_TIME"])].to_dict(
-                orient="records")
             try:
-                ci = get_entire_cyclone(start_point, end_point, history=history, future=future)
-                if ci and ci.is_eyewall_gt_good:
-                    print(ci.metadata["NAME"])
-                    per_cyclone(ci)
-                else:
-                    NAUGHTY_LIST.add(index)
-            except Exception:
-                import traceback
-                traceback.print_exc()
+                if os.path.isfile(os.path.join(os.environ["CACHE_DIRECTORY"], f"{start_point['NAME']}.{index}.gzp")):
+                    print(f"Already processed {start_point['NAME']}:{index}")
+                    continue
+                cy = CycloneImageFast.from_points(index, start_point, end_point)
+                cy.generate_environmental()
+                cy.pickle()
+            except (ConnectionError) as e:
+                print(e)
+                continue
+            except (FileNotFoundError, AssertionError, RuntimeError):
                 NAUGHTY_LIST.add(index)
 
 
@@ -119,25 +111,16 @@ def get_cyclone_by_name_date(name, start, end, per_cyclone=None):
         (best_track_df["NAME"] == name) & (best_track_df["USA_SSHS"] > 3)
         & (best_track_df["ISO_TIME"] <= end) & (best_track_df["ISO_TIME"] >= start)
         ]
-    dict_cy = df_cyclone.to_dict(orient="records")
-    for i, cyclone_point in enumerate(dict_cy[:-1]):
-        start_point = cyclone_point
-        end_point = dict_cy[i + 1]
-        history = best_track_df.loc[(best_track_df["NAME"] == name) &
-                                    (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"]) & (
-                                            best_track_df["ISO_TIME"] > start_point["ISO_TIME"] - timedelta(
-                                        hours=24))].to_dict(orient="records")
-        future = best_track_df.loc[(best_track_df["NAME"] == name) &
-                                   (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"] + timedelta(hours=24)) & (
-                                           best_track_df["ISO_TIME"] > start_point["ISO_TIME"])].to_dict(
-            orient="records")
+    dict_cy = df_cyclone.to_dict(orient="index")
+    for index in list(dict_cy.keys())[:-1]:
+        start_point = dict_cy[index]
+        if index + 1 not in dict_cy.keys():
+            continue
+        end_point = dict_cy[index + 1]
         try:
-            cy = get_entire_cyclone(start_point, end_point, history=history, future=future)
-            if cy and cy.is_eyewall_gt_good:
-                per_cyclone(cy)
-        except Exception:
-            import traceback
-            traceback.print_exc()
+            cy = CycloneImageFast.from_points(index, start_point, end_point)
+        except (FileNotFoundError, AssertionError):
+            continue
 
 
 def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=False):

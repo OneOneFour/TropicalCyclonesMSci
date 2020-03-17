@@ -10,6 +10,12 @@ fig, ax = plt.subplots()
 ax.hist(df["gt"], bins=np.arange(-44, -10, 2))
 ax.set_xlabel("Glaciation Temperature (C)")
 ax.set_ylabel("Frequency")
+
+fig, ax = plt.subplots()
+ax.scatter(df["gt"], df["delta_wind"])
+ax.set_xlabel("Glaciation Temperature (C)")
+ax.set_ylabel("24hr wind change (previous) (kts)")
+print(f"Correlation coeff:{stats.pearsonr(df['gt'], df['delta_wind'])}")
 plt.show()
 #
 # fig, ax = plt.subplots()
