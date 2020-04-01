@@ -17,7 +17,7 @@ CACHE_DIRECTORY = os.environ.get("CACHE_DIRECTORY")
 
 hc = 2E-7
 hcsq = 1.31E-34
-
+ABSOLUTE_ZERO = 273.15
 I4_wavelength = 11100
 I5_wavelength = 3400
 
@@ -31,61 +31,71 @@ def clamp(x, min_v, max_v):
 
 
 class CycloneCellFast:
-    __slots__ = ["i4", "i5", "gts", "xmin", "xmax", "ymin", "ymax"]
+    __slots__ = ["image", "i4_reflectance", "gts", "xmin", "xmax", "ymin", "ymax"]
+    A = 2 / (np.log(0.6 / 0.72))
+    B = 2 - A * np.log(0.72)
+    from pyspectral.near_infrared_reflectance import Calculator
+    calc = Calculator("Suomi-NPP", "viirs", "I4")
 
-    def __init__(self, i4_full, i5_full, xmin, xmax, ymin, ymax):
-        self.i4 = i4_full[ymin:ymax, xmin:xmax]
-        self.i5 = i5_full[ymin:ymax, xmin:xmax]
+    def __init__(self, image: "CycloneImageFast", xmin, xmax, ymin, ymax):
+        self.image = image
         self.xmin = xmin
         self.xmax = xmax
         self.ymin = ymin
         self.ymax = ymax
+        self.i4_reflectance = self.calc.reflectance_from_tbs(self.zenith, self.i4, self.i5)
         assert not np.isnan(self.i4).all() and not np.isnan(self.i5).all()
         self.gts = self.glaciation_temperature_percentile()
 
     @property
+    def i4(self):
+        return self.image.raw_grid_I4[self.ymin:self.ymax, self.xmin:self.xmax]
+
+    @property
+    def i5(self):
+        return self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax]
+
+    @property
+    def zenith(self):
+        return self.image.zenith[self.ymin:self.ymax, self.xmin:self.xmax]
+
+    @property
+    def satz(self):
+        return self.image.satz[self.ymin:self.ymax, self.xmin:self.xmax]
+
+    @property
+    def raz(self):
+        return self.image.raz[self.ymin:self.ymax, self.xmin:self.xmax]
+
+    @property
+    def i5_c(self):
+        return self.i5 - ABSOLUTE_ZERO
+
+    @property
+    def i5_flat_c(self):
+        return self.i5_flat - ABSOLUTE_ZERO
+
+    @property
     def BTD(self):
-        return self.i4_flat - (self.i5_flat + 273.15)
+        return self.i4_flat - (self.i5_flat)
 
     @property
     def BTD_ratio(self):
-        return (self.i4_flat - (self.i5_flat + 273.15)) / (self.i5_flat + 273.15)
+        return (self.i4_flat - (self.i5_flat)) / (self.i5_flat)
 
     @property
     def i4i5ratio(self):
-        return (self.i4_flat) / (self.i5_flat + 273.15)
-
-    def plot_BTD_ratio(self):
-        BTD = self.BTD_ratio
-        i5_flat = self.i5_flat
-        plt.scatter(i5_flat, BTD)
-        plt.gca().set_xlabel("I5 temperature")
-        plt.gca().set_ylabel("I4 - I5 ratio to I5")
-        plt.show()
-
-    def plot_BTD_difference(self):
-        BTD = self.BTD
-        i5_flat = self.i5_flat
-        plt.scatter(i5_flat, BTD)
-        plt.gca().set_xlabel("I5 temperature")
-        plt.gca().set_ylabel("I4 - I5 difference")
-        plt.show()
-
-    def plot_i4_i5_ratio(self):
-        i4i5_ratio = self.i4i5ratio
-        i5_flat = self.i5_flat
-        plt.scatter(i5_flat, i4i5_ratio)
-        plt.gca().set_xlabel("I5 temperature")
-        plt.gca().set_ylabel("I4 / I5 ratio")
-        plt.show()
+        return (self.i4_flat) / (self.i5_flat)
 
     @property
     def good_gt(self):
-        return (-45 < self.gt.value < 0) and self.gt.error < 5 and self.r2 > 0.85
+        return (ABSOLUTE_ZERO - 45 < self.gt.value < ABSOLUTE_ZERO) and self.gt.error < 5 and self.r2 > 0.85
 
-    def bin_data_percentiles(self, percentiles):
+    def bin_data_percentiles(self, percentiles, i4_band=None):
         i4_list, i5_list = [], []
-        gt_fit = GTFit(self.i4.flatten(), self.i5.flatten())
+        if i4_band is None:
+            i4_band = self.i4_flat
+        gt_fit = GTFit(i4_band, self.i5_flat)
         for p in percentiles:
             i5, i4 = gt_fit.bin_data(np.percentile, 1, (p,))
             i4_list.append(i4)
@@ -97,8 +107,16 @@ class CycloneCellFast:
             return True
         return cell.xmax > self.xmin and self.xmax > cell.xmin and self.ymax > cell.ymin and cell.ymax > self.ymin
 
-    def plot(self):
-        plt.imshow(self.i5)
+    def plot(self, fig, ax, show=True):
+        ax.imshow(self.i5)
+        if show:
+            plt.show()
+
+    def plot_profile(self):
+        fig, ax = plt.subplots(1, 2)
+        self.plot(fig, ax[0], show=False)
+        gt_fit = GTFit(self.i4_flat, self.i5_flat)
+        gt_fit.piecewise_percentile(5, fig, ax[1])
         plt.show()
 
     @property
@@ -118,12 +136,23 @@ class CycloneCellFast:
         return self.i4[~np.isnan(self.i4)].flatten()
 
     @property
+    def i4_reflectance_flat(self):
+        return self.i4_reflectance[~np.isnan(self.i4_reflectance)].flatten()
+
+    @property
     def i5_flat(self):
         return self.i5[~np.isnan(self.i5)].flatten()
 
     def glaciation_temperature_percentile(self, percentiles=(5, 50, 95)):
         gt_fit = GTFit(self.i4.flatten(), self.i5.flatten())
-        return gt_fit.piecewise_percentile_multiple(percentiles)
+        return gt_fit.piecewise_percentile_multiple(percentiles, units="kelvin")
+
+
+    def re(self,nan_out_of_range=False):
+        from inspect_nc import get_re
+        return np.array(
+            [[get_re(self.i4_reflectance[y, x], self.satz[y, x], self.zenith[y, x], np.abs(self.raz[y, x]),nan_out_of_range=nan_out_of_range) for x in
+              range(self.xmax - self.xmin)] for y in range(self.ymax - self.ymin)])
 
 
 class CycloneImageFast:
@@ -160,8 +189,9 @@ class CycloneImageFast:
                                dayOrNight="D", include_mod=False)
         inst__ = cls()
         inst__.scene = Scene(files, reader="viirs_l1b")
-        inst__.scene.load(["I04", "I05", "I01"])
-        inst__.scene["I05"] -= 273.15
+        inst__.scene.load(
+            ["I01", "I04", "I05", "i_solar_zenith_angle", "i_satellite_zenith_angle", "i_satellite_azimuth_angle",
+             "i_solar_azimuth_angle"])
         inst__.__interpolate(start_point, end_point)
         inst__.metadata["START_IDX"] = start_idx
         assert (inst__.eye_lon, inst__.eye_lat) in inst__.bb_area()
@@ -189,25 +219,22 @@ class CycloneImageFast:
                                                                   self.eye_lat - 2 * self.metadata["USA_RMW"] / 60)
             xmax, ymin = self.scene.max_area().get_xy_from_lonlat(self.eye_lon + 2 * self.metadata["USA_RMW"] / 60,
                                                                   self.eye_lat + 2 * self.metadata["USA_RMW"] / 60)
-            self.eye_gd = CycloneCellFast(self.raw_grid_I4,
-                                          self.raw_grid_I5, xmin, xmax, ymin, ymax)
+            self.eye_gd = CycloneCellFast(self, xmin, xmax, ymin, ymax)
             return self.eye_gd
 
     def bb_area(self):
         return self.scene.max_area().compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.eye_lat, "lat_1": self.eye_lat, "lon_0": self.eye_lon})
 
-    def mask(self, calculate=False):
-        self.scene["I05_mask"] = self.scene["I05"].where((self.scene["I05"] < 0) & (self.scene["I05"] > -50) & (
+    def mask(self,low=220,high=260, calculate=False):
+        self.scene["I05_mask"] = self.scene["I05"].where((self.scene["I05"] < high) & (self.scene["I05"] > low) & (
                 self.scene["I01"] > self.scene["I01"].mean() + self.scene["I01"].std()))
-        self.scene["I04_mask"] = self.scene["I04"].where((self.scene["I05"] < 0) & (self.scene["I05"] > -50) & (
+        self.scene["I04_mask"] = self.scene["I04"].where((self.scene["I05"] < high) & (self.scene["I05"] > low) & (
                 self.scene["I01"] > self.scene["I01"].mean() + self.scene["I01"].std()))
 
         if calculate:
             self.raw_grid_I4 = self.scene["I04_mask"].values
             self.raw_grid_I5 = self.scene["I05_mask"].values
-            self.eye()
-            self.generate_environmental()
 
     def unmask(self, recalculate=True):
         """
@@ -239,7 +266,9 @@ class CycloneImageFast:
         self.scene = self.scene.crop(area=cropped_area)
         self.raw_grid_I5 = self.scene["I05_mask"].values
         self.raw_grid_I4 = self.scene["I04_mask"].values
-        # self.raw_grid_I1 = self.scene["I01"].values
+        self.zenith = self.scene["i_solar_zenith_angle"].values
+        self.satz = np.cos(np.deg2rad(self.scene["i_satellite_zenith_angle"])).values
+        self.raz = np.abs(self.scene["i_satellite_azimuth_angle"] - self.scene["i_solar_azimuth_angle"]).values
 
     def __interpolate(self, start: dict, end: dict):
         from pandas import isna
@@ -262,15 +291,21 @@ class CycloneImageFast:
                 int_dict[k] = start[k]
         self.metadata = int_dict
 
-    def environment_bin_percentiles(self, percentiles):
+    def environment_bin_percentiles(self, percentiles, reflectivity=False, mean=False):
         assert hasattr(self, "cells")
         i4_list = [[] for p in percentiles]
         i5_list = [[] for p in percentiles]
         for c in self.cells:
-            i4, i5 = c.bin_data_percentiles(percentiles)
+            if reflectivity:
+                i4, i5 = c.bin_data_percentiles(percentiles, c.i4_reflectance_flat)
+            else:
+                i4, i5 = c.bin_data_percentiles(percentiles)
             for i in range(len(percentiles)):
                 i4_list[i].extend(i4[i])
                 i5_list[i].extend(i5[i])
+        if mean:
+            for i, p in enumerate(percentiles):
+                i5_list[i], i4_list[i] = GTFit(i4_list[i], i5_list[i]).bin_data(np.mean)
         return i4_list, i5_list
 
     def generate_environmental(self, w=192, h=192):
@@ -279,7 +314,9 @@ class CycloneImageFast:
         for i in range(shape[0] // h):
             for j in range(shape[1] // w):
                 try:
-                    ccf = CycloneCellFast(self.raw_grid_I4, self.raw_grid_I5, j * w, (j + 1) * w, i * h, (i + 1) * h)
+                    ccf = CycloneCellFast(self, j * w,
+                                          (j + 1) * w, i * h,
+                                          (i + 1) * h)
                     if ccf.good_gt and not ccf.intersects(self.eye()):
                         self.cells.append(ccf)
                 except (ValueError, RuntimeError, AssertionError):
@@ -292,6 +329,34 @@ class CycloneImageFast:
         del nc_meta["LAT"]
         del nc_meta["LON"]
         self.scene.save_datasets(writer="cf", filename="IRMA.nc", header_attrs=nc_meta)
+
+    def plot_eyewall_against_external(self):
+        fig, ax = plt.subplots()
+        i4_l, i5_l = self.eye().bin_data_percentiles((5, 50, 95))
+        i4_l_ext, i5_l_ext = self.environment_bin_percentiles((5, 50, 95), mean=True)
+        for i, p in enumerate((5, 50, 95)):
+            ax.plot(i4_l[i], i5_l[i], label=f"{p}th percentile eyewall")
+            ax.plot(i4_l_ext[i], i5_l_ext[i], label=f"{p}th percentile external")
+        ax.set_xlabel("I4 Brightness Temperature (K)")
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+        ax.set_ylabel("Cloud top temperature (K)")
+        ax.legend()
+        plt.show()
+
+    def plot_eyewall_against_ext_ref(self):
+        fig, ax = plt.subplots()
+        ref_l, i5_l = self.eye().bin_data_percentiles((5, 50, 95), self.eye().i4_reflectance_flat)
+        ref_l_ext, i5_l_ext = self.environment_bin_percentiles((5, 50, 95), reflectivity=True, mean=True)
+        for i, p in enumerate((5, 50, 95)):
+            ax.plot(ref_l[i], i5_l[i], label=f"{p}th percentile eyewall")
+            ax.plot(ref_l_ext[i], i5_l_ext[i], label=f"{p}th percentile external")
+        ax.set_xlabel("I4 reflectivity")
+        ax.set_ylabel("Cloud top temperature (K)")
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+        ax.legend()
+        plt.show()
 
     def pickle(self):
 

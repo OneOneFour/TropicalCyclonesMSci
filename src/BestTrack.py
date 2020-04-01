@@ -53,7 +53,7 @@ def all_cyclones_since(year, month, day, cat_min=4, per_cyclone=None):
             except (ConnectionError) as e:
                 print(e)
                 continue
-            except (FileNotFoundError, AssertionError, RuntimeError):
+            except Exception:
                 NAUGHTY_LIST.add(index)
 
 

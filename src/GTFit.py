@@ -13,7 +13,8 @@ d_gt_d_a = lambda a, b, c: (-3 * a * c + 2 * b * (-b + np.sqrt(b ** 2 - 3 * a * 
 d_gt_d_b = lambda a, b, c: (-1 + b / np.sqrt(b ** 2 - 3 * a * c)) / (3 * a)
 d_gt_d_c = lambda a, b, c: -1 / (2 * np.sqrt(b ** 2 - 3 * a * c))
 
-HOMOGENEOUS_FREEZING_TEMP = -38
+HOMOGENEOUS_FREEZING_TEMP_C = -38
+HOMOGENEOUS_FREEZING_TEMP_K = 273.15 - 38
 COLOR_LIST = ["firebrick", "gold", "darkorange"]
 
 
@@ -48,7 +49,7 @@ class GTFit:
             x_i05 = np.arange(custom_range[0], custom_range[1], bin_width)
         else:
             x_i05 = np.arange(min(self.i05), max(self.i05), bin_width)
-        y_i04 = np.array([0] * len(x_i05))
+        y_i04 = np.array([0] * len(x_i05), dtype=np.float64)
         if len(x_i05) < 1:
             raise ValueError("I4 data is empty. This could be due to masking or a bad input")
         for i, x in enumerate(x_i05):
@@ -65,18 +66,26 @@ class GTFit:
             y_i04 = np.delete(y_i04, zero_args)
         return x_i05, y_i04
 
-    def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise, setup_axis=True):
+    def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise, setup_axis=True, units="kelvin"):
         x_i05 = self.i05
         y_i04 = self.i04
         if len(self.i05) < 50 or len(self.i04) < 50:
             raise ValueError("Problem underconstrained.")
         if not self.i01 is None:
             params, cov = sp.curve_fit(func, x_i05, y_i04,
-                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280, 1, 1),
+                                       p0=(
+                                           HOMOGENEOUS_FREEZING_TEMP_C if units == "celcius" else HOMOGENEOUS_FREEZING_TEMP_K,
+                                           280,
+                                           1,
+                                           1),
                                        sigma=(100 / (self.i01 ** 2)))
         else:
             params, cov = sp.curve_fit(func, x_i05, y_i04,
-                                       p0=(HOMOGENEOUS_FREEZING_TEMP, 280, 1, 1))
+                                       p0=(
+                                           HOMOGENEOUS_FREEZING_TEMP_C if units == "celcius" else HOMOGENEOUS_FREEZING_TEMP_K,
+                                           280,
+                                           1,
+                                           1))
         r2 = 1 - (np.sum((y_i04 - func(x_i05, *params)) ** 2)) / np.sum((y_i04 - y_i04.mean()) ** 2)
         gt_err = np.sqrt(np.diag(cov))[0]
         gt = params[0]
@@ -86,7 +95,8 @@ class GTFit:
         i4_err_appx = abs(gt_err * (i4 / gt))
         return GT(gt, gt_err), I4(i4, i4_err_appx), r2
 
-    def piecewise_percentile_multiple(self, percentiles=None, fig=None, ax=None, plot_points=True, setup_axis=True,
+    def piecewise_percentile_multiple(self, percentiles=None, units="kelvin", fig=None, ax=None, plot_points=True,
+                                      setup_axis=True,
                                       colors=None, label=""):
         if colors is None:
             colors = COLOR_LIST
@@ -95,9 +105,12 @@ class GTFit:
         rtnLst = []
         for i, p in enumerate(percentiles):
             rtnLst.append(
-                self.piecewise_percentile(percentile=p, fig=fig, ax=ax, setup_axis=False, c=colors[i], label=label))
+                self.piecewise_percentile(percentile=p, fig=fig, ax=ax, setup_axis=False, c=colors[i], label=label,units=units))
         if ax is not None and setup_axis:
-            ax.axhline(-38, c='g', label="$T_{g,homo}$", ls="--")
+            if units == "celcius":
+                ax.axhline(HOMOGENEOUS_FREEZING_TEMP_C, c='g', label="$T_{g,homo}$", ls="--")
+            elif units == "kelvin":
+                ax.axhline(HOMOGENEOUS_FREEZING_TEMP_K, c="g", label="$T_{g,homo}$", ls="--")
             ax.invert_yaxis()
             ax.invert_xaxis()
             ax.set_ylabel("Cloud Temperature (C)")
@@ -105,14 +118,16 @@ class GTFit:
             ax.legend()
         return rtnLst
 
-    def piecewise_percentile(self, percentile=50, fig=None, ax=None, setup_axis=True, c='r', label=""):
+    def piecewise_percentile(self, percentile=50, fig=None, ax=None, setup_axis=True, units="kelvin", c='r', label=""):
         if len(self.i05) < 1:
             raise ValueError("I5 data is empty. This could be due to masking or a bad input")
         x_i05, y_i04 = self.bin_data(per_bin_func=np.percentile, bin_width=1, bin_func_args=(percentile,))
         if len(x_i05) < 4 or len(y_i04) < 4:
             raise ValueError("Problem underconstrained")
         params, cov = sp.curve_fit(simple_piecewise, x_i05, y_i04, absolute_sigma=True,
-                                   p0=(HOMOGENEOUS_FREEZING_TEMP, 260, 1, 1))
+                                   p0=(
+                                       HOMOGENEOUS_FREEZING_TEMP_C if units == "celcius" else HOMOGENEOUS_FREEZING_TEMP_K,
+                                       260, 1, 1))
 
         err = np.sqrt(np.diag(cov))
         gt_err = err[0]
@@ -121,13 +136,14 @@ class GTFit:
             (y_i04 - y_i04.mean()) ** 2)
         if fig and ax:
             self.plot(y_i04, x_i05, fig, ax, gt, gt_err, func=simple_piecewise, params=params, setup_axis=setup_axis,
-                      s=10, c=c, label=str(percentile) + "th", add_label=label)
+                      units=units, s=0.05, c=c, label=str(percentile) + "th", add_label=label)
         i4 = float(simple_piecewise(gt, *params))
         i4_err_appx = abs(gt_err * (i4 / gt))
 
         return GT(gt, gt_err), I4(i4, i4_err_appx), r2
 
-    def plot(self, x, y, fig, ax, gt=None, gt_err=None, func=None, params=None, setup_axis=True, s=0.5, c='b',
+    def plot(self, x, y, fig, ax, gt=None, gt_err=None, func=None, params=None, setup_axis=True, units="kelvin",
+             s=0.5, c='b',
              label="None", add_label=""):
         if fig is None or ax is None:
             return
@@ -141,7 +157,10 @@ class GTFit:
             ax.axhline(gt, label=f"{add_label} $T_{{g,{label}}}$:{round(gt, 1)}±{round(gt_err, 1)} C", c=c, ls="--")
 
         if setup_axis:
-            ax.axhline(-38, c='g', label="$T_{g,homo}$")
+            if units == "celcius":
+                ax.axhline(-38, c='g', label="$T_{g,homo}$")
+            elif units == "kelvin":
+                ax.axhline(273.15 - 38, c="g", label="$T_{g,homo}$")
             ax.invert_yaxis()
             ax.invert_xaxis()
             ax.set_ylabel("Cloud Temperature (C)")
