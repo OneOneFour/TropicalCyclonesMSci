@@ -23,6 +23,8 @@ if "NAUGHTY_LIST" in os.environ:
     def save_the_file():
         with open(os.environ.get("NAUGHTY_LIST"), 'w') as naughty_file:
             naughty_file.write(str(NAUGHTY_LIST))
+else:
+    NAUGHTY_LIST = None
 
 BEST_TRACK_CSV = os.environ.get("BEST_TRACK_CSV",
                                 r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\data\best_fit_csv\ibtracs.since1980.list.v04r00.csv")
@@ -48,13 +50,14 @@ def all_cyclones_since(year, month, day, cat_min=4, per_cyclone=None):
                     print(f"Already processed {start_point['NAME']}:{index}")
                     continue
                 cy = CycloneImageFast.from_points(index, start_point, end_point)
-                cy.generate_environmental()
+                # cy.generate_environmental()
                 cy.pickle()
             except (ConnectionError) as e:
                 print(e)
                 continue
             except (FileNotFoundError, AssertionError, RuntimeError):
-                NAUGHTY_LIST.add(index)
+                if NAUGHTY_LIST:
+                    NAUGHTY_LIST.add(index)
 
 
 # TODO: Move to using exclusion list
@@ -123,7 +126,7 @@ def get_cyclone_by_name_date(name, start, end, per_cyclone=None):
             continue
 
 
-def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=False):
+def get_cyclone_by_name(name, year, max_len=np.inf):
     df_cyclone = best_track_df.loc[
         (best_track_df["NAME"] == name) & (best_track_df["ISO_TIME"].dt.year == year) & (best_track_df["USA_SSHS"] > 3)]
     dict_cy = df_cyclone.to_dict(orient="index")
@@ -131,39 +134,20 @@ def get_cyclone_by_name(name, year, per_cyclone=None, max_len=np.inf, shading=Fa
     for index in list(dict_cy.keys())[:-1]:
         if len(vals_series) >= max_len:
             break
-        if index in NAUGHTY_LIST:
-            print(f"SKIPPING:{index}")
-            continue
+        if NAUGHTY_LIST:
+            if index in NAUGHTY_LIST:
+                print(f"SKIPPING:{index}")
+                continue
         start_point = dict_cy[index]
         if index + 1 not in dict_cy.keys():
             continue
         end_point = dict_cy[index + 1]
-        history = best_track_df.loc[(best_track_df["NAME"] == name) &
-                                    (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"]) & (
-                                            best_track_df["ISO_TIME"] > start_point["ISO_TIME"] - timedelta(
-                                        hours=24))].to_dict(orient="records")
-        future = best_track_df.loc[(best_track_df["NAME"] == name) &
-                                   (best_track_df["ISO_TIME"] <= start_point["ISO_TIME"] + timedelta(hours=24)) & (
-                                           best_track_df["ISO_TIME"] > start_point["ISO_TIME"])].to_dict(
-            orient="records")
-        # ci = get_eye_cubic(start_point, end_point, name=NAME, basin=start_point["BASIN"],
-        #                    cat=start_point["USA_SSHS"], dayOrNight="D")
-        # if ci is not None:
-        #     ci.draw_eye()
-        #     return ci
         try:
-            cy = get_entire_cyclone(start_point, end_point, history=history, future=future)
-
-            if cy and cy.is_eyewall_gt_good:
-                print(f"Cyclone:{cy.metadata['NAME']} on {cy.metadata['ISO_TIME']}")
-                if not (shading and cy.is_eyewall_shaded):
-                    vals = per_cyclone(cy)
-                    vals_series.append(vals)
-            else:
-                NAUGHTY_LIST.add(index)
-        except Exception:
+            cy = CycloneImageFast.from_points(index,start_point,end_point)
+            cy.generate_environmental()
+            cy.pickle()
+        except (FileNotFoundError, AssertionError,RuntimeError):
             import traceback
             traceback.print_exc()
-            NAUGHTY_LIST.add(index)
 
     return vals_series
