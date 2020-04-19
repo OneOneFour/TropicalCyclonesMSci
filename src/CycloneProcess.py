@@ -6,8 +6,10 @@ from itertools import chain
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scipy.stats as sps
 from tqdm import tqdm
 
+from BestTrack import best_track_df
 from GTFit import GTFit
 from alt.CycloneMap import CycloneImageFast
 
@@ -79,6 +81,39 @@ def plot_binned_i5vsi4r(df, title=""):
         gt_fit_i5_ref = GTFit(reflectance, i5)
         i5, reflectance = gt_fit_i5_ref.bin_data(np.mean)
         ax.plot(reflectance, i5, label=f"{p}th percentile external")
+    ax.set_title(title)
+    ax.invert_xaxis()
+    ax.invert_yaxis()
+    ax.set_xlabel("I4 band reflectance")
+    ax.set_ylabel("Cloud top temperature (K)")
+    ax.legend()
+    plt.show()
+
+
+def plot_binned_i5vsi4r_both(df_4, df_5, percentiles, title=""):
+    fig, ax = plt.subplots(figsize=(8, 8))
+    for p in percentiles:
+        i5 = list(chain.from_iterable(df_4[f"{p}_EYEWALL_REF_I5"]))
+        reflectance = list(chain.from_iterable(df_4[f"{p}_EYEWALL_REF_I4"]))
+        gt_fit_i5_ref = GTFit(reflectance, i5)
+        i5, reflectance = gt_fit_i5_ref.bin_data(np.mean)
+        ax.plot(reflectance, i5, label=f"Cat 5 eyewall, {p}th percentile")
+        i5 = list(chain.from_iterable(df_4[f"{p}_EXTERNAL_REF_I5"]))
+        reflectance = list(chain.from_iterable(df_4[f"{p}_EXTERNAL_REF_I4"]))
+        gt_fit_i5_ref = GTFit(reflectance, i5)
+        i5, reflectance = gt_fit_i5_ref.bin_data(np.mean)
+        ax.plot(reflectance, i5, label=f"Cat 4 external,{p}th percentile")
+
+        i5 = list(chain.from_iterable(df_5[f"{p}_EYEWALL_REF_I5"]))
+        reflectance = list(chain.from_iterable(df_5[f"{p}_EYEWALL_REF_I4"]))
+        gt_fit_i5_ref = GTFit(reflectance, i5)
+        i5, reflectance = gt_fit_i5_ref.bin_data(np.mean)
+        ax.plot(reflectance, i5, label=f"Cat 5 eyewall,{p}th percentile")
+        i5 = list(chain.from_iterable(df_5[f"{p}_EXTERNAL_REF_I5"]))
+        reflectance = list(chain.from_iterable(df_5[f"{p}_EXTERNAL_REF_I4"]))
+        gt_fit_i5_ref = GTFit(reflectance, i5)
+        i5, reflectance = gt_fit_i5_ref.bin_data(np.mean)
+        ax.plot(reflectance, i5, label=f"Cat 5 external, {p}th percentile")
     ax.set_title(title)
     ax.invert_xaxis()
     ax.invert_yaxis()
@@ -235,6 +270,37 @@ def plot_binned_i5vsre(df, title=""):
     plt.show()
 
 
+def plot_binned_i5vsre_same(df_4, df_5, percentiles, title=""):
+    fig, ax = plt.subplots(figsize=(8, 8))
+    for p in percentiles:
+        i5 = list(chain.from_iterable(df_4[f"{p}_EYEWALL_RE_I5"]))
+        re = list(chain.from_iterable(df_4[f"{p}_EYEWALL_RE"]))
+        gt_fit_re = GTFit(re, i5)
+        i5, re = gt_fit_re.bin_data(np.mean)
+        ax.plot(re, i5, label=f"Cat 4  eyewall, {p}th percentile")
+        i5 = list(chain.from_iterable(df_4[f"{p}_EXTERNAL_RE_I5"]))
+        re = list(chain.from_iterable(df_4[f"{p}_EXTERNAL_RE"]))
+        gt_fit_re = GTFit(re, i5)
+        i5, re = gt_fit_re.bin_data(np.mean)
+        ax.plot(re, i5, label=f"Cat 4 external, {p}th percentile")
+        i5 = list(chain.from_iterable(df_5[f"{p}_EYEWALL_RE_I5"]))
+        re = list(chain.from_iterable(df_5[f"{p}_EYEWALL_RE"]))
+        gt_fit_re = GTFit(re, i5)
+        i5, re = gt_fit_re.bin_data(np.mean)
+        ax.plot(re, i5, label=f"Cat 5 eyewall, {p}th percentile")
+        i5 = list(chain.from_iterable(df_5[f"{p}_EXTERNAL_RE_I5"]))
+        re = list(chain.from_iterable(df_5[f"{p}_EXTERNAL_RE"]))
+        gt_fit_re = GTFit(re, i5)
+        i5, re = gt_fit_re.bin_data(np.mean)
+        ax.plot(re, i5, label=f"Cat 5 external ,{p}th percentile")
+    ax.set_title(title)
+    ax.invert_yaxis()
+    ax.set_xlabel("Effective Radius (10^-6 m)$")
+    ax.set_ylabel("Temperature (K)")
+    ax.legend()
+    plt.show()
+
+
 def overlap_BTD_ratio(*dfs):
     fig, ax = plt.subplots()
     for i, df in enumerate(dfs):
@@ -248,20 +314,102 @@ def overlap_BTD_ratio(*dfs):
     plt.show()
 
 
-def plot_ext_eyewall_dif(percentiles, df):
+def plot_ext_eyewall_re_dif(percentiles, df_4, df_5, title=""):
+    fig, ax = plt.subplots()
     for percentile in percentiles:
-        eyewall_i5 = np.array(list(chain.from_iterable(df[f"{percentile}_EYEWALL_REF_I5"])))
-        eyewall_reflectance = np.array(list(chain.from_iterable(df[f"{percentile}_EYEWALL_REF_I4"])))
+        eyewall_i5 = np.array(list(chain.from_iterable(df_4[f"{percentile}_EYEWALL_RE_I5"])))
+        eyewall_reflectance = np.array(list(chain.from_iterable(df_4[f"{percentile}_EYEWALL_RE"])))
         gt_fitter_eyewall = GTFit(eyewall_reflectance, eyewall_i5)
         eyewall_i5, eyewall_reflectance = gt_fitter_eyewall.bin_data(np.mean)
-        external_i5 = np.array(list(chain.from_iterable(df[f"{percentile}_EXTERNAL_REF_I5"])))
-        external_reflectance = np.array(list(chain.from_iterable(df[f"{percentile}_EXTERNAL_REF_I4"])))
+        external_i5 = np.array(list(chain.from_iterable(df_4[f"{percentile}_EXTERNAL_RE_I5"])))
+        external_reflectance = np.array(list(chain.from_iterable(df_4[f"{percentile}_EXTERNAL_RE"])))
         gt_fitter_external = GTFit(external_reflectance, external_i5)
         external_i5, external_reflectance = gt_fitter_external.bin_data(np.mean)
         delta_ir = eyewall_reflectance - external_reflectance
-        plt.plot(delta_ir, external_i5)
-    plt.gca().invert_yaxis()
+        ax.plot(delta_ir, external_i5, label=f"{percentile}th percentile difference, Category 4")
+        eyewall_i5 = np.array(list(chain.from_iterable(df_5[f"{percentile}_EYEWALL_RE_I5"])))
+        eyewall_reflectance = np.array(list(chain.from_iterable(df_5[f"{percentile}_EYEWALL_RE"])))
+        gt_fitter_eyewall = GTFit(eyewall_reflectance, eyewall_i5)
+        eyewall_i5, eyewall_reflectance = gt_fitter_eyewall.bin_data(np.mean)
+        external_i5 = np.array(list(chain.from_iterable(df_5[f"{percentile}_EXTERNAL_RE_I5"])))
+        external_reflectance = np.array(list(chain.from_iterable(df_5[f"{percentile}_EXTERNAL_RE"])))
+        gt_fitter_external = GTFit(external_reflectance, external_i5)
+        external_i5, external_reflectance = gt_fitter_external.bin_data(np.mean)
+        delta_ir = eyewall_reflectance - external_reflectance
+        ax.plot(delta_ir, external_i5, label=f"{percentile}th percentile difference, Category 5")
+    ax.invert_yaxis()
+    ax.legend()
+    ax.set_title(title)
+    ax.set_ylabel("Temperature (K)")
+    ax.set_xlabel("Eyewall $r_e$ - External $r_e$  ($\mu m$)")
     plt.show()
+
+
+def plot_ext_eyewall_dif(percentiles, df_4, df_5, title=""):
+    fig, ax = plt.subplots()
+    for percentile in percentiles:
+        eyewall_i5 = np.array(list(chain.from_iterable(df_4[f"{percentile}_EYEWALL_REF_I5"])))
+        eyewall_reflectance = np.array(list(chain.from_iterable(df_4[f"{percentile}_EYEWALL_REF_I4"])))
+        gt_fitter_eyewall = GTFit(eyewall_reflectance, eyewall_i5)
+        eyewall_i5, eyewall_reflectance = gt_fitter_eyewall.bin_data(np.mean)
+        external_i5 = np.array(list(chain.from_iterable(df_4[f"{percentile}_EXTERNAL_REF_I5"])))
+        external_reflectance = np.array(list(chain.from_iterable(df_4[f"{percentile}_EXTERNAL_REF_I4"])))
+        gt_fitter_external = GTFit(external_reflectance, external_i5)
+        external_i5, external_reflectance = gt_fitter_external.bin_data(np.mean)
+        delta_ir = eyewall_reflectance - external_reflectance
+        ax.plot(delta_ir, external_i5, label=f"{percentile}th percentile difference, Category 4")
+        eyewall_i5 = np.array(list(chain.from_iterable(df_5[f"{percentile}_EYEWALL_REF_I5"])))
+        eyewall_reflectance = np.array(list(chain.from_iterable(df_5[f"{percentile}_EYEWALL_REF_I4"])))
+        gt_fitter_eyewall = GTFit(eyewall_reflectance, eyewall_i5)
+        eyewall_i5, eyewall_reflectance = gt_fitter_eyewall.bin_data(np.mean)
+        external_i5 = np.array(list(chain.from_iterable(df_5[f"{percentile}_EXTERNAL_REF_I5"])))
+        external_reflectance = np.array(list(chain.from_iterable(df_5[f"{percentile}_EXTERNAL_REF_I4"])))
+        gt_fitter_external = GTFit(external_reflectance, external_i5)
+        external_i5, external_reflectance = gt_fitter_external.bin_data(np.mean)
+        delta_ir = eyewall_reflectance - external_reflectance
+        ax.plot(delta_ir, external_i5, label=f"{percentile}th percentile difference, Category 5")
+    ax.set_title(title)
+    ax.invert_yaxis()
+    ax.invert_xaxis()
+    ax.legend()
+    ax.set_ylabel("Temperature (K)")
+    ax.set_xlabel("Eyewall reflectance - External reflectance")
+    plt.show()
+
+
+def vs_vmax(df, percentile=95, wind_time=0, fig=None, ax=None,label=""):
+    vmax = []
+    delta_ref = []
+    for idx, row in df.iterrows():
+        external_temp, external_reflectance = GTFit(row[f"{percentile}_EXTERNAL_REF_I4"],
+                                                    row[f"{percentile}_EXTERNAL_REF_I5"]).bin_data(np.mean,
+                                                                                                   custom_range=(
+                                                                                                       260, 280))
+        eyewall_temp, eyewall_reflectance, = GTFit(row[f"{percentile}_EYEWALL_REF_I4"],
+                                                   row[f"{percentile}_EYEWALL_REF_I5"]).bin_data(np.mean,
+                                                                                                 custom_range=(
+                                                                                                 260, 280))
+        min_len = min(len(eyewall_reflectance), len(external_reflectance))
+        delta_reflectance = eyewall_reflectance[:min_len] - external_reflectance[:min_len]
+        if np.mean(delta_reflectance) < 0.025 and row["USA_SSHS"] == 5:
+            continue
+        if np.isnan(np.mean(delta_reflectance)):
+            continue
+        if wind_time == 0:
+            vmax.append(row["USA_WIND"])
+        else:
+            steps = wind_time // 3
+            idx = int(row["START_IDX"] + steps)
+            if np.isnan(best_track_df.iloc[idx]["USA_WIND"]):
+                continue
+            vmax.append(best_track_df.iloc[idx]["USA_WIND"])
+        delta_ref.append(np.mean(delta_reflectance))
+    print(sps.pearsonr(delta_ref, vmax))
+    if fig is None or ax is None:
+        fig, ax = plt.subplots()
+    ax.scatter(delta_ref, vmax,label=label)
+    ax.set_xlabel("Eyewall reflectance - external reflectance")
+    ax.set_ylabel("$V_{max}$ (kts)")
 
 
 def changeI5mask(ci: CycloneImageFast, new_low=None, new_high=None):
@@ -275,7 +423,7 @@ def changeI5mask(ci: CycloneImageFast, new_low=None, new_high=None):
 
 if __name__ == "__main__":
     files = glob.glob(os.path.join(CACHE_DIRECTORY, "**.gzp"))
-    FILE = r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\cyclone_df_re__remask_260.gzp"
+    FILE = r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\cyclone_df_remasked_280.gzp"
     percentiles = (5, 50, 95)
     if os.path.isfile(FILE):
         cyclone_df = pd.read_pickle(FILE, compression="gzip")
@@ -291,7 +439,7 @@ if __name__ == "__main__":
                 # ci.plot_eyewall_against_ext_ref()
                 if ci.eye().good_gt:
                     ci_dict = ci.metadata
-
+                    changeI5mask(ci, 220, 300)
                     # ci_dict["GT_EYEWALL"] = ci.eye().gt.value
                     # ci_dict["GT_EYEWALL_ERR"] = ci.eye().gt.error
                     # ci_dict["I4_REFLECTANCE"] = ci.eye().i4_reflectance
@@ -376,23 +524,25 @@ if __name__ == "__main__":
                     cyclone_df = cyclone_df.append(ci_dict, ignore_index=True)
             except AssertionError:
                 continue
-
+        cyclone_df.to_pickle(FILE, compression="gzip")
     # i5_e, i4_e = bin_mean(cyclone_df, "95_EXTERNAL_I5", "95_EXTERNAL_I4")
     # i5_ewall, i4_ewall = bin_mean(cyclone_df, "95_EYEWALL_I5", "95_EYEWALL_I4")
     # delta_frac = (i4_ewall) / i4_e
     # print(np.mean(delta_frac))
     # print(sem(delta_frac))
-
+    #
     cat_4_df = cyclone_df[cyclone_df["USA_SSHS"] == 4]
     cat_5_df = cyclone_df[cyclone_df["USA_SSHS"] == 5]
-
-    plot_binned_i5vsre(cat_4_df, title="Category 4: Temperature vs Effective Radius")
-    plot_binned_i5vsre(cat_5_df, title="Cateogry 5: Temperature vs Effective Radius")
-
-    # plot_ext_eyewall_dif(percentiles, cyclone_df)
+    # #
+    # plot_binned_i5vsre_same(cat_4_df,cat_5_df, percentiles=percentiles, title=f"Temperature vs Effective Radius")
+    # plot_binned_i5vsre(cat_5_df, title="Cateogry 5: Temperature vs Effective Radius")
+    fig,ax = plt.subplots()
+    vs_vmax(cat_4_df, 95, wind_time=0,fig=fig,ax = ax,label="Category 4")
+    vs_vmax(cat_5_df, 95, wind_time=0,fig=fig,ax=ax,label="Category 5")
+    ax.legend()
+    plt.show()
     # plot_ext_vs_eyedif(95, cyclone_df)
     # plot_binned_i5vsi4(cyclone_df)
     # plot_binned_i5vsBTD(cyclone_df)
     # plot_binned_i5vsBTD_ratio(cyclone_df)
     # plot_binned_i5vsi4i5_ratio(cyclone_df)
-    cyclone_df.to_pickle(FILE, compression="gzip")
