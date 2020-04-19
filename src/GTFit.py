@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import numpy as np
 import scipy.optimize as sp
-import scipy.stats as sps
+
 GT = namedtuple("GT", ("value", "error"))
 I4 = namedtuple("I4", ("value", "error"))
 
@@ -39,6 +39,8 @@ class GTFit:
         self.i05 = np.array(i05_flat)
         self.i04 = self.i04[~np.isnan(self.i04)]
         self.i05 = self.i05[~np.isnan(self.i05)]
+        assert len(self.i04) == len(self.i05)
+
         self.i01 = i01_flat
         self.gt = None
 
@@ -68,7 +70,8 @@ class GTFit:
 
     def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise, setup_axis=True, units="kelvin", c='r', label="",
                       i4_units="kelvin"):
-        x_i05, y_i04 = self.bin_data(np.mean,custom_range=(230,260))
+        x_i05, y_i04 = self.bin_data(np.mean, custom_range=(230, 260))
+        assert len(self.i05) > 50
         if len(x_i05) < 5 or len(x_i05) < 5:
             raise ValueError("Problem underconstrained.")
         params, cov = sp.curve_fit(func, x_i05, y_i04,
@@ -77,17 +80,17 @@ class GTFit:
                                        280 if i4_units == "kelvin" else 0,
                                        1,
                                        1))
-        r2 = 1 - (np.sum((y_i04 - func(x_i05, *params)) ** 2) / np.sum((y_i04 - y_i04.mean()) ** 2))
 
         gt_err = np.sqrt(np.diag(cov))[0]
         gt = params[0]
+        s = np.sqrt(((y_i04 - func(x_i05, *params)) ** 2).sum() / (len(y_i04)))
         if fig and ax:
-            fig.suptitle(f"R^2:{r2}")
+            fig.suptitle(f"S:{s}")
             self.plot(y_i04, x_i05, fig, ax, gt, gt_err, func=simple_piecewise, params=params, setup_axis=setup_axis,
                       units=units, s=0.05, c=c, label="mean", add_label=label)
         i4 = float(func(gt, *params))
         i4_err_appx = abs(gt_err * (i4 / gt))
-        return GT(gt, gt_err), I4(i4, i4_err_appx), r2
+        return GT(gt, gt_err), I4(i4, i4_err_appx)
 
     def piecewise_percentile_multiple(self, percentiles=None, units="kelvin", fig=None, ax=None, plot_points=True,
                                       setup_axis=True,
@@ -128,16 +131,13 @@ class GTFit:
         err = np.sqrt(np.diag(cov))
         gt_err = err[0]
         gt = params[0]
-        r2 = 1 - (np.sum((y_i04 - simple_piecewise(x_i05, *params)) ** 2)) / np.sum(
-            (y_i04 - y_i04.mean()) ** 2)
         if fig and ax:
-            fig.suptitle(f"R^2:{r2}")
             self.plot(y_i04, x_i05, fig, ax, gt, gt_err, func=simple_piecewise, params=params, setup_axis=setup_axis,
                       units=units, s=0.05, c=c, label=str(percentile) + "th", add_label=label)
         i4 = float(simple_piecewise(gt, *params))
         i4_err_appx = abs(gt_err * (i4 / gt))
 
-        return GT(gt, gt_err), I4(i4, i4_err_appx), r2
+        return GT(gt, gt_err), I4(i4, i4_err_appx)
 
     def plot(self, x, y, fig, ax, gt=None, gt_err=None, func=None, params=None, setup_axis=True, units="kelvin",
              s=0.5, c='b',

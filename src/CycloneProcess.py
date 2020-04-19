@@ -1,7 +1,7 @@
 import glob
 import os
 from itertools import chain
-
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -11,6 +11,11 @@ from tqdm import tqdm
 from BestTrack import best_track_df
 from GTFit import GTFit
 from alt.CycloneMap import CycloneImageFast
+
+font = {'family': 'normal',
+        'size': 15}
+
+matplotlib.rc("font", **font)
 
 CACHE_DIRECTORY = os.environ["CACHE_DIRECTORY"]
 
@@ -31,18 +36,29 @@ def get_full_column(df: pd.DataFrame, key: str):
 def compare_histograms(df: pd.DataFrame):
     fig, axs = plt.subplots(1, 2)
     # Eye histogram
-    axs[0].hist(df["GT_EYEWALL"])
-    axs[0].set_title("Eyewall $T_g$")
-    axs[0].set_xlabel("Glaciation Temperature (C)")
-    axs[0].set_ylabel("Frequency")
+    eyewall_hist(fig,axs[0])
 
-    axs[1].hist(get_full_column(df, "EXTERNAL_GT"))
-    axs[1].set_title("Environmental cell $T_g$")
-    axs[1].set_xlabel("Glaciation Temperature (C)")
-    axs[1].set_ylabel("Frequency")
-
+    external_hist(fig,axs[1])
     plt.show()
 
+
+def eyewall_hist(df, fig=None, ax=None):
+    if fig is None or ax is None:
+        fig, ax = plt.subplots()
+    ax.hist(df["GT_EYEWALL"],bins=np.arange(273.15-44,273.15-10,2),rwidth=0.8,histtype="barstacked")
+    ax.set_title("Eyewall $T_g$")
+    ax.set_xlabel("Glaciation Temperature (K)")
+    ax.set_ylabel("Frequency")
+    plt.show()
+
+def external_hist(df, fig=None, ax=None):
+    if fig is None or ax is None:
+        fig, ax = plt.subplots()
+    ax.hist(get_full_column(df, "EXTERNAL_GT"),bins=np.arange(-44,-10,2))
+    ax.set_title("Environmental cell $T_g$")
+    ax.set_xlabel("Glaciation Temperature (K)")
+    ax.set_ylabel("Frequency")
+    plt.show()
 
 def bin_mean(df, key_i5, key_i4):
     i5 = list(chain.from_iterable(df[key_i5]))
@@ -422,7 +438,7 @@ def changeI5mask(ci: CycloneImageFast, new_low=None, new_high=None):
 
 if __name__ == "__main__":
     files = glob.glob(os.path.join(CACHE_DIRECTORY, "**.gzp"))
-    FILE = r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\new_gts.gzp"
+    FILE = r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\new2_gts.gzp"
     # percentiles = (5, 50, 95)
     if os.path.isfile(FILE):
         cyclone_df = pd.read_pickle(FILE, compression="gzip")
@@ -431,11 +447,14 @@ if __name__ == "__main__":
         for f in tqdm(files):
             try:
                 ci = CycloneImageFast.from_gzp(f)
-
+                if not hasattr(ci, "cells"):
+                    ci.generate_environmental()
+                    ci.pickle()
+                else:
+                    print(len(ci.cells))
                 # EYE
                 try:
-                    ci.eye().gt, ci.eye().gt_i4, ci.eye().r2 = ci.eye().glaciation_temperature_mean()
-                    ci.eye().plot_profile()
+                    ci.eye().gt, ci.eye().gt_i4 = ci.eye().glaciation_temperature_mean()
                 except ValueError:
                     continue
                 # ci.plot_eyewall_against_external()
@@ -527,9 +546,11 @@ if __name__ == "__main__":
 
                     cyclone_df = cyclone_df.append(ci_dict, ignore_index=True)
             except AssertionError:
-                continue
+                import traceback
+
+                traceback.print_exc()
         cyclone_df.to_pickle(FILE, compression="gzip")
-    compare_histograms(cyclone_df)
+    eyewall_hist(cyclone_df)
     # i5_e, i4_e = bin_mean(cyclone_df, "95_EXTERNAL_I5", "95_EXTERNAL_I4")
     # i5_ewall, i4_ewall = bin_mean(cyclone_df, "95_EYEWALL_I5", "95_EYEWALL_I4")
     # delta_frac = (i4_ewall) / i4_e

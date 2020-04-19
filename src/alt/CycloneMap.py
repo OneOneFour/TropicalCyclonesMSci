@@ -34,6 +34,7 @@ class CycloneCellFast:
     __slots__ = ["image", "i4_reflectance", "gt", "gt_i4", "r2", "xmin", "xmax", "ymin", "ymax", "__condition"]
     A = 2 / (np.log(0.6 / 0.72))
     B = 2 - A * np.log(0.72)
+    TOLERANCE = 0.05
     from pyspectral.near_infrared_reflectance import Calculator
     calc = Calculator("Suomi-NPP", "viirs", "I4")
 
@@ -45,7 +46,7 @@ class CycloneCellFast:
         self.ymax = ymax
         self.i4_reflectance = self.calc.reflectance_from_tbs(self.zenith, self.i4, self.i5) * 100
         assert not np.isnan(self.i4).all() and not np.isnan(self.i5).all()
-        self.gt, self.gt_i4, self.r2 = self.glaciation_temperature_mean()
+        self.gt, self.gt_i4 = self.glaciation_temperature_mean()
 
     @property
     def i4(self):
@@ -117,10 +118,8 @@ class CycloneCellFast:
 
     @property
     def good_gt(self):
-        val =  (ABSOLUTE_ZERO - 45 < self.gt.value < ABSOLUTE_ZERO) and self.r2 > 0.85
-        if not val:
-            print(f"FALSE:{self.gt.value},{self.gt.error},{self.r2}")
-        return val
+        return (ABSOLUTE_ZERO - 41 < self.gt.value < ABSOLUTE_ZERO) and self.gt.error <= 3
+
     def bin_data_percentiles(self, percentiles, i4_band=None):
         i4_list, i5_list = [], []
         if i4_band is None:
@@ -192,6 +191,16 @@ class CycloneCellFast:
         ax[1].invert_yaxis()
         plt.show()
 
+    def plot_raw_profile(self):
+        fig, ax = plt.subplots(1, 2)
+        self.plot("i5", fig, ax[0], show=False)
+        ax[1].scatter(self.i4_reflectance_flat, self.i5_flat, s=0.1, c="r")
+        ax[1].set_ylabel("Temperature (K)")
+        ax[1].set_xlabel("I4 Band reflectance (%)")
+        ax[1].invert_xaxis()
+        ax[1].invert_yaxis()
+        plt.show()
+
     @property
     def shape(self):
         return self.i5.shape
@@ -219,11 +228,6 @@ class CycloneCellFast:
     @property
     def i_satellite_azimuth(self):
         return self.image.mask(self.image.scene["i_satellite_azimuth_angle"])[self.ymin:self.ymax, self.xmin:self.xmax]
-
-    @property
-    def BTD_h(self):
-        return (self.image.mask(self.image.scene["I05"]) - self.image.mask(self.image.scene["M16"]))[
-               self.ymin:self.ymax, self.xmin:self.xmax]
 
     def glaciation_temperature_percentile(self, percentiles=(5, 50, 95)):
         gt_fit = GTFit(self.i4_reflectance_flat, self.i5.flatten())
@@ -452,7 +456,8 @@ class CycloneImageFast:
                     if ccf.good_gt and not ccf.intersects(self.eye()):
                         self.cells.append(ccf)
                 except (ValueError, RuntimeError, AssertionError):
-                    continue
+                   continue
+        print(len(self.cells))
         return self.cells
 
     def write(self):
