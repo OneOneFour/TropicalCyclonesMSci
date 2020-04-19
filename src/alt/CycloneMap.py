@@ -89,7 +89,7 @@ class CycloneCellFast:
 
     @property
     def good_gt(self):
-        return (ABSOLUTE_ZERO - 45 < self.gt.value < ABSOLUTE_ZERO) and self.gt.error < 5 and self.r2 > 0.85
+        return (ABSOLUTE_ZERO - 45 < self.gt.value < ABSOLUTE_ZERO) and self.gt.error < 5
 
     def bin_data_percentiles(self, percentiles, i4_band=None):
         i4_list, i5_list = [], []
@@ -144,14 +144,14 @@ class CycloneCellFast:
         return self.i5[~np.isnan(self.i5)].flatten()
 
     def glaciation_temperature_percentile(self, percentiles=(5, 50, 95)):
-        gt_fit = GTFit(self.i4.flatten(), self.i5.flatten())
-        return gt_fit.piecewise_percentile_multiple(percentiles, units="kelvin")
+        gt_fit = GTFit(self.i4_reflectance_flat, self.i5_flat)
+        return gt_fit.piecewise_percentile_multiple(percentiles, units="kelvin", i4_units="reflectance")
 
-
-    def re(self,nan_out_of_range=False):
+    def re(self, nan_out_of_range=False):
         from inspect_nc import get_re
         return np.array(
-            [[get_re(self.i4_reflectance[y, x], self.satz[y, x], self.zenith[y, x], np.abs(self.raz[y, x]),nan_out_of_range=nan_out_of_range) for x in
+            [[get_re(self.i4_reflectance[y, x], self.satz[y, x], self.zenith[y, x], np.abs(self.raz[y, x]),
+                     nan_out_of_range=nan_out_of_range) for x in
               range(self.xmax - self.xmin)] for y in range(self.ymax - self.ymin)])
 
 
@@ -226,7 +226,7 @@ class CycloneImageFast:
         return self.scene.max_area().compute_optimal_bb_area(
             {"proj": "lcc", "lat_0": self.eye_lat, "lat_1": self.eye_lat, "lon_0": self.eye_lon})
 
-    def mask(self,low=220,high=260, calculate=False):
+    def mask(self, low=220, high=260, calculate=False):
         self.scene["I05_mask"] = self.scene["I05"].where((self.scene["I05"] < high) & (self.scene["I05"] > low) & (
                 self.scene["I01"] > self.scene["I01"].mean() + self.scene["I01"].std()))
         self.scene["I04_mask"] = self.scene["I04"].where((self.scene["I05"] < high) & (self.scene["I05"] > low) & (
