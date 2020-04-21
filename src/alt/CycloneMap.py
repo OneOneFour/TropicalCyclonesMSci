@@ -22,16 +22,12 @@ I4_wavelength = 11100
 I5_wavelength = 3400
 
 
-def planck(T, wavelength):
-    return ()
-
-
 def clamp(x, min_v, max_v):
     return max(min(x, max_v), min_v)
 
 
 class CycloneCellFast:
-    __slots__ = ["image", "i4_reflectance", "gt", "gt_i4", "r2", "xmin", "xmax", "ymin", "ymax", "__condition"]
+    __slots__ = ["image", "i4_reflectance","gts","gt","gt_i4","r2", "xmin", "xmax", "ymin", "ymax", "__condition"]
     A = 2 / (np.log(0.6 / 0.72))
     B = 2 - A * np.log(0.72)
     TOLERANCE = 0.05
@@ -44,35 +40,54 @@ class CycloneCellFast:
         self.xmax = xmax
         self.ymin = ymin
         self.ymax = ymax
+        self.assign_condition()
         self.i4_reflectance = self.calc.reflectance_from_tbs(self.zenith, self.i4, self.i5) * 100
         assert not np.isnan(self.i4).all() and not np.isnan(self.i5).all()
-        self.gt, self.gt_i4 = self.glaciation_temperature_mean()
+        self.gts = self.glaciation_temperature_percentile()
+
+    @property
+    def gt_median(self):
+        return self.gts[1][0]
+
+    @property
+    def gt_rho(self):
+        return self.gts[1][1]
+
+    @property
+    def nrmse(self):
+        return self.gts[1][2]
+
+    def assign_condition(self):
+        T, BTD_4 = GTFit(self.BTD_m, self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax]).bin_data(
+            np.percentile, bin_func_args=(25,))
+        assert len(T) > 0
+        BTD_4_p = [0] * len(BTD_4)
+        BTD_4_p[-1] = BTD_4[-1]
+        for i in range(len(BTD_4) - 1)[::-1]:
+            if BTD_4[i] > BTD_4_p[i + 1]:
+                BTD_4_p[i] = BTD_4_p[i + 1]
+            else:
+                BTD_4_p[i] = BTD_4[i]
+        self.__condition = False
+        for i in range(len(T)):
+            self.__condition = self.__condition | (
+                    (abs(self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax] - T[i]) < 0.5) & (
+                    self.BTD_m <= BTD_4_p[i]))
+
+    def remove_condition(self):
+        del self.__condition
 
     @property
     def i4(self):
-        if not hasattr(self, "__condition"):
-            T, BTD_4 = GTFit(self.BTD_m, self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax]).bin_data(
-                np.percentile, bin_func_args=(25,))
-            self.__condition = False
-            for i in range(len(T)):
-                self.__condition = self.__condition | (
-                        (abs(self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax] - T[i]) < 0.5) & (
-                        self.BTD_m <= BTD_4[i]))
-
         return np.where(self.__condition, self.image.raw_grid_I4[self.ymin:self.ymax, self.xmin:self.xmax], np.nan)
 
     @property
     def i5(self):
-        if not hasattr(self, "__condition"):
-            T, BTD_4 = GTFit(self.BTD_m, self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax]).bin_data(
-                np.percentile, bin_func_args=(25,))
-            self.__condition = False
-            for i in range(len(T)):
-                self.__condition = self.__condition | (
-                        (abs(self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax] - T[i]) < 0.5) & (
-                        self.BTD_m <= BTD_4[i]))
-
         return np.where(self.__condition, self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax], np.nan)
+
+    @property
+    def i1(self):
+        return self.image.scene["I01"][self.ymin:self.ymax, self.xmin:self.xmax]
 
     # @property
     # def i4(self):
@@ -118,7 +133,7 @@ class CycloneCellFast:
 
     @property
     def good_gt(self):
-        return (ABSOLUTE_ZERO - 41 < self.gt.value < ABSOLUTE_ZERO) and self.gt.error <= 3
+        return (ABSOLUTE_ZERO - 40 < self.gt_median.value < ABSOLUTE_ZERO) and self.nrmse <= 0.3
 
     def bin_data_percentiles(self, percentiles, i4_band=None):
         i4_list, i5_list = [], []
@@ -147,7 +162,7 @@ class CycloneCellFast:
         ])
         ax.set_xlabel("km")
         ax.set_ylabel("km")
-        cb = plt.colorbar(im)
+        cb = plt.colorbar(im, ax=[ax], location="left")
         ax.set_title(f"{band}")
         if band in ("i1", "m9", "i4_reflectance"):
             cb.set_label("Reflectance (%)")
@@ -319,6 +334,7 @@ class CycloneImageFast:
                         continue
                     x_list.append(x)
                     y_list.append(y)
+            assert len(x_list) > 0
             xmin = min(x_list)
             xmax = max(x_list)
             ymin = min(y_list)
@@ -388,7 +404,7 @@ class CycloneImageFast:
 
     def get_environmental_gts(self):
         assert hasattr(self, "cells")
-        return [c.gt.value for c in self.cells], [c.gt.error for c in self.cells]
+        return [c.gt.value for c in self.cells if c.good_gt], [c.gt.error for c in self.cells if c.good_gt]
 
     def __interpolate(self, start: dict, end: dict):
         from pandas import isna
@@ -456,7 +472,7 @@ class CycloneImageFast:
                     if ccf.good_gt and not ccf.intersects(self.eye()):
                         self.cells.append(ccf)
                 except (ValueError, RuntimeError, AssertionError):
-                   continue
+                    continue
         print(len(self.cells))
         return self.cells
 
@@ -495,8 +511,8 @@ class CycloneImageFast:
         ax.legend()
         plt.show()
 
-    def pickle(self):
+    def pickle(self, custom_path=None):
 
         filename = f"{self.metadata['NAME']}.{self.metadata['START_IDX']}.gzp"
-        with gzip.GzipFile(os.path.join(CACHE_DIRECTORY, filename), 'w') as f:
+        with gzip.GzipFile(os.path.join(custom_path if custom_path else CACHE_DIRECTORY, filename), 'w') as f:
             pickle.dump(self, f)

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats as sps
+import scipy.optimize as spo
 from tqdm import tqdm
 
 from BestTrack import best_track_df
@@ -26,6 +27,14 @@ CACHE_DIRECTORY = os.environ["CACHE_DIRECTORY"]
 plt.ioff()
 
 
+def gauss(x, a, x0, sigma):
+    return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
+
+
+def bimodal(x, a1, x01, sigma1, a2, x02, sigma2):
+    return gauss(x, a1, x01, sigma1) + gauss(x, a2, x02, sigma2)
+
+
 def get_full_column(df: pd.DataFrame, key: str):
     if key in df:
         a = [val for cell in df[key].values.flatten() for val in cell]
@@ -36,29 +45,62 @@ def get_full_column(df: pd.DataFrame, key: str):
 def compare_histograms(df: pd.DataFrame):
     fig, axs = plt.subplots(1, 2)
     # Eye histogram
-    eyewall_hist(fig,axs[0])
+    eyewall_hist(fig, axs[0])
 
-    external_hist(fig,axs[1])
+    external_hist(fig, axs[1])
     plt.show()
 
 
-def eyewall_hist(df, fig=None, ax=None):
+def chi_sq_eyewal_vs_external(df):
+    # Sample dist in eyewall
+    stats, pvalue = sps.ks_2samp(df["GT_EYEWALL"], get_full_column(df, "EXTERNAL_GT"))
+    print(stats)
+    print(pvalue)
+
+
+def eyewall_hist(df, fig=None, ax=None, fit=False, cust_key=None):
     if fig is None or ax is None:
         fig, ax = plt.subplots()
-    ax.hist(df["GT_EYEWALL"],bins=np.arange(273.15-44,273.15-10,2),rwidth=0.8,histtype="barstacked")
-    ax.set_title("Eyewall $T_g$")
+    n, bins, patches = ax.hist(df["GT_EYEWALL"] if not cust_key else df[cust_key],
+                               bins=np.arange(273.15 - 41, 273.15 - 12, 2), rwidth=0.8,
+                               histtype="barstacked")
+    ax.set_yticks(np.arange(0, max(n) + 1, 2))
+    if fit:
+        # Try bimodal
+        x = 0.5 * (bins[1:] + bins[:-1])
+        popt, pcov = spo.curve_fit(bimodal, x, n, p0=(max(n), 235, 5, max(n), 245, 5))
+        err = np.sqrt(np.diag(pcov))
+        T = np.linspace(230, 260, 100)
+        ax.plot(T, bimodal(T, *popt),
+                label="Bimodal Fit\n $\mu_{cool}$:" + str(round(popt[1], 1)) + "$\pm$" + str(
+                    round(err[1], 1)) + "K\n$\mu_{warm}$:" + str(round(popt[4], 1)) + "$\pm$" + str(
+                    round(err[4], 1)) + "K")
+
+        # popt, pcov = spo.curve_fit(gauss, x, n, p0=(max(n), np.mean(x), np.std(x)))
+        # ax.plot(T, gauss(T, *popt), label="Gaussian Fit")
+    ax.legend()
     ax.set_xlabel("Glaciation Temperature (K)")
     ax.set_ylabel("Frequency")
     plt.show()
 
-def external_hist(df, fig=None, ax=None):
+
+def external_hist(df, fig=None, ax=None, fit=True):
     if fig is None or ax is None:
         fig, ax = plt.subplots()
-    ax.hist(get_full_column(df, "EXTERNAL_GT"),bins=np.arange(-44,-10,2))
+    n, bins, patches = ax.hist(get_full_column(df, "EXTERNAL_GT"), bins=np.arange(273.15 - 44, 273.15 - 10, 2),
+                               rwidth=0.8, histtype="barstacked")
+    # Fit gaussian
+    if fit:
+        x = 0.5 * (bins[1:] + bins[:-1])
+        popt, pcov = spo.curve_fit(gauss, x, n, p0=(max(n), np.mean(x), np.std(x)))
+        T = np.linspace(230, 260, 100)
+        ax.plot(T, gauss(T, *popt), label="Gaussian Fit")
     ax.set_title("Environmental cell $T_g$")
     ax.set_xlabel("Glaciation Temperature (K)")
     ax.set_ylabel("Frequency")
+    ax.legend()
     plt.show()
+
 
 def bin_mean(df, key_i5, key_i4):
     i5 = list(chain.from_iterable(df[key_i5]))
@@ -438,7 +480,7 @@ def changeI5mask(ci: CycloneImageFast, new_low=None, new_high=None):
 
 if __name__ == "__main__":
     files = glob.glob(os.path.join(CACHE_DIRECTORY, "**.gzp"))
-    FILE = r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\new2_gts.gzp"
+    FILE = r"C:\Users\Robert\PycharmProjects\TropicalCyclonesMSci\out\btd_median.gzp"
     # percentiles = (5, 50, 95)
     if os.path.isfile(FILE):
         cyclone_df = pd.read_pickle(FILE, compression="gzip")
@@ -447,24 +489,16 @@ if __name__ == "__main__":
         for f in tqdm(files):
             try:
                 ci = CycloneImageFast.from_gzp(f)
-                if not hasattr(ci, "cells"):
-                    ci.generate_environmental()
-                    ci.pickle()
-                else:
-                    print(len(ci.cells))
-                # EYE
-                try:
-                    ci.eye().gt, ci.eye().gt_i4 = ci.eye().glaciation_temperature_mean()
-                except ValueError:
-                    continue
+                del ci.eye_gd
+
                 # ci.plot_eyewall_against_external()
                 # ci.plot_eyewall_against_ext_ref()
 
                 if ci.eye().good_gt:
                     ci_dict = ci.metadata
-                    ci_dict["GT_EYEWALL"] = ci.eye().gt.value
-                    ci_dict["GT_EYEWALL_ERR"] = ci.eye().gt.error
-                    ci_dict["EXTERNAL_GT"], ci_dict["EXTERNAL_GT_ERR"] = ci.get_environmental_gts()
+                    ci_dict["GT_EYEWALL"] = ci.eye().gt_median.value
+                    ci_dict["GT_EYEWALL_ERR"] = ci.eye().gt_median.error
+                    #ci_dict["EXTERNAL_GT"], ci_dict["EXTERNAL_GT_ERR"] = ci.get_environmental_gts()
                     # # ci_dict["I4_REFLECTANCE"] = ci.eye().i4_reflectance
                     #
                     # # re = ci.eye().re(True).flatten()
@@ -545,7 +579,7 @@ if __name__ == "__main__":
                     # ci_dict[f"{p}_EXTERNAL_RE_I5"] = e_re_i5
 
                     cyclone_df = cyclone_df.append(ci_dict, ignore_index=True)
-            except AssertionError:
+            except (AssertionError,RuntimeError):
                 import traceback
 
                 traceback.print_exc()

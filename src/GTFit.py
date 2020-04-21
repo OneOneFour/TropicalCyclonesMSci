@@ -70,8 +70,8 @@ class GTFit:
 
     def piecewise_fit(self, fig=None, ax=None, func=simple_piecewise, setup_axis=True, units="kelvin", c='r', label="",
                       i4_units="kelvin"):
-        x_i05, y_i04 = self.bin_data(np.mean, custom_range=(230, 260))
-        assert len(self.i05) > 50
+        x_i05, y_i04 = self.bin_data(np.mean)
+        assert len(self.i05) > 100
         if len(x_i05) < 5 or len(x_i05) < 5:
             raise ValueError("Problem underconstrained.")
         params, cov = sp.curve_fit(func, x_i05, y_i04,
@@ -83,14 +83,14 @@ class GTFit:
 
         gt_err = np.sqrt(np.diag(cov))[0]
         gt = params[0]
-        s = np.sqrt(((y_i04 - func(x_i05, *params)) ** 2).sum() / (len(y_i04)))
+        rmse = np.sqrt(((y_i04 - func(x_i05, *params)) ** 2).sum() / (len(y_i04)))
+        nrmse = rmse / (max(y_i04) - min(y_i04))
         if fig and ax:
-            fig.suptitle(f"S:{s}")
             self.plot(y_i04, x_i05, fig, ax, gt, gt_err, func=simple_piecewise, params=params, setup_axis=setup_axis,
                       units=units, s=0.05, c=c, label="mean", add_label=label)
         i4 = float(func(gt, *params))
         i4_err_appx = abs(gt_err * (i4 / gt))
-        return GT(gt, gt_err), I4(i4, i4_err_appx)
+        return GT(gt, gt_err), I4(i4, i4_err_appx), nrmse
 
     def piecewise_percentile_multiple(self, percentiles=None, units="kelvin", fig=None, ax=None, plot_points=True,
                                       setup_axis=True,
@@ -131,13 +131,15 @@ class GTFit:
         err = np.sqrt(np.diag(cov))
         gt_err = err[0]
         gt = params[0]
+        rmse = np.sqrt(((y_i04 - simple_piecewise(x_i05, *params)) ** 2).sum() / (len(y_i04)))
+        nrmse = rmse / (max(y_i04) - min(y_i04))
         if fig and ax:
             self.plot(y_i04, x_i05, fig, ax, gt, gt_err, func=simple_piecewise, params=params, setup_axis=setup_axis,
                       units=units, s=0.05, c=c, label=str(percentile) + "th", add_label=label)
         i4 = float(simple_piecewise(gt, *params))
         i4_err_appx = abs(gt_err * (i4 / gt))
 
-        return GT(gt, gt_err), I4(i4, i4_err_appx)
+        return GT(gt, gt_err), I4(i4, i4_err_appx),nrmse
 
     def plot(self, x, y, fig, ax, gt=None, gt_err=None, func=None, params=None, setup_axis=True, units="kelvin",
              s=0.5, c='b',
