@@ -27,7 +27,8 @@ def clamp(x, min_v, max_v):
 
 
 class CycloneCellFast:
-    __slots__ = ["image", "i4_reflectance","gts","gt","gt_i4","r2", "xmin", "xmax", "ymin", "ymax", "__condition"]
+    __slots__ = ["image", "i4_reflectance", "gts", "gt", "gt_i4", "r2", "nrmse", "xmin", "xmax", "ymin", "ymax",
+                 "__condition"]
     A = 2 / (np.log(0.6 / 0.72))
     B = 2 - A * np.log(0.72)
     TOLERANCE = 0.05
@@ -40,25 +41,23 @@ class CycloneCellFast:
         self.xmax = xmax
         self.ymin = ymin
         self.ymax = ymax
-        self.assign_condition()
+        self.__condition = True
         self.i4_reflectance = self.calc.reflectance_from_tbs(self.zenith, self.i4, self.i5) * 100
         assert not np.isnan(self.i4).all() and not np.isnan(self.i5).all()
-        self.gts = self.glaciation_temperature_percentile()
+        self.gt, self.gt_i4, self.nrmse = self.glaciation_temperature_mean()
 
-    @property
-    def gt_median(self):
-        return self.gts[1][0]
 
-    @property
-    def gt_rho(self):
-        return self.gts[1][1]
-
-    @property
-    def nrmse(self):
-        return self.gts[1][2]
+    def basic_condition(self):
+        T, BTD_4 = GTFit(self.BTD_m, self.i5_raw).bin_data(
+            np.percentile, bin_func_args=(25,))
+        self.__condition = False
+        for i in range(len(T)):
+            self.__condition = self.__condition | (
+                    (abs(self.i5_raw - T[i]) < 0.5) & (
+                    self.BTD_m <= BTD_4[i]))
 
     def assign_condition(self):
-        T, BTD_4 = GTFit(self.BTD_m, self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax]).bin_data(
+        T, BTD_4 = GTFit(self.BTD_m, self.i5_raw).bin_data(
             np.percentile, bin_func_args=(25,))
         assert len(T) > 0
         BTD_4_p = [0] * len(BTD_4)
@@ -71,19 +70,29 @@ class CycloneCellFast:
         self.__condition = False
         for i in range(len(T)):
             self.__condition = self.__condition | (
-                    (abs(self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax] - T[i]) < 0.5) & (
+                    (abs(self.i5_raw - T[i]) < 0.5) & (
                     self.BTD_m <= BTD_4_p[i]))
 
     def remove_condition(self):
-        del self.__condition
+        self.__condition = True
+
+    @property
+    def i4_raw(self):
+        return np.where(self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax] <= 280,
+                        self.image.raw_grid_I4[self.ymin:self.ymax, self.xmin:self.xmax], np.nan)
+
+    @property
+    def i5_raw(self):
+        return np.where(self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax] <= 280,
+                        self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax], np.nan)
 
     @property
     def i4(self):
-        return np.where(self.__condition, self.image.raw_grid_I4[self.ymin:self.ymax, self.xmin:self.xmax], np.nan)
+        return np.where(self.__condition, self.i4_raw, np.nan)
 
     @property
     def i5(self):
-        return np.where(self.__condition, self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax], np.nan)
+        return np.where(self.__condition, self.i5_raw, np.nan)
 
     @property
     def i1(self):
@@ -133,7 +142,7 @@ class CycloneCellFast:
 
     @property
     def good_gt(self):
-        return (ABSOLUTE_ZERO - 40 < self.gt_median.value < ABSOLUTE_ZERO) and self.nrmse <= 0.3
+        return (ABSOLUTE_ZERO - 45 < self.gt.value < ABSOLUTE_ZERO) and self.nrmse <= 0.3 and self.gt.error < 5
 
     def bin_data_percentiles(self, percentiles, i4_band=None):
         i4_list, i5_list = [], []
@@ -162,14 +171,11 @@ class CycloneCellFast:
         ])
         ax.set_xlabel("km")
         ax.set_ylabel("km")
-        cb = plt.colorbar(im, ax=[ax], location="left")
-        ax.set_title(f"{band}")
-        if band in ("i1", "m9", "i4_reflectance"):
-            cb.set_label("Reflectance (%)")
-        else:
-            cb.set_label("Kelvin (K)")
         if show:
+            cb = plt.colorbar(im)
+            cb.set_label("Temperature (K)")
             plt.show()
+        return im
 
     def plot_i5vsi4r(self):
         fig, axs = plt.subplots(1, 2)
@@ -196,24 +202,27 @@ class CycloneCellFast:
         gt_fit.piecewise_fit(fig, ax[1], units="kelvin", i4_units="reflectance")
         plt.show()
 
-    def plot_raw_profile(self):
-        fig, ax = plt.subplots(1, 2)
-        self.plot("i5", fig, ax[0], show=False)
-        ax[1].scatter(self.i4_reflectance_flat, self.i5_flat, s=0.1, c="r")
-        ax[1].set_ylabel("Temperature (K)")
-        ax[1].set_xlabel("I4 Band reflectance (%)")
-        ax[1].invert_xaxis()
-        ax[1].invert_yaxis()
+    def plot_profile_only(self,s=0.5):
+        fig,ax = plt.subplots()
+        gt,gti4,nrmse = GTFit(self.i4_reflectance_flat,self.i5_flat).piecewise_fit(fig,ax,units="kelvin",i4_units="reflectance",s=s)
+        print(gt)
+        print(gti4)
+        print(nrmse)
         plt.show()
 
     def plot_raw_profile(self):
         fig, ax = plt.subplots(1, 2)
-        self.plot("i5", fig, ax[0], show=False)
+
+        im = self.plot("i5", fig, ax[0], show=False)
         ax[1].scatter(self.i4_reflectance_flat, self.i5_flat, s=0.1, c="r")
         ax[1].set_ylabel("Temperature (K)")
         ax[1].set_xlabel("I4 Band reflectance (%)")
         ax[1].invert_xaxis()
         ax[1].invert_yaxis()
+        fig.suptitle(f"{self.image.metadata['NAME']}({self.image.metadata['START_IDX']})")
+        cbaxes = fig.add_axes([0.1, 0.1, 0.03, 0.8])
+        cb = plt.colorbar(im, cax=cbaxes)
+        cb.set_label("Reflectance (%)")
         plt.show()
 
     @property
@@ -238,7 +247,8 @@ class CycloneCellFast:
 
     @property
     def BTD_m(self):
-        return self.image.BTD_m[self.ymin:self.ymax, self.xmin:self.xmax]
+        return np.where(self.image.raw_grid_I5[self.ymin:self.ymax, self.xmin:self.xmax] <= 280,
+                        self.image.BTD_m[self.ymin:self.ymax, self.xmin:self.xmax], np.nan)
 
     @property
     def i_satellite_azimuth(self):
