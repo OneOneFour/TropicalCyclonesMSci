@@ -79,7 +79,7 @@ tornado==6.0.3
 tqdm==4.40.2
 trollimage==1.11.0
 trollsift==0.3.3
-urllib3==1.25.7
+urllib3==1.26.5
 wget==3.2
 win-inet-pton==1.1.0
 wincertstore==0.2
